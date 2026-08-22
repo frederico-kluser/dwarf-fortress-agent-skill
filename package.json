@@ -1,10 +1,10 @@
 {
-  "name": "dwarf-fortress-agent-skills",
+  "name": "dwarf-fortress-agent-skill",
   "version": "3.6.0",
   "description": "Dwarf Fortress wiki (v50) as Agent Skills for Claude Code, pi, Cursor, Codex and custom agents — interactive installer (df-skills).",
   "bin": {
     "df-skills": "bin/cli.js",
-    "dwarf-fortress-agent-skills": "bin/cli.js"
+    "dwarf-fortress-agent-skill": "bin/cli.js"
   },
   "files": [
     "bin/",
@@ -31,11 +31,11 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/frederico-kluser/dwarf-fortress-agent-skills.git"
+    "url": "git+https://github.com/frederico-kluser/dwarf-fortress-agent-skill.git"
   },
-  "homepage": "https://github.com/frederico-kluser/dwarf-fortress-agent-skills#readme",
+  "homepage": "https://github.com/frederico-kluser/dwarf-fortress-agent-skill#readme",
   "bugs": {
-    "url": "https://github.com/frederico-kluser/dwarf-fortress-agent-skills/issues"
+    "url": "https://github.com/frederico-kluser/dwarf-fortress-agent-skill/issues"
   },
   "author": "Frederico Kluser",
   "license": "MIT"

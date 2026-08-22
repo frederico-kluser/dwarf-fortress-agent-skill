@@ -2,7 +2,7 @@
 
 > A **flat** Agent Skills knowledge base for [Dwarf Fortress](https://www.bay12games.com/dwarves/) **v50 / Premium**, built from the official [wiki](https://dwarffortresswiki.org) via its MediaWiki API — **no RAG, no embeddings, no vector database**. Clean Markdown + progressive disclosure + a tiny SQLite FTS5 search.
 
-[![npm](https://img.shields.io/npm/v/dwarf-fortress-agent-skills)](https://www.npmjs.com/package/dwarf-fortress-agent-skills)
+[![npm](https://img.shields.io/npm/v/dwarf-fortress-agent-skill)](https://www.npmjs.com/package/dwarf-fortress-agent-skill)
 [![License: GFDL & MIT](https://img.shields.io/badge/wiki_license-GFDL%20%26%20MIT-blue)](#license)
 [![Skills](https://img.shields.io/badge/skills-16-orange)](#skill-categories)
 [![Source](https://img.shields.io/badge/source-v50%20wiki%20(2026--06)-green)](https://dwarffortresswiki.org)
@@ -123,9 +123,9 @@ narrating, advising **copilot** on top of these reads.
 ### Via npm (recommended) — interactive installer
 
 ```bash
-npm install -g dwarf-fortress-agent-skills
+npm install -g dwarf-fortress-agent-skill
 # or straight from GitHub (no registry needed):
-npm install -g github:frederico-kluser/dwarf-fortress-agent-skills
+npm install -g github:frederico-kluser/dwarf-fortress-agent-skill
 
 cd your-project
 df-skills            # interactive: pick your code agent with ↑/↓

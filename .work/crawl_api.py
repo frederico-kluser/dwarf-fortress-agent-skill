@@ -23,7 +23,7 @@ API = "https://dwarffortresswiki.org/api.php"
 OUT = os.path.join(HERE, "pages.jsonl")
 NAMESPACE = 0                      # 0 = Main = conteúdo v50 atual
 DELAY = 0.4                        # segundos entre requisições (serial, educado)
-UA = "dwarf-rag-fortress/2.0 (+https://github.com/frederico-kluser/dwarf-fortress-agent-skills)"
+UA = "dwarf-rag-fortress/2.0 (+https://github.com/frederico-kluser/dwarf-fortress-agent-skill)"
 
 session = requests.Session()
 session.headers.update({"User-Agent": UA})

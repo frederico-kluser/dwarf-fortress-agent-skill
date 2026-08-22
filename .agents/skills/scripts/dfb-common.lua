@@ -3,7 +3,7 @@
 -- Carregue com:  local C = reqscript('dfb-common')   (as funções globais viram exports)
 -- NÃO imprime nada — os scripts que o usam é que imprimem o JSON único que o
 -- df_bridge.py (run_game_script) extrai.
--- Licença: MIT (dwarf-fortress-agent-skills).
+-- Licença: MIT (dwarf-fortress-agent-skill).
 
 json = require('json')
 

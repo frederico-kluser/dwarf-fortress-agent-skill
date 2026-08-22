@@ -255,8 +255,8 @@ ${routerMarkdown(root)}
   return '.cursor/rules/dwarf-fortress-skills.mdc';
 }
 
-const MD_START = '<!-- dwarf-fortress-agent-skills:start -->';
-const MD_END = '<!-- dwarf-fortress-agent-skills:end -->';
+const MD_START = '<!-- dwarf-fortress-agent-skill:start -->';
+const MD_END = '<!-- dwarf-fortress-agent-skill:end -->';
 
 function upsertAgentsMd(root) {
   const file = path.join(process.cwd(), 'AGENTS.md');

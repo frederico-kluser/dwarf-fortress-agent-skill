@@ -6,7 +6,7 @@
 --   dfb-act key KEY [KEY...]          → simula teclas (nomes de df.interface_key)
 --   dfb-act click X Y [left|right]    → clique de mouse sintético no tile (x,y) da tela
 --   dfb-act move <n|s|e|w|ne|nw|se|sw|up|down|wait>  → 1 passo do aventureiro
--- Licença: MIT (dwarf-fortress-agent-skills).
+-- Licença: MIT (dwarf-fortress-agent-skill).
 
 local C = reqscript('dfb-common')
 local json = C.json

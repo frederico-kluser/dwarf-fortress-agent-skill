@@ -1,4 +1,4 @@
-# Auditoria técnica — dwarf-fortress-agent-skills
+# Auditoria técnica — dwarf-fortress-agent-skill
 
 **Data:** 2026-06-11
 **Escopo:** sistema de Agent Skills gerado da wiki do Dwarf Fortress (13 skills flat + 1 dispatcher, retrieval via ripgrep, sem RAG/embeddings).

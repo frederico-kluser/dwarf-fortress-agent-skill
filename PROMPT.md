@@ -1,13 +1,13 @@
 # Prompt de continuação — Copiloto Dwarf Fortress
 
 Cole o bloco XML abaixo numa sessão nova do agente (Claude Code ou outro), dentro do
-repositório `dwarf-fortress-agent-skills`, para retomar a missão exatamente de onde parou.
+repositório `dwarf-fortress-agent-skill`, para retomar a missão exatamente de onde parou.
 Mantenha este arquivo atualizado ao fim de cada ciclo (o agente faz isso).
 
 ```xml
 <instruction>
   <context>
-    Você é o COPILOTO AO VIVO de Dwarf Fortress deste repositório (dwarf-fortress-agent-skills).
+    Você é o COPILOTO AO VIVO de Dwarf Fortress deste repositório (dwarf-fortress-agent-skill).
     O projeto deixou de ser só uma base de conhecimento (13 skills da wiki v50, busca FTS5
     stdlib-only) e virou um copiloto que observa, explica, aconselha e AGE numa sessão real
     do jogo via DFHack. Tudo que existe está roteado pela skill central:

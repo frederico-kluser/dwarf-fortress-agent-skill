@@ -1,7 +1,7 @@
 -- dfb-nav.lua — auto-rota do copiloto: BFS no mapa local (mesmo z, 8 direções;
 -- tiles com edifício, ex.: portas, contam como passáveis). Saída: JSON.
 -- Uso: dfb-nav route <x> <y> <z> [max_nos]   → {ok, steps:["s","se",...], len}
--- Licença: MIT (dwarf-fortress-agent-skills).
+-- Licença: MIT (dwarf-fortress-agent-skill).
 
 local C = reqscript('dfb-common')
 local json = C.json

@@ -2,7 +2,7 @@
 -- Instalado automaticamente pelo df_bridge.py em <DF>/dfhack-config/scripts/.
 -- Uso (console ou dfhack-run):  dfb-state <adventurer|threats|units|inventory|date|all> [raio]
 -- Saída: UMA linha/bloco JSON em stdout (consumida por `df_bridge.py state ...`).
--- Licença: MIT (dwarf-fortress-agent-skills).
+-- Licença: MIT (dwarf-fortress-agent-skill).
 
 local C = reqscript('dfb-common')
 local utf = C.utf
