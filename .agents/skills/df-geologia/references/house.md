@@ -1,9 +1,0 @@
-# House
-
-> Fonte: [House](https://dwarffortresswiki.org/index.php/House) — Dwarf Fortress Wiki (GFDL & MIT). Snapshot 2026-06.
-
-!!UNKNOWN!!  · xTATTEREDx  · +FINE+  · \*SUPERIOR\*  · ≡EXCEPTIONAL≡  · ☼MASTERWORK☼
-
-A **house** or **tower "Tower (structure)")** (although the latter may lead to confusion with necromancer or player-designed towers "Tower (project)")) is a building owned by a rich denizen of a town. Anybody with a sufficient account can grab a house or have a tower built in a city. The buildings pass on to family members currently, and buildings that don't pass to anybody can be obtained by somebody (instead of having them build a new one, sometimes.) Tower-builders are generally merchants and wealthy officials, as they are very expensive. There's a cap on the amount of towers based on city size to prevent a Towers of Bologna situation from being too common, but there can still be a number of them. Towers can also be reconstructed and extended - feast halls, added fortifications and gated yards are common. The previous owners of towers and houses are referenced in the histories, so their passage can be reasonably easily followed.
-
-These houses can contain lost artifacts without anyone knowing it. For instance, if a villain, say, passes on in an unfortunate way and has no family in the area to inherit their artifacts or house, the artifacts will simply be in that house, hidden and lost. In the very likely event that the house is purchased later, the artifacts will be unknown to the homebuyer (at first), but they will nevertheless possibly have a problem on their hands, depending on who might be searching for the treasures.

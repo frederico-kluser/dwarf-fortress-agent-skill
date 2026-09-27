@@ -1,7 +1,0 @@
-# Pipeline de geração das skills (Python 3.9+). Instale num venv:
-#   python -m venv .venv && . .venv/bin/activate && pip install -r requirements.txt
-# Dependências de sistema (não-pip): pandoc, sqlite3 (com FTS5), ripgrep.
-requests>=2.31
-beautifulsoup4>=4.12
-lxml>=5.0
-# Busca (search.py / build_index.py) usa apenas a stdlib (sqlite3 + FTS5).
