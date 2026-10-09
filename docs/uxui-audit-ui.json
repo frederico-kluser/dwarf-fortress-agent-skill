@@ -1,0 +1,174 @@
+{
+  "interface_type": "dashboard",
+  "interface_type_note": "Tipo dominante: dashboard (mission control de supervisao de um agente autonomo que joga Dwarf Fortress em adventure mode). Tipos secundarios presentes e avaliados como adjacentes: ai-chat (a fila de perguntas do agente — QuestionsPanel.tsx + QuestionsQueueDrawer.tsx, o unico ponto em que a IA pergunta ao humano), form (editores de memoria/objetivo/inputs) e data-table (log de decisoes JEV). Partes priorizadas por isso: 1 (Foundations), 2 (Core), 4 (Interface Patterns) — dashboard — mais a Parte 5 (AI-Native: transparencia, calibracao de carga cognitiva, prevencao de automation bias) porque o trabalho do humano aqui e supervisionar um agente, nao operar um CRUD. Parte 3 aplicada pontualmente (divulgacao progressiva, hierarquia visual) e Parte 6 verificada por amostragem. LIMITES DE VERIFICACAO: a avaliacao e feita a partir do codigo-fonte (JSX, tema, contrato, mock) e nao de renderizacao real — nao houve browser, screenshot nem medicao de viewport, pelo que contagens de itens, alturas e scroll horizontal sao estruturais (derivadas de Grid/Tabs/Table/`maxHeight`) e nao medidas em pixeis; os racios de contraste foram calculados a partir dos valores hexadecimais da paleta em web/src/theme.ts (WCAG 2.x, luminancia relativa) e nao lidos de um ecra. O backend nao foi executado: os volumes de dados citados vem do mock (web/src/api/mock.ts), que e o modo por omissao quando VITE_API_BASE nao esta definida.",
+  "overall_score": 40,
+  "band": "fair",
+  "findings": [
+    {
+      "id": "finding-1",
+      "principle": {
+        "code": "C.1.4.01",
+        "slug": "error-prevention",
+        "title": "Error Prevention",
+        "part": "part-2"
+      },
+      "severity": "critical",
+      "message": "A escolha de seguranca do utilizador e silenciosamente ultrapassada. Retomar de «Em pausa» ou desligar o kill-switch devolve SEMPRE o modo `autopilot`, ignorando o `checkpoint` que estava selecionado: web/src/panels/ControlPanel.tsx:361 (`mode === 'paused' ? 'autopilot' : 'paused'`), ControlPanel.tsx:417 (`mode: next ? 'paused' : mode === 'paused' ? 'autopilot' : mode`) e web/src/layout/AppShell.tsx:80 (`currentMode === 'paused' ? 'autopilot' : currentMode`) — o modo anterior nao e guardado em lado nenhum. Num jogo com morte permanente, um botao que se le como «Retomar autopiloto» (ControlPanel.tsx:363) reativa acao autonoma irreversivel sem confirmacao e sem dizer para que modo vai; o dialogo do kill-switch e vago sobre isso («O agente volta a poder agir assim que o modo de autonomia o permitir», web/src/components/KillSwitchButton.tsx:78). A friccao esta invertida em todo o ecra: o kill-switch, que e reversivel, tem um `alertdialog` completo com âmbito e reversibilidade explicados (KillSwitchButton.tsx:64-99), enquanto responder a uma pergunta — escrita irreversivel na memoria do agente, sem caminho de edicao no contrato — sai com um unico clique numa opcao rapida, sem pre-visualizacao nem confirmacao (web/src/components/QuestionCard.tsx:86-96). E o proprio botao de emergencia e apenas um icone de power sem etiqueta visivel, revelado por tooltip com 350 ms de atraso (web/src/layout/TopBar.tsx:104-108; web/src/theme.ts:141). Este padrao — atrito no que e reversivel, zero atrito no que e irreversivel — e exatamente o que alimenta automation bias num loop agente-humano.",
+      "remediation": "1) Persistir o ultimo modo explicito da campanha (o contrato ja devolve `control.mode`) e devolve-lo ao retomar ou ao desligar o kill-switch, nunca assumindo `autopilot`. 2) Quando a transicao resultante for para `autopilot` vinda de `paused`/`checkpoint`, exigir confirmacao nomeando o modo de destino e o que ele implica. 3) Dar ao kill-switch uma etiqueta textual visivel na AppBar («Parar agente») com alvo >=44 px, mantendo o dialogo. 4) Nas opcoes rapidas da pergunta, mostrar a resposta escolhida e o efeito (vai para a memoria do agente) antes de enviar, e oferecer um passo de confirmacao para respostas livres. Resultado mensuravel: zero transicoes para `autopilot` sem confirmacao explicita do utilizador e nenhuma escrita irreversivel em memoria com um unico clique.",
+      "business_impact": "A prevencao de erros e o que separa um painel de supervisao de um painel decorativo: um controlo que reativa autonomia total sem confirmacao transforma uma salvaguarda numa armadilha e destroi a confianca no kill-switch, precisamente o mecanismo que a arquitetura elegeu como paragem de emergencia para sessoes longas observadas."
+    },
+    {
+      "id": "finding-2",
+      "principle": {
+        "code": "S.1.3.01",
+        "slug": "ai-transparency",
+        "title": "AI Transparency Principle",
+        "part": "part-5"
+      },
+      "severity": "critical",
+      "message": "A superficie de human-in-the-loop nao diz PORQUE o agente pergunta. O cartao mostra pergunta, id, timestamp, opcoes e campo livre (web/src/components/QuestionCard.tsx:47-61), mas nao mostra a banda (hitl vs abstain), a confianca, o papel JEV, a decisao que originou a pergunta, nem o que o agente faz enquanto espera — e o tipo `Question` do contrato nao tem esses campos (web/src/api/types.ts:325-339), logo a UI nao os consegue apresentar. O rotulo PT de `hitl` e literalmente «hitl · confirmação» (web/src/api/format.ts:110): a intencao de confirmacao existe no codigo e nunca chega ao ecra onde a confirmacao acontece. Tampouco existe ligacao entre o log de decisoes e a pergunta que ele gerou (web/src/panels/DecisionsPanel.tsx:167-179 nao tem coluna nem id de pergunta). A chegada de uma pergunta e silenciosa: o evento `question_new` so escreve na cache do React Query (web/src/api/queries.ts:188-192), sem toast, banner ou regiao aria-live; o unico sinal e um badge numerico entre seis controlos da AppBar (web/src/layout/TopBar.tsx:102) e o drawer so abre por clique (web/src/layout/AppShell.tsx:141-151), pelo que o agente pode ficar bloqueado a espera sem que o supervisor perceba. No modo por omissao (mock, sem VITE_API_BASE) as opcoes rapidas das perguntas novas sao «Opção A»/«Opção B» (web/src/api/mock.ts:832-835), o que nem permite avaliar o fluxo.",
+      "remediation": "1) Estender `Question` no contrato (docs/api.md §questions) com `band`, `confidence`, `decision_id` e o papel JEV, e mostra-los no cartao como chips (reutilizando BandChip/AgentChip de web/src/components/Chips.tsx) com link para a linha correspondente do log. 2) Explicar a origem em linguagem natural: «o agente perguntou porque a confianca (0,62) ficou na banda hitl». 3) Anunciar a chegada: toast/banner com acao «Responder» e regiao `aria-live=\"polite\"` no contador de pendentes; no painel de metricas, mostrar um aviso persistente «o agente esta a espera de resposta ha X min» quando ha pendentes. 4) Substituir as opcoes placeholder do mock por opcoes reais nos seeds. Resultado mensuravel: qualquer pergunta respondivel com banda, confianca e decisao de origem visiveis sem abrir outro painel.",
+      "business_impact": "Transparencia e o que torna o consentimento informado possivel: sem a razao, a banda e a confianca da pergunta, o humano carimba decisoes em vez de as supervisionar, e a taxa de respostas erradas (ou de perguntas ignoradas) sobe sem que ninguem consiga auditar por que."
+    },
+    {
+      "id": "finding-3",
+      "principle": {
+        "code": "F.1.1.02",
+        "slug": "cognitive-load",
+        "title": "Cognitive Load",
+        "part": "part-1"
+      },
+      "severity": "warning",
+      "message": "O painel de entrada por omissao e o mais denso da aplicacao: `DEFAULT_PANEL_ID = 'metricas'` (web/src/panels/registry.tsx:113) abre 8 grupos de metricas (web/src/panels/MetricsPanel.tsx:135-338) mais 5 cartoes de metricas do agente aninhados no ultimo grupo (MetricsPanel.tsx:351-403) — 13 blocos num unico scroll, sem resumo acima da dobra e sem ordenacao por severidade. O que falta nao e so contagem, e prioridade: nada no painel diz o que exige atencao agora (o unico alerta de topo e o de combate, MetricsPanel.tsx:126-131), o cartao de ameacas tem o mesmo peso visual que o de inventario, e o ruido soma — 5 sparklines repetem a legenda «N amostras» (web/src/components/Sparkline.tsx:84-86) e as listas de ferimentos e de combate sao completas, sem limite. A pergunta «esta tudo bem?» — a unica que um supervisor faz de relance — obriga a percorrer tres a quatro ecras de cartoes equivalentes.",
+      "remediation": "1) Colocar acima da dobra um resumo de 4-5 sinais vitais (ameacas/combate, saude, progresso do objetivo, decisoes/min, confianca media) com destaque quando mudam de estado. 2) Passar os restantes grupos a divulgacao progressiva (separadores ou acordeoes fechados por omissao), mantendo os 8 grupos do contrato acessiveis. 3) Cortar ruido: mover a contagem de amostras para tooltip do sparkline e limitar/colapsar ferimentos e historico de combate. 4) Ordenar cartoes por severidade em vez de pela ordem do contrato. Resultado mensuravel: «esta tudo bem?» respondivel sem scroll e sem abrir nenhum cartao.",
+      "business_impact": "A memoria de trabalho retem 7+-2 itens: 13 blocos com o mesmo peso visual tornam a leitura de estado mais lenta e mais propensa a falhas, e num dashboard de supervisao isso significa reagir mais tarde ao que importa."
+    },
+    {
+      "id": "finding-4",
+      "principle": {
+        "code": "F.1.1.03",
+        "slug": "mental-model",
+        "title": "Mental Model",
+        "part": "part-1"
+      },
+      "severity": "warning",
+      "message": "«Checkpoints» e oferecido como modo de autonomia (web/src/panels/ControlPanel.tsx:344-346) e a arquitetura descreve-o como «Autopiloto ⇄ checkpoints» (web/src/panels/registry.tsx:107), mas nao existe superficie de aprovacao: nenhum painel mostra o que aguarda aprovacao, nem sequer que o agente esta parado a espera, e o chip de modo so muda de cor e etiqueta (web/src/components/Chips.tsx:39-57). O contrato tambem nao ajuda: `POST /control` so aceita `mode` e `kill_switch` (docs/api.md:398) e a unica entrada humana e `POST .../questions/{qid}/answer` (docs/api.md:370) — ou seja, o «checkpoint» nao tem artefacto de aprovacao e, na pratica, colapsa na fila de perguntas, coisa que a UI nunca diz. O subtitulo do cartao explica as bandas (ControlPanel.tsx:333) mas nao o que o modo faz. Quem escolhe checkpoints fica sem saber se o agente esta bloqueado, o que quer fazer nem como autorizar, e o modelo mental que a etiqueta cria («eu aprovo antes de agir») nao corresponde ao que o ecra entrega.",
+      "remediation": "Enquanto o contrato nao expuser aprovacao: 1) descrever o modo pelo comportamento real («Checkpoints — o agente para e pergunta na fila de perguntas») e fazer o chip do modo abrir a fila com esse filtro; 2) mostrar um estado explicito «a espera de resposta» com tempo decorrido no cabecalho global, derivado do mesmo contador de pendentes (web/src/layout/AppShell.tsx:57-61); 3) adicionar `band`/`confidence`/`decision_id` a `Question` para que a fila funcione como aprovacao auditavel. Resultado mensuravel: em modo checkpoint, o utilizador sabe em <5 s se o agente esta bloqueado e o que espera dele.",
+      "business_impact": "Um modo de seguranca que promete aprovacao humana e nao a mostra gera falsa confianca: o utilizador acredita estar a supervisionar quando o agente ja decidiu, e a salvaguarda deixa de ser usada por parecer decorativa."
+    },
+    {
+      "id": "finding-5",
+      "principle": {
+        "code": "F.2.2.03",
+        "slug": "hicks-law",
+        "title": "Hick's Law",
+        "part": "part-1"
+      },
+      "severity": "warning",
+      "message": "A navegacao e uma lista plana de 8 paineis sem agrupamento nem prioridade (web/src/panels/registry.tsx:45-111; web/src/layout/NavDrawer.tsx:36-49), e o trabalho principal do humano — responder as duvidas do agente — e o 5.º item (registry.tsx:79-86), atras de Memória, Objetivo, Inputs e Métricas. Em ecras estreitos a navegacao aparece duas vezes: drawer temporario mais 8 separadores scrolláveis com os mesmos itens e os mesmos icones (web/src/layout/PanelTabs.tsx:19-44), duplicando o custo de escolha. O estado que devia reordenar a lista nao a reordena: perguntas pendentes aparecem apenas no badge da AppBar (web/src/layout/TopBar.tsx:102) e nao no item «Perguntas» da navegacao, pelo que a escolha relevante nunca sobe ao topo. Pela lei de Hick cada duplicacao de alternativas acrescenta ~150-200 ms de decisao, e a posicao na lista (serial position) faz o 5.º item ser dos menos lembrados.",
+      "remediation": "1) Agrupar a navegacao em «Supervisão» (Perguntas, Decisões, Controlo) e «Contexto» (Memória, Objetivo, Inputs, Métricas, Ecrã), mantendo os 8 paineis. 2) Promover Perguntas ao topo (com contador no proprio item) sempre que houver pendentes, e destacar Controlo quando o kill-switch estiver ativo. 3) Em mobile manter uma unica navegacao (drawer ou tabs, nao as duas). Resultado mensuravel: fila de perguntas alcancavel em <=2 acoes a partir de qualquer painel, em qualquer breakpoint.",
+      "business_impact": "Navegacao simplificada e sinais ordenados por relevancia reduzem o tempo ate a acao: aqui isso traduz-se em responder mais depressa ao agente bloqueado, que e o unico evento em que o humano e o caminho critico."
+    },
+    {
+      "id": "finding-6",
+      "principle": {
+        "code": "D.1.1.01",
+        "slug": "progressive-disclosure",
+        "title": "Progressive Disclosure",
+        "part": "part-3"
+      },
+      "severity": "suggestion",
+      "message": "O log de decisoes e a unica superficie para reconstruir o que o agente fez e porque, mas apresenta-se todo de uma vez: tabela de 9 colunas com `minWidth: 1080` e `maxHeight: 620` (web/src/panels/DecisionsPanel.tsx:160-179), ate 250 linhas em cache (web/src/api/queries.ts:185), com scroll horizontal e vertical; as probabilidades sao cortadas nas 2 melhores (DecisionsPanel.tsx:215), o resumo do pedido e as respostas ficam truncados com `noWrap` e so legiveis por tooltip (DecisionsPanel.tsx:194-207); nao ha ordenacao por coluna, filtro por intervalo de tempo nem expansao de linha para ver o pedido/resposta completos, e falta a indicacao de frescura que os outros paineis vivos tem (métricas, ecrã e gastos mostram-na: MetricsPanel.tsx:98-100, ScreenPanel.tsx:66-68, ControlPanel.tsx:432-434; o log nao, apesar de a leitura ter intervalo de 20 s — queries.ts:138-140).",
+      "remediation": "1) Tornar a linha clicavel e abrir um detalhe com pedido completo, todas as probabilidades, respostas tipadas, banda, latencia e custo (o conteudo ja existe no payload). 2) Manter na tabela apenas as colunas de decisao rapida (hora, papel, banda, confianca, custo) e deixar o resto no detalhe. 3) Acrescentar filtros rapidos por banda/confianca baixa e por intervalo de tempo, mais ordenacao por hora/latencia/custo. 4) Mostrar «atualizado ha X s» no cabecalho. Resultado mensuravel: reconstruir uma decisao concreta em <=2 cliques e sem scroll horizontal.",
+      "business_impact": "Divulgacao progressiva encurta o tempo ate a primeira acao e mantem a descoberta de funcionalidades: num log de auditoria isso e a diferenca entre investigar um incidente em segundos ou percorrer 250 linhas truncadas."
+    },
+    {
+      "id": "finding-7",
+      "principle": {
+        "code": "C.1.1.01",
+        "slug": "consistency-standards",
+        "title": "Consistency and Standards",
+        "part": "part-2"
+      },
+      "severity": "suggestion",
+      "message": "Os sinais de estado nao seguem o mesmo padrao entre paineis. Métricas, ecrã e gastos mostram frescura com tempo relativo e atualizacao manual (web/src/panels/MetricsPanel.tsx:98-111, web/src/panels/ScreenPanel.tsx:66-87, web/src/panels/ControlPanel.tsx:432-434), enquanto perguntas, decisoes e memoria nao dizem quando foram lidos pela ultima vez — apesar de as leituras terem intervalos proprios (15 s e 20 s em web/src/api/queries.ts:138-155). O estado do agente tambem depende do viewport: o chip de modo de autonomia esta escondido abaixo de `sm` (web/src/layout/TopBar.tsx:92-97) e o kill-switch continua visivel, ou seja, em ecra pequeno ve-se que da para parar mas nao em que modo o agente esta; a AppBar esconde ainda o toggle de tema em `xs` (TopBar.tsx:110-112) e o chip «dados simulados» so aparece em `lg` (TopBar.tsx:56-64), ficando a divulgacao de mock apenas no badge de ligacao (web/src/components/ConnectionBadge.tsx:43).",
+      "remediation": "1) Padronizar um cabecalho de frescura reutilizavel («atualizado ha X s» + botao de refresh) em todos os paineis com dados vivos, incluindo perguntas, decisoes e memoria. 2) Nunca esconder o modo de autonomia enquanto o kill-switch estiver visivel: manter um chip compacto em todos os breakpoints. 3) Manter a etiqueta de dados simulados visivel em qualquer largura (o badge de ligacao ja a inclui — reaproveitar esse texto em vez de o esconder). Resultado mensuravel: os mesmos indicadores de estado presentes em todos os paineis e breakpoints.",
+      "business_impact": "Consistencia e o que permite respostas automaticas em vez de reaprendizagem: quando cada painel responde a «isto e atual?» de forma diferente, o supervisor passa a desconfiar de todos os numeros ou a assumir que estao frescos quando nao estao."
+    },
+    {
+      "id": "finding-8",
+      "principle": {
+        "code": "H.1.1.01",
+        "slug": "perceivable-principle",
+        "title": "Perceivable Principle (WCAG)",
+        "part": "part-6"
+      },
+      "severity": "suggestion",
+      "message": "A base de acessibilidade e forte — contraste calculado a partir da paleta cumpre AA em ambos os esquemas (text.secondary 8,44:1 sobre paper escuro e 7,75:1 no claro; chips outlined entre 5,5:1 e 10,6:1; filled entre 8,4:1 e 11,0:1), ha outline de foco visivel (web/src/theme.ts:82-86), link «Saltar para o conteúdo principal» (web/src/layout/AppShell.tsx:89-104), `role=status`/`role=alert` nos estados (web/src/components/PanelState.tsx:11-52) e a cor das bandas nunca e o unico sinal (web/src/components/Chips.tsx:13-26). Duas lacunas de ARIA: (1) em desktop o item ativo da navegacao so recebe a classe de selecao — o comentario promete «aria-current via seleção» (web/src/layout/NavDrawer.tsx:22) mas o codigo passa apenas `selected` (NavDrawer.tsx:38-43), logo um leitor de ecra nao ouve qual painel esta ativo; (2) o `role=\"tabpanel\"` e aplicado sempre (AppShell.tsx:129-134), mas o `tablist` correspondente so existe em ecras estreitos (PanelTabs.tsx:19-32) — em desktop ha um tabpanel sem tablist visivel, e o padrao tab/tabpanel nao corresponde a navegacao que o utilizador ve.",
+      "remediation": "1) Acrescentar `aria-current=\"page\"` ao ListItemButton ativo (ou `aria-selected` se a lista for apresentada como tablist em todos os tamanhos). 2) Aplicar `role=\"tabpanel\"`/`aria-labelledby` apenas quando os Tabs estiverem visiveis, ou adotar um unico padrao (nav + regiao com `aria-label`) em desktop e mobile. Verificacao: nome e estado do painel ativo audiveis em NVDA/VoiceOver nos dois breakpoints.",
+      "business_impact": "Percebibilidade com tecnologias de apoio alarga o publico e a fiabilidade do painel: saber em que painel se esta e o minimo para navegar sem visao, e e tambem o que evita acoes no painel errado durante uma emergencia."
+    }
+  ],
+  "strengths": [
+    {
+      "principle": {
+        "code": "C.1.1.01",
+        "slug": "consistency-standards",
+        "title": "Consistency and Standards"
+      },
+      "message": "Consistencia interna exemplar: os 8 paineis usam a mesma moldura (PanelShell), o mesmo tema com CSS vars para os dois esquemas (web/src/theme.ts:55-159), numeros e ids em monoespaçado e a mesma convencao de mostrar valores EN do contrato em PT — o InfoCard imprime a chave do grupo do contrato (web/src/components/InfoCard.tsx:45-54) e os Chips traduzem enums (web/src/components/Chips.tsx:71-84)."
+    },
+    {
+      "principle": {
+        "code": "H.1.1.01",
+        "slug": "perceivable-principle",
+        "title": "Perceivable Principle (WCAG)"
+      },
+      "message": "Cuidado real com acessibilidade: os racios de contraste calculados a partir da paleta passam AA com folga em ambos os esquemas (o pior par e 5,49:1), ha `:focus-visible` com outline de 2 px (web/src/theme.ts:82-86), link de salto para o conteudo principal (web/src/layout/AppShell.tsx:89-104), spinners e alertas anunciados com `role=status`/`role=alert` (web/src/components/PanelState.tsx:11-52) e a banda de acao nunca depende so da cor (web/src/components/Chips.tsx:13-26)."
+    },
+    {
+      "principle": {
+        "code": "S.1.3.01",
+        "slug": "ai-transparency",
+        "title": "AI Transparency Principle"
+      },
+      "message": "Honestidade sobre confianca, que e raro: confianca ausente ou 0 e mostrada como «indisponível» com tooltip a explicar que nao significa «certo» (web/src/panels/DecisionsPanel.tsx:244-252), a formatacao devolve null para valores <=0 em vez de 0 % (web/src/api/format.ts:95-98), o cartao de confianca media explica a mesma regra (web/src/panels/MetricsPanel.tsx:364-368) e o mock inclui deliberadamente uma decisao sem confianca para manter esse caminho exercitado (web/src/api/mock.ts:731-733)."
+    },
+    {
+      "principle": {
+        "code": "C.1.4.01",
+        "slug": "error-prevention",
+        "title": "Error Prevention"
+      },
+      "message": "Onde ha risco, ha friccao bem desenhada: o kill-switch abre um `alertdialog` que explica o âmbito e a reversibilidade («a memória e as métricas ficam intactas», web/src/components/KillSwitchButton.tsx:64-99) e as edicoes de memoria e objetivo sao encenadas localmente — chip «alterações por guardar» e botao Reverter antes de qualquer escrita (web/src/panels/MemoryPanel.tsx:53-77 e 106, web/src/panels/ObjectivePanel.tsx:62-86 e 120), com erros que dizem o que falhou e oferecem repetir (web/src/components/PanelState.tsx:27-52)."
+    },
+    {
+      "principle": {
+        "code": "I.1.3.01",
+        "slug": "affordances",
+        "title": "Affordances Law"
+      },
+      "message": "Affordances que se explicam sozinhas: o modo simulado e divulgado em dois sitios (chip «dados simulados» e badge «mock · …» com tooltip, web/src/layout/TopBar.tsx:56-64 e web/src/components/ConnectionBadge.tsx:33-43), o ecra ao vivo tem congelar/retomar e copiar com rotulos acessiveis (web/src/panels/ScreenPanel.tsx:36-95) e o painel de inputs oferece chips de exemplo que preenchem o campo com um clique, poupando redacao (web/src/panels/InputsPanel.tsx:75-83)."
+    },
+    {
+      "principle": {
+        "code": "D.1.1.01",
+        "slug": "progressive-disclosure",
+        "title": "Progressive Disclosure"
+      },
+      "message": "Estados vazios, de carregamento e de erro tratados a serio: o vazio diz o que falta e por que («As dúvidas aparecem aqui quando o JEV decide nas bandas hitl ou abstain», web/src/components/QuestionsQueueDrawer.tsx:101-105), o erro traz accao de repetir, a ausencia de backend explica o que fazer e onde (web/src/layout/AppShell.tsx:179-204) e um error boundary evita o ecra branco (web/src/main.tsx:30-46)."
+    }
+  ],
+  "priority_fixes": [
+    "finding-1",
+    "finding-2",
+    "finding-3",
+    "finding-4",
+    "finding-5",
+    "finding-6",
+    "finding-7",
+    "finding-8"
+  ],
+  "api_enriched": false,
+  "api_note": "Sem UXUI_API_KEY nesta sessao: o endpoint `audit` (pro) devolveu 403 PRO_REQUIRED e os principios fora do lote gratuito devolveram 403 no lookup por slug, pelo que a avaliacao foi feita com o framework e conhecimento interno. Apesar disso, o indice publico de principios respondeu 200 sem autenticacao e foi usado para fixar codigo/slug/titulo reais dos 12 principios do lote gratuito: F.1.1.02 cognitive-load, F.2.2.03 hicks-law, C.1.1.01 consistency-standards, D.1.1.01 progressive-disclosure, D.2.1.02 visual-hierarchy, S.1.3.01 ai-transparency, S.1.1.01 conversational-flow-principle, I.2.2.02 fitts-law, I.1.3.01 affordances, H.1.1.01 perceivable-principle e H.2.2.03 inclusive-wellbeing (a API usa o prefixo H na Parte 6). Os codigos dos principios fora desse lote vem da taxonomia do framework e das tabelas da skill (C.1.4.01 error-prevention, F.1.1.03 mental-model, F.1.3.01 cognitive-load-calibration-ai). Os principios de Fitts, hierarquia visual e carga cognitiva calibrada foram considerados mas nao geraram findings: nao houve violacao observavel no codigo (alvos de toque >=40 px, cabecalhos hierarquizados, banda/confianca visiveis onde existem). `business_impact` e derivado do framework (a API do lote gratuito nao devolve esse campo) e nao uma citacao da API. Para findings enriquecidos com citacoes e business impact da API: uxuiprinciples.com/en/checkout."
+}
