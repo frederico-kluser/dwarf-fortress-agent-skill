@@ -1,9 +1,4 @@
 import type { ReactNode } from 'react';
-import Card from '@mui/material/Card';
-import CardContent from '@mui/material/CardContent';
-import CardHeader from '@mui/material/CardHeader';
-import Divider from '@mui/material/Divider';
-import Typography from '@mui/material/Typography';
 
 export interface SectionCardProps {
   title: string;
@@ -17,7 +12,14 @@ export interface SectionCardProps {
   flush?: boolean;
 }
 
-/** Bloco de secção: cabeçalho + conteúdo, sempre sobre um Card outlined. */
+/**
+ * Bloco de secção: cabeçalho + conteúdo, sempre sobre um cartão.
+ *
+ * Cartão composto no vocabulário semântico Motion UI/shadcn (`bg-card`,
+ * `border-border`, `rounded-lg`): o catálogo @motion não tem invólucro de cartão
+ * base (só expansões — expand-card/tilt-card/card-stack), e a camada de tokens
+ * do projeto resolve as cores nos dois esquemas.
+ */
 export default function SectionCard({
   title,
   subtitle,
@@ -26,28 +28,19 @@ export default function SectionCard({
   headingLevel = 'h2',
   flush = false,
 }: SectionCardProps) {
+  const Heading = headingLevel;
   return (
-    <Card component="section">
-      <CardHeader
-        sx={{ px: 2, py: 1.5 }}
-        title={
-          <Typography variant="h5" component={headingLevel}>
-            {title}
-          </Typography>
-        }
-        subheader={
-          subtitle ? (
-            <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-              {subtitle}
-            </Typography>
-          ) : undefined
-        }
-        action={action}
-      />
-      <Divider />
-      <CardContent sx={flush ? { p: 0, '&:last-child': { pb: 0 } } : { p: 2, '&:last-child': { pb: 2 } }}>
-        {children}
-      </CardContent>
-    </Card>
+    <section className="rounded-lg border border-border bg-card text-card-foreground shadow-sm">
+      <header className="flex flex-wrap items-start justify-between gap-2 px-4 py-3">
+        <div className="min-w-0">
+          <Heading className="text-sm font-bold text-card-foreground">{title}</Heading>
+          {subtitle ? <p className="mt-0.5 text-xs text-muted-foreground">{subtitle}</p> : null}
+        </div>
+        {action ? <div className="flex shrink-0 flex-wrap items-center gap-2">{action}</div> : null}
+      </header>
+      <div className="border-t border-border">
+        <div className={flush ? '' : 'p-4'}>{children}</div>
+      </div>
+    </section>
   );
 }

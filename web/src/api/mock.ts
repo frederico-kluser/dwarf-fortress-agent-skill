@@ -4,13 +4,22 @@
  * Dados realistas de adventure mode + simulação de eventos WebSocket a cada
  * poucos segundos (`metrics_update`, `screen_translation`, `decision`,
  * `spend_update`, `question_new`, `question_answered`, `memory_update`,
- * `control_state`, `approval_new`) para que todos os painéis pareçam vivos sem
- * backend nenhum.
+ * `control_state`, `approval_new`, `adventure_task`) para que todos os painéis
+ * pareçam vivos sem backend nenhum. As tarefas de aventura
+ * (`new_world`/`new_character`/`load`) são simuladas passo a passo, com o mesmo
+ * envelope `task` do contrato e cancelamento a meio.
  */
 
 import { parseServerEvent } from './events';
 import type { ApiClient, ConnectionStatus, SubscriptionHandlers } from './client';
 import type {
+  AdventureCancelResponse,
+  AdventuresResponse,
+  AdventureSave,
+  AdventureStatusResponse,
+  AdventureTask,
+  AdventureTaskKind,
+  AdventureTaskStart,
   AnswerQuestionRequest,
   AnswerQuestionResponse,
   Approval,
@@ -22,17 +31,23 @@ import type {
   ControlState,
   CreateCampaignRequest,
   CreateInputRequest,
+  CurrentAdventure,
   Decision,
   DecisionBand,
   DecisionStatus,
+  GameActionRequest,
+  GameActionResponse,
   HealthResponse,
   InputHistoryEntry,
   InputInjection,
   JevAgent,
   KeyInfo,
   ListPageQuery,
+  LoadAdventureRequest,
   Memory,
   Metrics,
+  NewCharacterRequest,
+  NewWorldRequest,
   Objective,
   PatchMemoryRequest,
   Question,
@@ -40,6 +55,7 @@ import type {
   ServerEvent,
   SetKeyRequest,
   Spend,
+  SystemStatus,
 } from './types';
 
 /* --------------------------------------------------------------- helpers --- */
@@ -57,6 +73,18 @@ function randomBetween(min: number, max: number): number {
 function round(value: number, decimals: number): number {
   const factor = 10 ** decimals;
   return Math.round(value * factor) / factor;
+}
+
+/** Slug de nome (campanha, save) — minúsculas, sem acentos, separado por `-`. */
+function slugify(value: string): string {
+  return (
+    value
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/(^-|-$)/g, '') || 'mundo'
+  );
 }
 
 function pick<T>(items: readonly T[], index: number): T {
@@ -503,6 +531,78 @@ function whyPtFor(band: DecisionBand): string {
   return 'a ação é reversível e a confiança ficou na banda auto: confirmar antes de executar';
 }
 
+/* ------------------------------------------------------------ aventuras --- */
+
+/** Passos totais por tipo de tarefa — os mesmos números do exemplo do contrato. */
+const TASK_STEPS: Record<AdventureTaskKind, number> = {
+  new_world: 6,
+  new_character: 13,
+  load: 5,
+};
+
+/** Duração de um passo por tipo (o worldgen "demora mais" que os menus). */
+const TASK_STEP_MS: Record<AdventureTaskKind, number> = {
+  new_world: 1100,
+  new_character: 420,
+  load: 800,
+};
+
+/** Ecrãs traduzidos (PT) vistos em cada passo — uma tradução por passo. */
+const TASK_SCREENS: Record<AdventureTaskKind, string[]> = {
+  new_world: [
+    'Ecrã de título — a abrir a criação de mundo…',
+    'A escrever o nome do mundo…',
+    'Parâmetros do mundo — a aceitar o ecrã…',
+    'A gerar o mundo — este passo pode demorar minutos…',
+    'A exportar o mundo gerado…',
+    'Mundo criado — ecrã de tipo de jogo.',
+  ],
+  new_character: [
+    'Ecrã de tipo de jogo — a escolher «Aventura»…',
+    'A criar o personagem…',
+    'A escolher o destino…',
+    'Destino escolhido — a avançar…',
+    'A escolher a raça…',
+    'A confirmar a raça…',
+    'A escolher a origem…',
+    'A aceitar o aspeto…',
+    'A aceitar a personalidade…',
+    '«Pronto para a aventura!» — quase pronto…',
+    'A confirmar o personagem…',
+    '«Ir!» — a entrar no mundo…',
+    'Personagem criado — sessão pronta.',
+  ],
+  load: [
+    'A localizar o jogo guardado na pasta do jogo…',
+    'A ler o mundo guardado…',
+    'A carregar o jogo guardado…',
+    'A preparar a sessão…',
+    'Aventura carregada.',
+  ],
+};
+
+/** Nomes de aventureiro usados quando o personagem é aleatório. */
+const ADVENTURER_NAMES = ['Omba Ziltacathi', 'Urist McShield', 'Dastot Lustrousfrosts', 'Sibrek Goldencurls'];
+
+/** Contexto da tarefa em curso (só mock — o contrato não o transporta). */
+interface TaskContext {
+  worldName?: string;
+  characterName?: string;
+  adventureId?: string;
+}
+
+const SAVE_ROOT = '/home/ondokai/Games/dwarf-fortress-53.16/data/save';
+
+function saveOf(id: string, name: string, kind: AdventureSave['kind'], minutes: number): AdventureSave {
+  return {
+    id,
+    name,
+    kind,
+    folder: `${SAVE_ROOT}/${id}`,
+    saved_at: minutesAgo(minutes),
+  };
+}
+
 /* ------------------------------------------------------------ campanhas --- */
 
 interface CampaignSeed {
@@ -512,6 +612,10 @@ interface CampaignSeed {
   mode: ControlState['mode'];
   kill_switch: boolean;
   ageHours: number;
+  /** Saves da pasta do DF (best-effort, como o `GET .../adventures`). */
+  adventures: AdventureSave[];
+  /** Aventura atual do último snapshot (`null` sem aventureiro). */
+  current: CurrentAdventure | null;
 }
 
 const CAMPAIGN_SEEDS: CampaignSeed[] = [
@@ -522,6 +626,13 @@ const CAMPAIGN_SEEDS: CampaignSeed[] = [
     mode: 'autopilot',
     kill_switch: false,
     ageHours: 3,
+    // Sem aventureiro ativo: o cartão de estado mostra o empty state convidativo.
+    adventures: [
+      saveOf('region1', 'region1', 'active', 60 * 26),
+      saveOf('region2-00202-01-01', 'region2', 'world', 60 * 49),
+      saveOf('vale-negro-00311-02-14', 'Vale Negro', 'world', 60 * 80),
+    ],
+    current: null,
   },
   {
     id: 'b41d7a93-2f88-4c50-8e17-6a9c3d5e0b22',
@@ -530,6 +641,16 @@ const CAMPAIGN_SEEDS: CampaignSeed[] = [
     mode: 'checkpoint',
     kill_switch: false,
     ageHours: 29,
+    adventures: [
+      saveOf('region1', 'region1', 'active', 60 * 5),
+      saveOf('colinas-de-vardan-00180-03-02', 'Colinas de Vardan', 'world', 60 * 52),
+    ],
+    current: {
+      adventure_id: 'region1',
+      adventurer_name: 'Omba Ziltacathi',
+      world_name: 'As Profecias dos Planetas',
+      alive: true,
+    },
   },
   {
     id: 'd7e05c16-9a34-4b72-b0f8-1c4e8a26d5f3',
@@ -538,6 +659,9 @@ const CAMPAIGN_SEEDS: CampaignSeed[] = [
     mode: 'paused',
     kill_switch: true,
     ageHours: 76,
+    // Nenhum save nesta instala — o escolhedor mostra o seu estado vazio.
+    adventures: [],
+    current: null,
   },
 ];
 
@@ -550,6 +674,8 @@ export class MockApiClient implements ApiClient {
   readonly baseUrl = '';
 
   private readonly states = new Map<string, MockState>();
+  /** Timers das tarefas de aventura em curso (uma por campanha). */
+  private readonly taskTimers = new Map<string, number>();
 
   constructor() {
     for (const seed of CAMPAIGN_SEEDS) {
@@ -594,6 +720,8 @@ export class MockApiClient implements ApiClient {
       mode: 'autopilot',
       kill_switch: false,
       ageHours: 0,
+      adventures: [],
+      current: null,
     };
     const state = buildState(seed, index);
     if (body.is_new_game) {
@@ -807,6 +935,221 @@ export class MockApiClient implements ApiClient {
     return this.delay(clone(this.state(id).screen));
   }
 
+  /* ---------------------------------------------------------- aventuras --- */
+
+  listAdventures(id: string) {
+    const state = this.state(id);
+    return this.delay<AdventuresResponse>({
+      adventures: clone(state.adventures),
+      current: state.current ? clone(state.current) : null,
+    });
+  }
+
+  getAdventureStatus(id: string) {
+    const state = this.state(id);
+    return this.delay<AdventureStatusResponse>({
+      task: state.task ? clone(state.task) : null,
+      current: state.current ? clone(state.current) : null,
+    });
+  }
+
+  startNewWorld(id: string, body: NewWorldRequest) {
+    return this.beginTask(id, 'new_world', {
+      worldName: body.world_name?.trim() || undefined,
+    });
+  }
+
+  startNewCharacter(id: string, body: NewCharacterRequest) {
+    // `randomize` clica os labels `Randomize` do jogo: sem `name`, o jogo escolhe.
+    const name =
+      body.name?.trim() ||
+      (body.randomize ? pick(ADVENTURER_NAMES, Math.round(Date.now() / 1000)) : undefined);
+    return this.beginTask(id, 'new_character', { characterName: name });
+  }
+
+  loadAdventure(id: string, body: LoadAdventureRequest) {
+    const state = this.state(id);
+    const save = state.adventures.find((item) => item.id === body.adventure_id);
+    if (!save) {
+      return Promise.reject(new Error(`aventura desconhecida: ${body.adventure_id}`));
+    }
+    return this.beginTask(id, 'load', { adventureId: save.id });
+  }
+
+  cancelAdventureTask(id: string) {
+    const state = this.state(id);
+    const task = state.task;
+    if (!task || task.state !== 'running') {
+      // Sem tarefa em curso: `cancelled: false` e a última tarefa (se houver).
+      return this.delay<AdventureCancelResponse>({
+        cancelled: false,
+        task: task ? clone(task) : null,
+      });
+    }
+    this.stopTaskTimer(id);
+    task.state = 'error';
+    task.error = 'cancelled';
+    this.emitTask(id, state);
+    return this.delay<AdventureCancelResponse>({ cancelled: true, task: clone(task) });
+  }
+
+  /**
+   * Arranca uma tarefa assíncrona (uma de cada vez por campanha — a segunda
+   * devolve o equivalente ao `409` do contrato). O WS `adventure_task` é emitido
+   * no arranque, em cada passo e no fim.
+   */
+  private beginTask(
+    id: string,
+    kind: AdventureTaskKind,
+    context: TaskContext,
+  ): Promise<AdventureTaskStart> {
+    const state = this.state(id);
+    if (state.task && state.task.state === 'running') {
+      return Promise.reject(new Error('já existe uma tarefa de aventura em curso nesta campanha'));
+    }
+    const task: AdventureTask = {
+      id: `t-${Math.random().toString(16).slice(2, 14)}`,
+      kind,
+      state: 'running',
+      step: 0,
+      steps_total: TASK_STEPS[kind],
+      last_screen_pt: TASK_SCREENS[kind][0],
+    };
+    state.task = task;
+    // Composição do contrato: `new-character` herda o mundo/save da tarefa
+    // anterior (`new-world` ou `load`) quando não traz o seu próprio alvo.
+    state.taskContext = { ...state.taskContext, ...context };
+    this.emitTask(id, state);
+    this.scheduleTaskStep(id);
+    return this.delay<AdventureTaskStart>({ task_id: task.id, kind }, 180);
+  }
+
+  /** Avança um passo da tarefa em curso e agenda o seguinte. */
+  private scheduleTaskStep(id: string) {
+    const kind = this.state(id).task?.kind ?? 'load';
+    this.stopTaskTimer(id);
+    const timer = window.setTimeout(() => {
+      const state = this.state(id);
+      const task = state.task;
+      if (!task || task.state !== 'running') return;
+      task.step += 1;
+      const screens = TASK_SCREENS[task.kind];
+      task.last_screen_pt = screens[Math.min(task.step, screens.length) - 1] ?? task.last_screen_pt;
+      if (task.step >= task.steps_total) {
+        task.state = 'done';
+        this.finishTask(state, task);
+      }
+      this.emitTask(id, state);
+      if (task.state === 'running') this.scheduleTaskStep(id);
+    }, TASK_STEP_MS[kind]);
+    this.taskTimers.set(id, timer);
+  }
+
+  private stopTaskTimer(id: string) {
+    const timer = this.taskTimers.get(id);
+    if (timer !== undefined) {
+      window.clearTimeout(timer);
+      this.taskTimers.delete(id);
+    }
+  }
+
+  /** Efeitos da tarefa terminada: saves, aventura atual (como o backend real). */
+  private finishTask(state: MockState, task: AdventureTask) {
+    const context = state.taskContext;
+    const ts = iso(new Date());
+    if (task.kind === 'new_world') {
+      const name = context.worldName ?? 'Mundo novo';
+      const saveId = slugify(name);
+      const existing = state.adventures.find((item) => item.id === saveId);
+      if (existing) {
+        existing.kind = 'world';
+        existing.saved_at = ts;
+      } else {
+        state.adventures = [saveOf(saveId, name, 'world', 0), ...state.adventures];
+      }
+      state.taskContext = { ...context, worldName: name, adventureId: saveId };
+      return;
+    }
+    const saveId = context.adventureId ?? state.adventures[0]?.id ?? 'region1';
+    const save = state.adventures.find((item) => item.id === saveId);
+    if (save) {
+      if (task.kind === 'new_character') save.kind = 'active';
+      save.saved_at = ts;
+    }
+    if (task.kind === 'load' && save?.kind === 'world') {
+      // Contrato: `current` é null sem aventureiro — um save `world` só tem o
+      // mundo gerado; o `new-character` compõe depois e só ele cria o aventureiro.
+      state.current = null;
+      return;
+    }
+    state.current = {
+      adventure_id: saveId,
+      adventurer_name: context.characterName ?? state.current?.adventurer_name ?? 'Aventureiro',
+      world_name: save?.name ?? context.worldName ?? 'Mundo guardado',
+      alive: true,
+    };
+  }
+
+  /** Difunde o progresso da tarefa (objeto `task` do contrato, `task_id` no WS). */
+  private emitTask(id: string, state: MockState) {
+    const task = state.task;
+    if (!task) return;
+    this.emit(id, {
+      type: 'adventure_task',
+      ts: iso(new Date()),
+      payload: {
+        task_id: task.id,
+        kind: task.kind,
+        state: task.state,
+        step: task.step,
+        steps_total: task.steps_total,
+        ...(task.last_screen_pt ? { last_screen_pt: task.last_screen_pt } : {}),
+        ...(task.error ? { error: task.error } : {}),
+      },
+    });
+  }
+
+  /* ------------------------------------------------------------- sistema --- */
+
+  private readonly system: SystemStatus = {
+    game: { running: true, pid: 41236, rpc: true, path: '/home/ondokai/Games/dwarf-fortress-53.16' },
+    backend: { version: '0.1.0-mock' },
+    frontend: { running: true, port: 5173 },
+    loop: { campaigns: [] },
+  };
+
+  getSystemStatus() {
+    const campaigns = [...this.states.values()].map((state) => ({
+      id: state.campaign.id,
+      mode: state.campaign.control.mode,
+      running: state.campaign.control.mode !== 'paused' && !state.campaign.control.kill_switch,
+    }));
+    return this.delay<SystemStatus>(clone({ ...this.system, loop: { campaigns } }));
+  }
+
+  setGameAction(body: GameActionRequest) {
+    const game = this.system.game;
+    if (body.action === 'start') {
+      if (game.running) {
+        return this.delay<GameActionResponse>(
+          { action: 'start', running: true, pid: game.pid, already_running: true },
+          250,
+        );
+      }
+      game.running = true;
+      game.pid = 41236;
+      game.rpc = true;
+      return this.delay<GameActionResponse>(
+        { action: 'start', running: true, pid: game.pid, already_running: false },
+        500,
+      );
+    }
+    game.running = false;
+    game.rpc = false;
+    delete game.pid;
+    return this.delay<GameActionResponse>({ action: 'stop', running: false }, 900);
+  }
+
   /* -------------------------------------------------------- websocket --- */
 
   subscribe(id: string, handlers: SubscriptionHandlers): () => void {
@@ -900,6 +1243,13 @@ interface MockState {
   screen: ScreenTranslation;
   inputs: InputHistoryEntry[];
   keys: KeyInfo[];
+  /** Saves do DF + aventura atual (`docs/api.md` §aventuras). */
+  adventures: AdventureSave[];
+  current: CurrentAdventure | null;
+  /** Última tarefa de aventura (terminada ou em curso) — `null` antes da primeira. */
+  task: AdventureTask | null;
+  /** Contexto mock da tarefa em curso (nome do mundo/personagem/save alvo). */
+  taskContext: TaskContext;
   tick: number;
 }
 
@@ -963,6 +1313,10 @@ function buildState(seed: CampaignSeed, index = 0): MockState {
       { provider: 'typesafe', masked_key: 'ts_live_••••••••b710', set: true },
       { provider: 'deepseek', masked_key: null, set: false },
     ],
+    adventures: seed.adventures.map((save) => ({ ...save })),
+    current: seed.current ? { ...seed.current } : null,
+    task: null,
+    taskContext: {},
     tick: 0,
   };
 

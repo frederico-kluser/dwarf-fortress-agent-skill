@@ -2,13 +2,17 @@ import { useState } from 'react';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Collapse from '@mui/material/Collapse';
-import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import ExpandMore from '@mui/icons-material/ExpandMore';
 import Send from '@mui/icons-material/Send';
 
+import {
+  StaggerReveal,
+  StaggerRevealHeadline,
+  StaggerRevealItem,
+} from '@/components/motion-ui/stagger-reveal';
 import { asText, formatRelative } from '../api/format';
 import {
   isDecisionBand,
@@ -132,14 +136,15 @@ function QuestionProvenance({ question, dense }: { question: Question; dense: bo
   if (!band && !role && !actionId && !why && !source) return null;
 
   return (
-    <Box
-      sx={{
-        p: dense ? 1 : 1.25,
-        borderRadius: 1,
-        borderLeft: '3px solid var(--mui-palette-info-main)',
-        backgroundColor: 'var(--mui-palette-action-hover)',
-      }}
-    >
+    <StaggerRevealItem>
+      <Box
+        sx={{
+          p: dense ? 1 : 1.25,
+          borderRadius: 1,
+          borderLeft: '3px solid var(--mui-palette-info-main)',
+          backgroundColor: 'var(--mui-palette-action-hover)',
+        }}
+      >
       <Stack spacing={0.5}>
         <Stack
           direction="row"
@@ -165,7 +170,8 @@ function QuestionProvenance({ question, dense }: { question: Question; dense: bo
 
         {source ? <SourceDataDetails data={source} dense={dense} /> : null}
       </Stack>
-    </Box>
+      </Box>
+    </StaggerRevealItem>
   );
 }
 
@@ -227,35 +233,46 @@ export default function QuestionCard({
   };
 
   return (
-    <Paper variant="outlined" sx={{ p: dense ? 1.5 : 2 }}>
-      <Stack spacing={1.5}>
-        <Stack
-          direction="row"
-          spacing={1}
-          sx={{ alignItems: 'flex-start', justifyContent: 'space-between' }}
-        >
-          <Typography variant="body1" component="h3" sx={{ fontWeight: 600 }}>
-            {question.question}
-          </Typography>
-          <Stack
-            direction="row"
-            spacing={0.5}
-            sx={{ alignItems: 'center', flexShrink: 0 }}
+    <>
+      {/*
+        Cartão composto no vocabulário semântico Motion UI; a chegada (montagem
+        do cartão — primeira leitura ou evento WebSocket) revela-se em
+        `stagger-reveal`: a pergunta sobe linha a linha e o conteúdo entra em
+        cascata por baixo.
+      */}
+      <StaggerReveal
+        as="article"
+        className={
+          dense
+            ? 'flex flex-col gap-3 rounded-lg border border-border bg-card p-3 text-card-foreground shadow-sm'
+            : 'flex flex-col gap-3 rounded-lg border border-border bg-card p-4 text-card-foreground shadow-sm'
+        }
+      >
+        <div className="flex items-start justify-between gap-2">
+          <StaggerRevealHeadline
+            as="h3"
+            className="min-w-0 text-sm font-semibold text-card-foreground"
           >
+            {question.question}
+          </StaggerRevealHeadline>
+          <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', flexShrink: 0 }}>
             <AttemptsChip attempts={groupAttempts} lastSeenTs={lastSeen} />
             <QuestionStatusChip status={question.status} />
           </Stack>
-        </Stack>
+        </div>
 
-        <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-          {question.id} · {formatRelative(question.ts)}
-          {groupAttempts > 1 && lastSeen ? ` · último re-pedido ${formatRelative(lastSeen)}` : ''}
-        </Typography>
+        <StaggerRevealItem>
+          <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+            {question.id} · {formatRelative(question.ts)}
+            {groupAttempts > 1 && lastSeen ? ` · último re-pedido ${formatRelative(lastSeen)}` : ''}
+          </Typography>
+        </StaggerRevealItem>
 
         <QuestionProvenance question={question} dense={dense} />
 
         {coalesced.length > 0 ? (
-          <Box
+          <StaggerRevealItem>
+            <Box
             sx={{
               p: 1,
               borderRadius: 1,
@@ -278,9 +295,11 @@ export default function QuestionCard({
                 </Typography>
               ))}
             </Stack>
-          </Box>
+            </Box>
+          </StaggerRevealItem>
         ) : null}
 
+        <StaggerRevealItem>
         {answered ? (
           <Box>
             <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
@@ -392,7 +411,8 @@ export default function QuestionCard({
             )}
           </>
         )}
-      </Stack>
+        </StaggerRevealItem>
+      </StaggerReveal>
 
       <AnswerConfirmDialog
         question={pending ? question : null}
@@ -402,6 +422,6 @@ export default function QuestionCard({
         onCancel={cancel}
         onConfirm={confirm}
       />
-    </Paper>
+    </>
   );
 }

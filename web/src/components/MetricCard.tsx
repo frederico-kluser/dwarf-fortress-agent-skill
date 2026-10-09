@@ -1,10 +1,9 @@
 import type { ReactNode } from 'react';
-import Card from '@mui/material/Card';
-import CardContent from '@mui/material/CardContent';
-import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
+import Stack from '@mui/material/Stack';
 import Box from '@mui/material/Box';
 
+import { AnimatedNumber, type NumberFormat } from '@/components/motion-ui/animated-number';
 import { MONO_FONT } from '../theme';
 import Sparkline from './Sparkline';
 
@@ -22,9 +21,23 @@ export interface MetricCardProps {
   color?: string;
   /** Marca o indicador como indisponível (ex.: confidence ausente). */
   unavailable?: boolean;
+  /**
+   * Valor numérico para o contador animado (Motion UI `AnimatedNumber`) —
+   * ex.: gasto acumulado em USD. Quando presente, substitui o texto estático.
+   */
+  numericValue?: number;
+  /** Formato `Intl.NumberFormat` do contador (moeda, casas decimais). */
+  numericFormat?: NumberFormat;
+  /** Texto antes do número do contador (ex.: `US$ `). */
+  numericPrefix?: string;
 }
 
-/** Cartão de métrica denso: valor grande, unidade pequena, sparkline opcional. */
+/**
+ * Cartão de métrica denso: valor grande, unidade pequena, sparkline opcional.
+ * O invólucro é um cartão no vocabulário semântico Motion UI (`bg-card`,
+ * `border-border`, `rounded-lg`); os números mutáveis contam com
+ * `AnimatedNumber` (Motion+), que respeita reduced motion pelo tema.
+ */
 export default function MetricCard({
   title,
   value,
@@ -34,25 +47,20 @@ export default function MetricCard({
   series,
   color = 'primary.main',
   unavailable = false,
+  numericValue,
+  numericFormat,
+  numericPrefix,
 }: MetricCardProps) {
   return (
-    <Card sx={{ height: '100%' }}>
-      <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
-        <Stack
-          direction="row"
-          spacing={1}
-          sx={{ alignItems: 'center', color, mb: 0.5 }}
-        >
+    <div className="h-full rounded-lg border border-border bg-card text-card-foreground shadow-sm">
+      <div className="p-3">
+        <Stack direction="row" spacing={1} sx={{ alignItems: 'center', color, mb: 0.5 }}>
           {icon}
           <Typography variant="overline" sx={{ color: 'text.secondary' }}>
             {title}
           </Typography>
         </Stack>
-        <Stack
-          direction="row"
-          spacing={0.5}
-          sx={{ alignItems: 'baseline', flexWrap: 'wrap' }}
-        >
+        <Stack direction="row" spacing={0.5} sx={{ alignItems: 'baseline', flexWrap: 'wrap' }}>
           <Typography
             variant="h4"
             component="p"
@@ -61,7 +69,17 @@ export default function MetricCard({
               color: unavailable ? 'text.secondary' : 'text.primary',
             }}
           >
-            {value}
+            {numericValue !== undefined && !unavailable ? (
+              <AnimatedNumber
+                value={numericValue}
+                transition="lively"
+                format={numericFormat}
+                prefix={numericPrefix}
+                locales="pt-PT"
+              />
+            ) : (
+              value
+            )}
           </Typography>
           {unit ? (
             <Typography variant="caption" sx={{ color: 'text.secondary' }}>
@@ -79,7 +97,7 @@ export default function MetricCard({
             <Sparkline values={series} label={title} color={color} />
           </Box>
         ) : null}
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }

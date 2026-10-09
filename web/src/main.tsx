@@ -11,10 +11,13 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import '@fontsource/roboto/400.css';
 import '@fontsource/roboto/500.css';
 import '@fontsource/roboto/700.css';
+import './index.css';
 
 import App from './App';
 import { ApiProvider } from './api/ApiProvider';
 import { theme } from './theme';
+import { MotionUIThemeProvider } from '@/components/motion-ui/ui-theme';
+import motionTheme from '../motion.theme';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -59,13 +62,16 @@ createRoot(document.getElementById('root') as HTMLElement).render(
     <InitColorSchemeScript attribute="class" defaultMode="dark" />
     <ThemeProvider theme={theme} defaultMode="dark" noSsr disableTransitionOnChange>
       <CssBaseline />
-      <AppErrorBoundary>
-        <QueryClientProvider client={queryClient}>
-          <ApiProvider>
-            <App />
-          </ApiProvider>
-        </QueryClientProvider>
-      </AppErrorBoundary>
+      {/* Motion UI: uma só vez na raiz — sem isto as secções caem nos defaults. */}
+      <MotionUIThemeProvider theme={motionTheme}>
+        <AppErrorBoundary>
+          <QueryClientProvider client={queryClient}>
+            <ApiProvider>
+              <App />
+            </ApiProvider>
+          </QueryClientProvider>
+        </AppErrorBoundary>
+      </MotionUIThemeProvider>
     </ThemeProvider>
   </StrictMode>,
 );

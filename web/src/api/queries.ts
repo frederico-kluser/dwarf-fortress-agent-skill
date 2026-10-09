@@ -18,7 +18,13 @@ import {
 
 import { ApiContext, type ApiContextValue } from './context';
 import type { ApiClient, ConnectionStatus } from './client';
+import { adventureTaskFromEvent } from './types';
 import type {
+  AdventureCancelResponse,
+  AdventuresResponse,
+  AdventureStatusResponse,
+  AdventureTask,
+  AdventureTaskStart,
   AnswerQuestionRequest,
   AnswerQuestionResponse,
   Approval,
@@ -29,11 +35,16 @@ import type {
   ControlState,
   CreateInputRequest,
   Decision,
+  GameActionRequest,
+  GameActionResponse,
   InputHistoryEntry,
   InputInjection,
   KeyInfo,
+  LoadAdventureRequest,
   Memory,
   Metrics,
+  NewCharacterRequest,
+  NewWorldRequest,
   Objective,
   PatchMemoryRequest,
   Question,
@@ -41,6 +52,7 @@ import type {
   ServerEvent,
   SetKeyRequest,
   Spend,
+  SystemStatus,
 } from './types';
 
 export const queryKeys = {
@@ -56,6 +68,12 @@ export const queryKeys = {
   approvals: (id: string) => ['approvals', id] as const,
   screen: (id: string) => ['screen', id] as const,
   keys: (id: string) => ['keys', id] as const,
+  /** Saves do DF + aventura atual. */
+  adventures: (id: string) => ['adventures', id] as const,
+  /** Progresso ao vivo da tarefa de aventura. */
+  adventureStatus: (id: string) => ['adventureStatus', id] as const,
+  /** Estado global do sistema (jogo, RPC, frontend, loop) — sem âmbito de campanha. */
+  system: ['system'] as const,
 };
 
 /** Filtro por omissão de `GET .../approvals` — só as pendentes. */
@@ -310,6 +328,48 @@ export function useKeys(): UseQueryResult<KeyInfo[], Error> {
   return useCampaignQuery(queryKeys.keys(campaignId), (c, id) => c.listKeys(id));
 }
 
+/* ---------------------------------------------------------- aventuras --- */
+
+/** `GET .../adventures` — saves do DF + aventura atual. */
+export function useAdventures(): UseQueryResult<AdventuresResponse, Error> {
+  const campaignId = useCampaignId() ?? '';
+  return useCampaignQuery(queryKeys.adventures(campaignId), (c, id) => c.listAdventures(id));
+}
+
+/**
+ * `GET .../adventures/status` — progresso ao vivo. Rede de segurança com
+ * polling curto enquanto há tarefa a correr (o caminho normal é o WS
+ * `adventure_task`); sem tarefa o `staleTime` evita ruído.
+ */
+export function useAdventureStatus(): UseQueryResult<AdventureStatusResponse, Error> {
+  const campaignId = useCampaignId() ?? '';
+  return useCampaignQuery(queryKeys.adventureStatus(campaignId), (c, id) => c.getAdventureStatus(id), {
+    refetchInterval: 2500,
+  });
+}
+
+/** Tarefa a correr (se houver) — atalho para a UI. */
+export function runningTask(status?: AdventureStatusResponse | null): AdventureTask | null {
+  const task = status?.task ?? null;
+  return task && task.state === 'running' ? task : null;
+}
+
+/* ------------------------------------------------------------- sistema --- */
+
+/**
+ * `GET /api/system/status` — estado global (jogo, RPC, frontend, loop).
+ * Fora do âmbito da campanha: corre mesmo sem campanha selecionada.
+ */
+export function useSystemStatus(): UseQueryResult<SystemStatus, Error> {
+  const client = useApi();
+  return useQuery<SystemStatus, Error>({
+    queryKey: queryKeys.system,
+    queryFn: () => client.getSystemStatus(),
+    refetchInterval: 5000,
+    staleTime: 1000,
+  });
+}
+
 /* ------------------------------------------------- eventos em tempo real --- */
 
 /**
@@ -390,6 +450,21 @@ export function applyServerEvent(
         ),
       );
       break;
+    case 'adventure_task': {
+      // Aditivo: cada transição (arranque, passo, fim) atualiza o progresso ao
+      // vivo. `task_id` (WS) → `id` (objeto `task` do GET .../status).
+      const task = adventureTaskFromEvent(event.payload);
+      queryClient.setQueryData<AdventureStatusResponse>(
+        queryKeys.adventureStatus(campaignId),
+        (prev) => ({ task, current: prev?.current ?? null }),
+      );
+      if (task.state !== 'running') {
+        // Fim (done/error): a lista de saves e a aventura atual podem ter mudado.
+        void queryClient.invalidateQueries({ queryKey: queryKeys.adventures(campaignId) });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.adventureStatus(campaignId) });
+      }
+      break;
+    }
     case 'game_state':
       // Estado crítico em EN enviado ao JEV — não é apresentado na UI (só PT).
       break;
@@ -568,6 +643,139 @@ export function useSetKey(options?: {
     onSuccess: (key) => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.keys(campaignId) });
       options?.onSuccess?.(key);
+    },
+    onError: (error) => options?.onError?.(error),
+  });
+}
+
+/* ------------------------------------------------- tarefas de aventura --- */
+
+/**
+ * Escreve a tarefa recém-arrancada na cache: o arranque da tarefa é imediatamente
+ * visível (estado `running`, passos ainda desconhecidos) até ao primeiro evento
+ * `adventure_task` ou `GET .../status` preencher os passos.
+ */
+function seedRunningTask(
+  queryClient: ReturnType<typeof useQueryClient>,
+  campaignId: string,
+  start: AdventureTaskStart,
+) {
+  queryClient.setQueryData<AdventureStatusResponse>(
+    queryKeys.adventureStatus(campaignId),
+    (prev) => ({
+      task: { id: start.task_id, kind: start.kind, state: 'running', step: 0, steps_total: 0 },
+      current: prev?.current ?? null,
+    }),
+  );
+  void queryClient.invalidateQueries({ queryKey: queryKeys.adventures(campaignId) });
+}
+
+/**
+ * `POST .../adventures/new-world` — worldgen assíncrono (pode demorar minutos).
+ * O corpo tem os defaults do wizard; `world_name` é *soft* no contrato.
+ */
+export function useStartNewWorld(options?: {
+  onSuccess?: (start: AdventureTaskStart) => void;
+  onError?: (error: unknown) => void;
+}): UseMutationResult<AdventureTaskStart, Error, NewWorldRequest> {
+  const client = useApi();
+  const campaignId = useCampaignId() ?? '';
+  const queryClient = useQueryClient();
+  return useMutation<AdventureTaskStart, Error, NewWorldRequest>({
+    mutationFn: (body) => client.startNewWorld(campaignId, body),
+    onSuccess: (start) => {
+      seedRunningTask(queryClient, campaignId, start);
+      options?.onSuccess?.(start);
+    },
+    onError: (error) => options?.onError?.(error),
+  });
+}
+
+/** `POST .../adventures/new-character` — menus de personagem (assíncrono). */
+export function useStartNewCharacter(options?: {
+  onSuccess?: (start: AdventureTaskStart) => void;
+  onError?: (error: unknown) => void;
+}): UseMutationResult<AdventureTaskStart, Error, NewCharacterRequest> {
+  const client = useApi();
+  const campaignId = useCampaignId() ?? '';
+  const queryClient = useQueryClient();
+  return useMutation<AdventureTaskStart, Error, NewCharacterRequest>({
+    mutationFn: (body) => client.startNewCharacter(campaignId, body),
+    onSuccess: (start) => {
+      seedRunningTask(queryClient, campaignId, start);
+      options?.onSuccess?.(start);
+    },
+    onError: (error) => options?.onError?.(error),
+  });
+}
+
+/** `POST .../adventures/load` — carrega um save da lista (assíncrono). */
+export function useLoadAdventure(options?: {
+  onSuccess?: (start: AdventureTaskStart) => void;
+  onError?: (error: unknown) => void;
+}): UseMutationResult<AdventureTaskStart, Error, LoadAdventureRequest> {
+  const client = useApi();
+  const campaignId = useCampaignId() ?? '';
+  const queryClient = useQueryClient();
+  return useMutation<AdventureTaskStart, Error, LoadAdventureRequest>({
+    mutationFn: (body) => client.loadAdventure(campaignId, body),
+    onSuccess: (start) => {
+      seedRunningTask(queryClient, campaignId, start);
+      options?.onSuccess?.(start);
+    },
+    onError: (error) => options?.onError?.(error),
+  });
+}
+
+/** `POST .../adventures/cancel` — o motor para de enviar teclas; erro `cancelled`. */
+export function useCancelAdventureTask(options?: {
+  onSuccess?: (result: AdventureCancelResponse) => void;
+  onError?: (error: unknown) => void;
+}): UseMutationResult<AdventureCancelResponse, Error, void> {
+  const client = useApi();
+  const campaignId = useCampaignId() ?? '';
+  const queryClient = useQueryClient();
+  return useMutation<AdventureCancelResponse, Error, void>({
+    mutationFn: () => client.cancelAdventureTask(campaignId),
+    onSuccess: (result) => {
+      queryClient.setQueryData<AdventureStatusResponse>(
+        queryKeys.adventureStatus(campaignId),
+        (prev) => ({ task: result.task, current: prev?.current ?? null }),
+      );
+      void queryClient.invalidateQueries({ queryKey: queryKeys.adventures(campaignId) });
+      options?.onSuccess?.(result);
+    },
+    onError: (error) => options?.onError?.(error),
+  });
+}
+
+/* ------------------------------------------------------------- sistema --- */
+
+/** `POST /api/system/game` — arranca/pára o processo do jogo (fora da campanha). */
+export function useGameAction(options?: {
+  onSuccess?: (result: GameActionResponse) => void;
+  onError?: (error: unknown) => void;
+}): UseMutationResult<GameActionResponse, Error, GameActionRequest> {
+  const client = useApi();
+  const queryClient = useQueryClient();
+  return useMutation<GameActionResponse, Error, GameActionRequest>({
+    mutationFn: (body) => client.setGameAction(body),
+    onSuccess: (result) => {
+      queryClient.setQueryData<SystemStatus>(queryKeys.system, (prev) =>
+        prev
+          ? {
+              ...prev,
+              game: {
+                ...prev.game,
+                running: result.running,
+                ...(typeof result.pid === 'number' ? { pid: result.pid } : {}),
+                ...(result.running ? {} : { rpc: false }),
+              },
+            }
+          : prev,
+      );
+      void queryClient.invalidateQueries({ queryKey: queryKeys.system });
+      options?.onSuccess?.(result);
     },
     onError: (error) => options?.onError?.(error),
   });

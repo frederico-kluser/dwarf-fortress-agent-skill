@@ -18,6 +18,11 @@ import Block from '@mui/icons-material/Block';
 import ExpandMore from '@mui/icons-material/ExpandMore';
 import TaskAlt from '@mui/icons-material/TaskAlt';
 
+import {
+  StaggerReveal,
+  StaggerRevealHeadline,
+  StaggerRevealItem,
+} from '@/components/motion-ui/stagger-reveal';
 import { errorMessage } from '../api/events';
 import { formatDateTime, formatRelative } from '../api/format';
 import { useApprovals, useDecideApproval } from '../api/queries';
@@ -218,75 +223,76 @@ export default function ApprovalsSection({ mode }: ApprovalsSectionProps) {
             <ListItem
               key={approval.id}
               divider={index < approvalGroups.length - 1}
-              alignItems="flex-start"
-              sx={{ gap: 1, flexWrap: 'wrap', py: 1.5 }}
+              sx={{ display: 'block', py: 1.5 }}
             >
-              <ListItemText
-                sx={{ minWidth: 240, flexGrow: 1 }}
-                primary={
-                  <Stack
-                    direction="row"
-                    spacing={1}
-                    useFlexGap
-                    sx={{ alignItems: 'center', flexWrap: 'wrap' }}
-                  >
-                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
+              {/*
+                Chegada do cartão de aprovação (primeira leitura ou evento
+                WebSocket `approval_new`): `stagger-reveal` com o nome da ação
+                por título e os detalhes em cascata por baixo.
+              */}
+              <StaggerReveal className="flex flex-wrap items-start gap-2">
+                <div className="min-w-60 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <StaggerRevealHeadline
+                      as="h3"
+                      className="text-xs font-semibold text-foreground"
+                    >
                       {approval.action_name_en}
-                    </Typography>
+                    </StaggerRevealHeadline>
                     {isDecisionBand(approval.band) ? <BandChip band={approval.band} /> : null}
                     <AttemptsChip attempts={groupAttempts} lastSeenTs={lastSeen} />
-                  </Stack>
-                }
-                secondary={
-                  <Stack spacing={0.25} sx={{ mt: 0.5 }}>
-                    {approval.question ? (
-                      <Typography variant="body2" component="span">
-                        {approval.question}
+                  </div>
+                  <StaggerRevealItem>
+                    <div className="mt-1 flex flex-col gap-0.5">
+                      {approval.question ? (
+                        <Typography variant="body2" component="span">
+                          {approval.question}
+                        </Typography>
+                      ) : null}
+                      <Typography
+                        variant="caption"
+                        component="span"
+                        sx={{ color: 'text.secondary', fontFamily: MONO_FONT }}
+                      >
+                        {approval.id} · {approval.action_id} · {formatRelative(approval.ts, now)} ·{' '}
+                        {formatDateTime(approval.ts)}
                       </Typography>
-                    ) : null}
-                    <Typography
-                      variant="caption"
-                      component="span"
-                      sx={{ color: 'text.secondary', fontFamily: MONO_FONT }}
-                    >
-                      {approval.id} · {approval.action_id} · {formatRelative(approval.ts, now)} ·{' '}
-                      {formatDateTime(approval.ts)}
-                    </Typography>
-                    {approval.description_en ? (
-                      <Typography variant="caption" component="span" sx={{ color: 'text.secondary' }}>
-                        {approval.description_en}
-                      </Typography>
-                    ) : null}
-                    {coalesced.length > 0 ? (
-                      <Typography variant="caption" component="span" sx={{ color: 'text.secondary' }}>
-                        Agrupados: {coalesced.length + 1} pedidos da mesma ação ({approval.action_id}) —
-                        decidir esta decide o grupo (duplicados pendentes são descartados).
-                      </Typography>
-                    ) : null}
-                  </Stack>
-                }
-              />
-              <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexShrink: 0 }}>
-                <Button
-                  variant="contained"
-                  size="small"
-                  startIcon={<TaskAlt />}
-                  disabled={decideMutation.isPending}
-                  onClick={() => setPending({ approval, approve: true })}
-                >
-                  Aprovar
-                </Button>
-                <Button
-                  variant="outlined"
-                  size="small"
-                  color="error"
-                  startIcon={<Block />}
-                  disabled={decideMutation.isPending}
-                  onClick={() => setPending({ approval, approve: false })}
-                >
-                  Rejeitar
-                </Button>
-              </Stack>
+                      {approval.description_en ? (
+                        <Typography variant="caption" component="span" sx={{ color: 'text.secondary' }}>
+                          {approval.description_en}
+                        </Typography>
+                      ) : null}
+                      {coalesced.length > 0 ? (
+                        <Typography variant="caption" component="span" sx={{ color: 'text.secondary' }}>
+                          Agrupados: {coalesced.length + 1} pedidos da mesma ação ({approval.action_id}) —
+                          decidir esta decide o grupo (duplicados pendentes são descartados).
+                        </Typography>
+                      ) : null}
+                    </div>
+                  </StaggerRevealItem>
+                </div>
+                <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexShrink: 0 }}>
+                  <Button
+                    variant="contained"
+                    size="small"
+                    startIcon={<TaskAlt />}
+                    disabled={decideMutation.isPending}
+                    onClick={() => setPending({ approval, approve: true })}
+                  >
+                    Aprovar
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    color="error"
+                    startIcon={<Block />}
+                    disabled={decideMutation.isPending}
+                    onClick={() => setPending({ approval, approve: false })}
+                  >
+                    Rejeitar
+                  </Button>
+                </Stack>
+              </StaggerReveal>
             </ListItem>
             );
           })}

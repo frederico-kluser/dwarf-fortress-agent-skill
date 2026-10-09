@@ -10,6 +10,10 @@ import { MockApiClient } from './mock';
 import { errorMessage, parseServerEvent, safeJsonParse } from './events';
 import {
   API_PATHS,
+  type AdventureCancelResponse,
+  type AdventuresResponse,
+  type AdventureStatusResponse,
+  type AdventureTaskStart,
   type AnswerQuestionRequest,
   type AnswerQuestionResponse,
   type ApiErrorBody,
@@ -22,13 +26,18 @@ import {
   type CreateCampaignRequest,
   type CreateInputRequest,
   type Decision,
+  type GameActionRequest,
+  type GameActionResponse,
   type HealthResponse,
   type InputHistoryEntry,
   type InputInjection,
   type KeyInfo,
   type ListPageQuery,
+  type LoadAdventureRequest,
   type Memory,
   type Metrics,
+  type NewCharacterRequest,
+  type NewWorldRequest,
   type Objective,
   type PatchMemoryRequest,
   type Question,
@@ -36,6 +45,7 @@ import {
   type ServerEvent,
   type SetKeyRequest,
   type Spend,
+  type SystemStatus,
 } from './types';
 
 /** Estado da ligação WebSocket, tal como a UI o mostra. */
@@ -94,6 +104,24 @@ export interface ApiClient {
 
   setControl(id: string, body: ControlRequest): Promise<ControlState>;
   getScreen(id: string): Promise<ScreenTranslation>;
+
+  /** `GET .../adventures` — saves do DF + aventura atual. */
+  listAdventures(id: string): Promise<AdventuresResponse>;
+  /** `POST .../adventures/new-world` — `202` com a tarefa arrancada (pode demorar minutos). */
+  startNewWorld(id: string, body: NewWorldRequest): Promise<AdventureTaskStart>;
+  /** `POST .../adventures/new-character` — `202`; compõe com `new-world`/`load`. */
+  startNewCharacter(id: string, body: NewCharacterRequest): Promise<AdventureTaskStart>;
+  /** `POST .../adventures/load` — `202`; `422` quando o save não existe. */
+  loadAdventure(id: string, body: LoadAdventureRequest): Promise<AdventureTaskStart>;
+  /** `GET .../adventures/status` — progresso ao vivo da tarefa. */
+  getAdventureStatus(id: string): Promise<AdventureStatusResponse>;
+  /** `POST .../adventures/cancel` — o motor para de enviar teclas. */
+  cancelAdventureTask(id: string): Promise<AdventureCancelResponse>;
+
+  /** `GET /api/system/status` — estado global (jogo, RPC, frontend, loop). */
+  getSystemStatus(): Promise<SystemStatus>;
+  /** `POST /api/system/game` — arranca/pára o processo do jogo. */
+  setGameAction(body: GameActionRequest): Promise<GameActionResponse>;
 
   /** Abre o canal de tempo real; devolve a função de cancelamento. */
   subscribe(id: string, handlers: SubscriptionHandlers): () => void;
@@ -277,6 +305,57 @@ export class HttpApiClient implements ApiClient {
 
   getScreen(id: string) {
     return this.request<ScreenTranslation>(API_PATHS.screen(id));
+  }
+
+  /* ---------------------------------------------------------- aventuras --- */
+
+  listAdventures(id: string) {
+    return this.request<AdventuresResponse>(API_PATHS.adventures(id));
+  }
+
+  startNewWorld(id: string, body: NewWorldRequest) {
+    return this.request<AdventureTaskStart>(API_PATHS.newWorld(id), {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  }
+
+  startNewCharacter(id: string, body: NewCharacterRequest) {
+    return this.request<AdventureTaskStart>(API_PATHS.newCharacter(id), {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  }
+
+  loadAdventure(id: string, body: LoadAdventureRequest) {
+    return this.request<AdventureTaskStart>(API_PATHS.loadAdventure(id), {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  }
+
+  getAdventureStatus(id: string) {
+    return this.request<AdventureStatusResponse>(API_PATHS.adventuresStatus(id));
+  }
+
+  cancelAdventureTask(id: string) {
+    return this.request<AdventureCancelResponse>(API_PATHS.adventuresCancel(id), {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
+  }
+
+  /* ------------------------------------------------------------- sistema --- */
+
+  getSystemStatus() {
+    return this.request<SystemStatus>(API_PATHS.systemStatus);
+  }
+
+  setGameAction(body: GameActionRequest) {
+    return this.request<GameActionResponse>(API_PATHS.systemGame, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
   }
 
   /* ------------------------------------------- histórico local de inputs --- */

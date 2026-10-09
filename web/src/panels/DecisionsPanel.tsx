@@ -2,13 +2,8 @@ import { useMemo, useState } from 'react';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
-import Dialog from '@mui/material/Dialog';
-import DialogActions from '@mui/material/DialogActions';
-import DialogContent from '@mui/material/DialogContent';
-import DialogTitle from '@mui/material/DialogTitle';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import IconButton from '@mui/material/IconButton';
-import LinearProgress from '@mui/material/LinearProgress';
 import MenuItem from '@mui/material/MenuItem';
 import Stack from '@mui/material/Stack';
 import Switch from '@mui/material/Switch';
@@ -23,6 +18,14 @@ import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
 import ExpandMore from '@mui/icons-material/ExpandMore';
 
+import {
+  Sheet,
+  SheetBackdrop,
+  SheetClose,
+  SheetHandle,
+  SheetPanel,
+} from '@/components/motion-ui/sheet';
+import { ProgressBar } from '@/components/motion-ui/progress-bar';
 import { errorMessage } from '../api/events';
 import {
   BAND_DESCRIPTION,
@@ -383,18 +386,32 @@ export default function DecisionsPanel() {
         </SectionCard>
       </Stack>
 
-      <Dialog
+      {/*
+        Detalhe da decisão num `sheet` do registry Motion UI (arrastar para
+        fechar, foco gerido, scrim clicável) — em vez do dialog centrado.
+      */}
+      <Sheet
         open={detail !== null}
-        onClose={() => setDetailId(null)}
-        maxWidth="md"
-        fullWidth
-        aria-labelledby="detalhe-decisao-titulo"
+        onOpenChange={(open) => {
+          if (!open) setDetailId(null);
+        }}
       >
-        <DialogTitle id="detalhe-decisao-titulo">
-          Decisão {detail?.id ?? '—'}
-        </DialogTitle>
-        <DialogContent>
-          {detail ? (
+        <SheetBackdrop label="Fechar o detalhe da decisão" />
+        <SheetPanel labelledBy="detalhe-decisao-titulo" className="max-w-3xl!">
+          <SheetHandle />
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h2 id="detalhe-decisao-titulo" className="text-sm font-bold text-card-foreground">
+                Decisão {detail?.id ?? '—'}
+              </h2>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Pedido completo, probabilidades, respostas tipadas, latência e custo.
+              </p>
+            </div>
+            <SheetClose label="Fechar o detalhe da decisão" />
+          </div>
+          <div className="mt-3 max-h-[65vh] overflow-y-auto">
+            {detail ? (
             <Stack spacing={2} sx={{ mt: 0.5 }}>
               <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
                 <AgentChip agent={detail.agent} />
@@ -488,9 +505,10 @@ export default function DecisionsPanel() {
                             {(value * 100).toFixed(1)} %
                           </Typography>
                         </Stack>
-                        <LinearProgress
-                          variant="determinate"
-                          value={Math.round(value * 100)}
+                        <ProgressBar
+                          value={value}
+                          size="sm"
+                          progressbar
                           aria-label={`Probabilidade de ${option}: ${(value * 100).toFixed(1)} por cento`}
                         />
                       </Stack>
@@ -499,12 +517,13 @@ export default function DecisionsPanel() {
                 )}
               </Box>
             </Stack>
-          ) : null}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDetailId(null)}>Fechar</Button>
-        </DialogActions>
-      </Dialog>
+            ) : null}
+          </div>
+          <div className="mt-3 flex justify-end">
+            <Button onClick={() => setDetailId(null)}>Fechar</Button>
+          </div>
+        </SheetPanel>
+      </Sheet>
     </PanelShell>
   );
 }

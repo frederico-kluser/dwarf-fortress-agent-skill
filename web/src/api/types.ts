@@ -124,6 +124,16 @@ export const API_PATHS = {
     `/api/campaigns/${encodeURIComponent(id)}/approvals/${encodeURIComponent(approvalId)}/approve`,
   reject: (id: string, approvalId: string) =>
     `/api/campaigns/${encodeURIComponent(id)}/approvals/${encodeURIComponent(approvalId)}/reject`,
+  /** Saves do DF + aventura atual (`docs/api.md` §aventuras). */
+  adventures: (id: string) => `/api/campaigns/${encodeURIComponent(id)}/adventures`,
+  newWorld: (id: string) => `/api/campaigns/${encodeURIComponent(id)}/adventures/new-world`,
+  newCharacter: (id: string) => `/api/campaigns/${encodeURIComponent(id)}/adventures/new-character`,
+  loadAdventure: (id: string) => `/api/campaigns/${encodeURIComponent(id)}/adventures/load`,
+  adventuresStatus: (id: string) => `/api/campaigns/${encodeURIComponent(id)}/adventures/status`,
+  adventuresCancel: (id: string) => `/api/campaigns/${encodeURIComponent(id)}/adventures/cancel`,
+  /** Sistema global (`docs/api.md` §sistema) — fora do âmbito da campanha. */
+  systemStatus: '/api/system/status',
+  systemGame: '/api/system/game',
   ws: (id: string) => `/ws/campaigns/${encodeURIComponent(id)}`,
 } as const;
 
@@ -549,6 +559,231 @@ export interface ScreenTranslation {
   ts: Iso8601;
 }
 
+/* -------------------------------------------------------------- aventuras --- */
+
+/**
+ * Tipo de save derivado da pasta de saves do DF (`docs/api.md` §aventuras):
+ * `active` = `world.sav` presente (jogo já iniciado, carregável com `load-save`);
+ * `world` = só `world.dat` (mundo gerado, nenhum jogo iniciado).
+ */
+export type AdventureKind = 'active' | 'world';
+
+/** Tipos de save do contrato — guard para payloads que podem trazer lixo. */
+export const ADVENTURE_KINDS: readonly AdventureKind[] = ['active', 'world'];
+
+/** `true` se o valor for um tipo de save conhecido. */
+export function isAdventureKind(value: unknown): value is AdventureKind {
+  return typeof value === 'string' && (ADVENTURE_KINDS as readonly string[]).includes(value);
+}
+
+/**
+ * Tipo de tarefa de aventura (`docs/api.md` §tarefas de aventura):
+ * `new_world` (worldgen) · `new_character` (menus de personagem) · `load`.
+ */
+export type AdventureTaskKind = 'new_world' | 'new_character' | 'load';
+
+/** Tipos de tarefa do contrato — guard para payloads que podem trazer lixo. */
+export const ADVENTURE_TASK_KINDS: readonly AdventureTaskKind[] = [
+  'new_world',
+  'new_character',
+  'load',
+];
+
+/** `true` se o valor for um tipo de tarefa de aventura conhecido. */
+export function isAdventureTaskKind(value: unknown): value is AdventureTaskKind {
+  return typeof value === 'string' && (ADVENTURE_TASK_KINDS as readonly string[]).includes(value);
+}
+
+/** Estados do contrato (fixos): `running` | `done` | `error`. */
+export type AdventureTaskState = 'running' | 'done' | 'error';
+
+/** Estados de tarefa do contrato — guard para payloads que podem trazer lixo. */
+export const ADVENTURE_TASK_STATES: readonly AdventureTaskState[] = ['running', 'done', 'error'];
+
+/** `true` se o valor for um estado de tarefa de aventura conhecido. */
+export function isAdventureTaskState(value: unknown): value is AdventureTaskState {
+  return typeof value === 'string' && (ADVENTURE_TASK_STATES as readonly string[]).includes(value);
+}
+
+/**
+ * Parâmetros de worldgen (`POST .../adventures/new-world`):
+ * `quick` = tenta encurtar o worldgen (passo *soft*); `default` = aceita o ecrã.
+ */
+export type WorldParams = 'quick' | 'default';
+
+/** Parâmetros de worldgen do contrato — guard para payloads que podem trazer lixo. */
+export const WORLD_PARAMS: readonly WorldParams[] = ['quick', 'default'];
+
+/** Um save da pasta `<df>/data/save/` (parsing best-effort do backend). */
+export interface AdventureSave {
+  /** Nome da pasta do save — é o argumento do `load-save` do DFHack. */
+  id: string;
+  /** Nome da pasta sem o sufixo sazonal `region#-AAAA-MM-DD` (best-effort). */
+  name: string;
+  kind: AdventureKind;
+  /** Caminho absoluto da pasta do save. */
+  folder: string;
+  /** `mtime` de `world.sav`/`world.dat` (ou da pasta), ISO-8601 UTC. */
+  saved_at: Iso8601;
+  /** Omitido hoje — nomes de personagens não são parseáveis offline. */
+  characters?: string[];
+}
+
+/** Aventura atual, do último snapshot do jogo (`null` sem aventureiro). */
+export interface CurrentAdventure {
+  /** Preenchido quando é conhecido (última carga ou pasta com o nome do mundo). */
+  adventure_id?: string;
+  adventurer_name: string;
+  world_name: string;
+  /** Best-effort: `false` quando o gamelog marca a morte do aventureiro. */
+  alive: boolean;
+}
+
+/** `GET .../adventures` — lista de saves + aventura atual. */
+export interface AdventuresResponse {
+  adventures: AdventureSave[];
+  current: CurrentAdventure | null;
+}
+
+/**
+ * Tarefa assíncrona de aventura (`docs/api.md` §tarefas de aventura). Uma de
+ * cada vez por campanha; cada passo corre com ≤ 5 tentativas e, na falha final,
+ * `error` traz o relatório PT (passo, tentativas, ações, telas).
+ */
+export interface AdventureTask {
+  id: string;
+  kind: AdventureTaskKind;
+  state: AdventureTaskState;
+  step: number;
+  steps_total: number;
+  /** Último ecrã traduzido, calculado dentro da tarefa (uma tradução por passo). */
+  last_screen_pt?: string;
+  /** Relatório PT do erro, ou `"cancelled"` quando cancelada pelo humano. */
+  error?: string;
+}
+
+/** `payload` do evento WS `adventure_task` (aditivo). */
+export interface AdventureTaskEvent {
+  task_id: string;
+  kind: AdventureTaskKind;
+  state: AdventureTaskState;
+  step: number;
+  steps_total: number;
+  last_screen_pt?: string;
+  error?: string;
+}
+
+/** Evento WS `adventure_task` → objeto `task` do `GET .../adventures/status`. */
+export function adventureTaskFromEvent(event: AdventureTaskEvent): AdventureTask {
+  return {
+    id: event.task_id,
+    kind: event.kind,
+    state: event.state,
+    step: event.step,
+    steps_total: event.steps_total,
+    ...(event.last_screen_pt ? { last_screen_pt: event.last_screen_pt } : {}),
+    ...(event.error ? { error: event.error } : {}),
+  };
+}
+
+/** `202` dos três `POST` (`new-world`, `new-character`, `load`). */
+export interface AdventureTaskStart {
+  task_id: string;
+  kind: AdventureTaskKind;
+}
+
+/** `GET .../adventures/status` — progresso ao vivo (nunca bloqueia). */
+export interface AdventureStatusResponse {
+  /** `null` quando esta campanha ainda não correu nenhuma tarefa. */
+  task: AdventureTask | null;
+  current: CurrentAdventure | null;
+}
+
+/** `POST .../adventures/new-world` — `world_name` é *soft* (nunca aborta). */
+export interface NewWorldRequest {
+  world_name?: string;
+  params: WorldParams;
+}
+
+/** `POST .../adventures/new-character` — sem parâmetros aceita tudo. */
+export interface NewCharacterRequest {
+  /** *Soft*: clica o campo de nome e escreve o texto. */
+  name?: string;
+  /** Guia o label `Select <race>` (predefinição: `human`). */
+  race?: string;
+  /** Guia o label `Select <origin>` (predefinição: a primeira origem visível). */
+  origin?: string;
+  /** *Soft*: clica labels `Randomize` antes de aceitar aparência/personalidade. */
+  randomize: boolean;
+}
+
+/** `POST .../adventures/load` — `adventure_id` é o nome da pasta do save. */
+export interface LoadAdventureRequest {
+  adventure_id: string;
+}
+
+/** `POST .../adventures/cancel` — o motor para de enviar teclas. */
+export interface AdventureCancelResponse {
+  cancelled: boolean;
+  task: AdventureTask | null;
+}
+
+/* ---------------------------------------------------------------- sistema --- */
+
+/** Processo do jogo — só no caminho configurado (nunca há caminho no pedido). */
+export interface SystemGameStatus {
+  running: boolean;
+  /** Opcional: falta quando o jogo está em baixo. */
+  pid?: number;
+  /** Sonda TCP best-effort da porta RPC do DFHack. */
+  rpc: boolean;
+  path: string;
+}
+
+export interface SystemBackendStatus {
+  version: string;
+}
+
+export interface SystemFrontendStatus {
+  running: boolean;
+  port: number;
+}
+
+/** Loop de decisão de uma campanha (id, modo de controlo e se está a correr). */
+export interface SystemLoopCampaign {
+  id: string;
+  mode: ControlMode;
+  running: boolean;
+}
+
+export interface SystemLoopStatus {
+  campaigns: SystemLoopCampaign[];
+}
+
+/** `GET /api/system/status` — estado global do sistema. */
+export interface SystemStatus {
+  game: SystemGameStatus;
+  backend: SystemBackendStatus;
+  frontend: SystemFrontendStatus;
+  loop: SystemLoopStatus;
+}
+
+/** `POST /api/system/game` — arranca/pára o processo do jogo. */
+export type GameAction = 'start' | 'stop';
+
+export interface GameActionRequest {
+  action: GameAction;
+}
+
+/** `200` do `POST /api/system/game`. */
+export interface GameActionResponse {
+  action: GameAction;
+  running: boolean;
+  pid?: number;
+  /** `true` quando o jogo já estava a correr no `start` (não lança outro). */
+  already_running?: boolean;
+}
+
 /* ------------------------------------------------------------- websocket --- */
 
 /**
@@ -573,6 +808,8 @@ export interface ServerEventPayloads {
   approval_new: Approval;
   /** Aditivo — a mesma aprovação depois de decidida. */
   approval_updated: Approval;
+  /** Aditivo — progresso de uma tarefa de aventura (cada transição de estado/passo). */
+  adventure_task: AdventureTaskEvent;
   /** Aditivo — erro recuperável do canal (`{"detail": …}`); o canal não fecha. */
   error: ApiErrorBody;
 }
@@ -600,6 +837,7 @@ export const SERVER_EVENT_TYPES: readonly ServerEventType[] = [
   'question_answered',
   'approval_new',
   'approval_updated',
+  'adventure_task',
   'error',
 ];
 

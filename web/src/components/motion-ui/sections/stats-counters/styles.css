@@ -1,0 +1,30 @@
+@layer theme, base, components;
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css";
+@source "./index.tsx";
+/* The demo composes the count-up roll from the shared component library, so
+   its Tailwind classes must be scanned into this section's chunk too. The
+   metric tile and its rule-mark are demo-local markup inside index.tsx,
+   already scanned above. */
+@source "../../animated-number/index.tsx";
+
+.velocity-stats {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: clip;
+}
+
+.velocity-stats,
+.velocity-stats *,
+.velocity-stats *::before,
+.velocity-stats *::after {
+  box-sizing: border-box;
+}
+
+/* AnimateNumber's digit reel is taller than its visible glyph line. Anchor
+   every unit to the reel's end, then lift the compact unit until its visible
+   glyph bottom aligns with the number rather than the reel's padded box. */
+.velocity-stat-value .number-section-post {
+  align-self: flex-end;
+  transform: translateY(-0.9em);
+}

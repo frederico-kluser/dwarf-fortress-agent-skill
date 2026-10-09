@@ -21,7 +21,8 @@ import {
 } from '../components/MetricsGroups';
 import { SEVERITY_RANK, worstSeverity, type Severity } from '../components/metricsSeverity';
 import PanelShell from '../components/PanelShell';
-import { PanelError, PanelLoading, PanelNotice } from '../components/PanelState';
+import { PanelError, PanelNotice } from '../components/PanelState';
+import { VitalsSkeleton } from '../components/SkeletonBlocks';
 import VitalSignsStrip from '../components/VitalSignsStrip';
 import { useNow, useSparkSeries } from '../hooks/useSparkSeries';
 
@@ -114,7 +115,7 @@ export default function MetricsPanel() {
         />
       }
     >
-      {metricsQuery.isLoading ? <PanelLoading label="A carregar métricas…" /> : null}
+      {metricsQuery.isLoading ? <VitalsSkeleton /> : null}
 
       {metricsQuery.isError ? (
         <PanelError

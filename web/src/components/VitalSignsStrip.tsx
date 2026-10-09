@@ -12,6 +12,8 @@ import Shield from '@mui/icons-material/Shield';
 import TrackChanges from '@mui/icons-material/TrackChanges';
 
 import {
+  USD_COUNTER_COMPACT_FORMAT,
+  USD_PREFIX,
   formatConfidence,
   formatNumber,
   formatPercent,
@@ -20,6 +22,7 @@ import {
   valuePt,
 } from '../api/format';
 import type { Metrics } from '../api/types';
+import { AnimatedNumber, type NumberFormat } from '@/components/motion-ui/animated-number';
 import { MONO_FONT } from '../theme';
 
 type Tone = 'default' | 'success' | 'warning' | 'error' | 'info' | 'primary';
@@ -43,6 +46,8 @@ export interface VitalSignal {
   icon: ReactNode;
   /** Destaque quando o sinal pede atenção (borda + fundo). */
   attention?: boolean;
+  /** Valor numérico para o contador animado (ex.: gasto acumulado em USD). */
+  counter?: { value: number; format: NumberFormat; prefix?: string };
 }
 
 /** Pior tom entre vários valores do contrato (ex.: fome/sede/sono). */
@@ -123,6 +128,11 @@ function buildVitalSignals(metrics: Metrics): VitalSignal[] {
       key: 'agente',
       label: 'Gastos e confiança',
       value: formatUsd(metrics.agent.cost_usd, { compact: true }),
+      counter: {
+        value: metrics.agent.cost_usd,
+        format: USD_COUNTER_COMPACT_FORMAT as NumberFormat,
+        prefix: USD_PREFIX,
+      },
       detail: `${formatNumber(metrics.agent.calls)} chamadas · confiança ${
         confidence ?? 'indisponível'
       }`,
@@ -174,7 +184,17 @@ export default function VitalSignsStrip({ metrics }: { metrics: Metrics }) {
                     component="p"
                     sx={{ fontFamily: MONO_FONT, color: signal.attention ? 'inherit' : undefined }}
                   >
-                    {signal.value}
+                    {signal.counter ? (
+                      <AnimatedNumber
+                        value={signal.counter.value}
+                        transition="lively"
+                        format={signal.counter.format}
+                        prefix={signal.counter.prefix}
+                        locales="pt-PT"
+                      />
+                    ) : (
+                      signal.value
+                    )}
                   </Typography>
                 </Tooltip>
                 <Typography

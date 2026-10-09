@@ -1,0 +1,157 @@
+{
+ "interface_type": "onboarding",
+ "interface_type_note": "Tipo dominante: onboarding — a experiência nova é a entrada do utilizador no produto (escolher/criar aventura = mundo + personagem antes de qualquer sessão). Escolhido entre onboarding e modal: o wizard «Criar nova aventura» é MODAL-DOMINANTE (Dialog modal com Stepper de 4 passos — Mundo → Personagem → Progresso → Pronto), mas o tipo de interface do fluxo é onboarding (primeira configuração guiada em passos); a superfície à volta (cartão de estado + escolhedor de saves + secção Sistema) é a moldura de suporte, avaliada como adjacentes (empty-state, data-table de saves, settings de sistema). Partes priorizadas: 1 (Foundations), 3 (Design Systems), 4 (Interface Patterns), 6 (Human-Centered) — onboarding — mais a Parte 2 (Core: error prevention, controlo do utilizador, feedback) porque o fluxo lança tarefas LONGAS (worldgen de minutos) e a Parte 5 (AI-Native: transparência), porque é um agente que conduz os menus do jogo em nome do humano. Âmbito: web/src/panels/AventuraPanel.tsx + web/src/components/AdventureWizard.tsx + web/src/components/AdventureTaskCard.tsx + web/src/components/SystemSection.tsx + contrato web/src/api/* (adventures/system/adventure_task) + mock. LIMITES DE VERIFICACAO: auditoria a partir do codigo-fonte JA VALIDADO por renderizacao real (headless Chrome/CDP: fluxo completo wizard com progresso animado, cancelamento, carregamento de save, 9 paineis, capturas de texto PT); contagens estruturais e nao medidas em pixeis; contrastes calculados a partir dos hex de web/src/theme.ts (WCAG 2.x, luminancia relativa). V3 da auditoria (v1 = docs/uxui-audit-ui.json 40/100, v2 = docs/uxui-audit-ui-v2.json 43/100 → rescore 100/100): esta v3 cobre a experiencia NOVA (painel aventura + wizard + secao Sistema) entregue sobre a base ja limpa da v2.",
+ "overall_score": 52,
+ "band": "fair",
+ "findings": [
+  {
+   "id": "finding-1",
+   "principle": {
+    "code": "C.1.2.01",
+    "slug": "user-control-freedom",
+    "title": "User Control and Freedom",
+    "part": "part-2"
+   },
+   "severity": "warning",
+   "message": "Fechar o wizard com uma tarefa a correr só oferece duas saídas: «Continuar a tarefa» (o wizard fica aberto até terminar) ou «Cancelar tarefa e fechar». O contrato permite uma terceira saída natural — a tarefa continua no servidor e o painel já a segue com o cartão de progresso — mas o utilizador é forçado a escolher entre ficar preso ao diálogo ou destruir minutos de worldgen. É uma armadilha de controlo: a opção menos destrutiva (fechar e deixar correr) está ausente do diálogo.",
+   "remediation": "Adicionar a terceira ação «Fechar e deixar correr» ao diálogo de confirmação de fecho: fecha o wizard sem cancelar e deixa o cartão de progresso do painel continuar a mostrar passo/total + cancelar. Resultado medível: 3 saídas claras (continuar · fechar sem cancelar · cancelar e fechar) e zero necessidade de destruir progresso para navegar.",
+   "business_impact": null
+  },
+  {
+   "id": "finding-2",
+   "principle": {
+    "code": "C.1.4.01",
+    "slug": "error-prevention",
+    "title": "Error Prevention",
+    "part": "part-2"
+   },
+   "severity": "critical",
+   "message": "O CTA final do wizard («Entrar em sessão») e o do cartão de tarefa concluída navegam para o painel de perguntas SEM verificar se o processo do jogo está a correr. Com o jogo desligado a sessão não existe: o agente não vê o mundo, nada acontece e NENHUM feedback é dado no momento do clique — o utilizador só descobre (se descobrir) na secção Sistema do Controlo. É exatamente o padrão que a prevenção de erros proíbe: a ação primária de todo o fluxo (criar aventura → jogar) termina num beco silencioso.",
+   "remediation": "Antes de navegar, consultar o estado do jogo (GET /api/system/status já ligado via useSystemStatus): se `game.running` for falso, mostrar um aviso visível junto do CTA («O jogo está desligado — liga-o na secção Sistema») e navegar para o Controlo (onde o botão «Ligar o jogo» está) em vez de para as Perguntas. Resultado medível: o CTA nunca termina num ecrã sem ação possível; o caminho até ter a sessão a correr tem no máximo um clique extra.",
+   "business_impact": null
+  },
+  {
+   "id": "finding-3",
+   "principle": {
+    "code": "F.1.1.03",
+    "slug": "mental-model",
+    "title": "Mental Model",
+    "part": "part-1"
+   },
+   "severity": "warning",
+   "message": "O contrato compõe `new-character` depois de `new-world` OU depois de `load` de um save `world` (mundo gerado sem jogo iniciado), mas a UI ignora esta composição: «Continuar aventura» num save `world` termina com «Tarefa concluída» + «Entrar em sessão», quando na realidade o jogo está no ecrã de tipo de jogo SEM personagem. O modelo mental do utilizador («continuar aventura = ir jogar») é traído: o save `world` precisa de um passo de criação de personagem que a UI não oferece em lado nenhum desse caminho.",
+   "remediation": "Ao concluir o carregamento de um save `kind: 'world'`, o cartão de tarefa oferece «Criar personagem» (em vez de/ao lado de «Entrar em sessão»), abrindo o wizard em modo personagem (passos Personagem → Progresso → Pronto, que corre só `POST .../adventures/new-character`). Resultado medível: todos os saves listados levam a uma sessão com personagem em ≤ 1 fluxo extra, sem becos.",
+   "business_impact": null
+  },
+  {
+   "id": "finding-4",
+   "principle": {
+    "code": "H.1.1.01",
+    "slug": "perceivable-principle",
+    "title": "Perceivable Principle",
+    "part": "part-6"
+   },
+   "severity": "warning",
+   "message": "O bloco de progresso está todo envolvido em `role=\"status\" aria-live=\"polite\"`, incluindo o contador «Passo X de Y» que muda a cada 0,4–1,1 s (a criação de personagem tem 13 passos). Leitores de ecrã enfileiram dezenas de anúncios que ficam para trás da realidade e enterram os anúncios importantes (início, conclusão, erro, cancelamento) — o oposto de um feedback percebível.",
+   "remediation": "Tirar a região live do contador de passos (mantê-lo visível + `LinearProgress` com aria-label e valores) e anunciar apenas transições de estado: região `role=\"status\"` com a fase («Etapa 1 de 2 — criação do mundo»), mais os Alerts de concluída/erro/cancelada (já com role=status/alert). Resultado medível: ≤ 3 anúncios por tarefa (início/fim/erro) em vez de ~19, sem perda de informação visual.",
+   "business_impact": null
+  },
+  {
+   "id": "finding-5",
+   "principle": {
+    "code": "C.1.3.01",
+    "slug": "feedback-loops",
+    "title": "Feedback Loops",
+    "part": "part-2"
+   },
+   "severity": "suggestion",
+   "message": "Durante um worldgen de minutos o cartão mostra passo/total e o último ecrã traduzido, mas não há nenhum sinal de vitalidade temporal («atualizado há X» / atualizar agora): se o WS silenciar a meio do passo longo (o worldgen é um só passo durante minutos), o utilizador vê um progresso congelado sem saber se o sistema ainda está vivo — a janela clássica de ansiedade de espera longa.",
+   "remediation": "Ligar o FreshnessIndicator já usado no resto da aplicação ao cartão de tarefa (ts = última atualização do GET .../status, com botão de atualizar que faz refetch). Resultado medível: o utilizador distingue «a correr devagar» de «pendurado» em ≤ 2 s de olhar.",
+   "business_impact": null
+  },
+  {
+   "id": "finding-6",
+   "principle": {
+    "code": "I.2.2.02",
+    "slug": "fitts-law",
+    "title": "Fitts's Law",
+    "part": "part-4"
+   },
+   "severity": "suggestion",
+   "message": "As ações primárias por linha do escolhedor («Continuar aventura») e do cartão de tarefa («Cancelar tarefa», «Entrar em sessão», «Fechar») usam `size=\"small\"` (~30 px de altura), abaixo dos 44 px recomendados para alvos táteis (WCAG 2.2 AA mínimo de 24 px é cumprido, mas o alvo principal do painel — a ação repetida linha após linha — fica desconfortável em ecrãs táteis).",
+   "remediation": "Subir as ações primárias do escolhedor e do cartão de tarefa para a variante normal com `minHeight: 40` px (e ≥ 40 px de área clicável), mantendo os botões puramente decorativos/avançados em small. Resultado medível: alvo ≥ 40 px em todas as ações primárias das novas superfícies.",
+   "business_impact": null
+  },
+  {
+   "id": "finding-7",
+   "principle": {
+    "code": "H.1.1.01",
+    "slug": "perceivable-principle",
+    "title": "Perceivable Principle",
+    "part": "part-6"
+   },
+   "severity": "suggestion",
+   "message": "O switch «Aleatório» tem etiqueta, mas a explicação («O jogo escolhe nome, raça, origem, aspeto e personalidade ao acaso») é um caption solto, sem associação programática (`aria-describedby`): quem usa tecnologias de assistência ouve a etiqueta mas não o significado da opção — decisão sem informação.",
+   "remediation": "Dar um `id` ao caption e referenciá-lo no input do switch via `slotProps.input['aria-describedby']`. Resultado medível: o nome acessível do controlo inclui a descrição verificável em qualquer auditoria de acessibilidade.",
+   "business_impact": null
+  },
+  {
+   "id": "finding-8",
+   "principle": {
+    "code": "I.1.1.03",
+    "slug": "error-prevention-forms",
+    "title": "Error Prevention in Forms",
+    "part": "part-4"
+   },
+   "severity": "suggestion",
+   "message": "Na secção Sistema, enquanto o `GET /api/system/status` ainda carrega (ou falha), o slot de ação desenha o botão «Ligar o jogo» porque `game` ainda é desconhecido: o botão promove uma ação sobre um estado que a UI não conhece — clicar com o jogo ligado devolve `already_running`, e com erro de leitura nem sequer há base para agir.",
+   "remediation": "Desativar a ação de jogo enquanto `systemQuery.isLoading || systemQuery.isError` (e mostrar o estado «a carregar…» no slot). Resultado medível: zero ações de sistema disponíveis sobre estado desconhecido.",
+   "business_impact": null
+  }
+ ],
+ "strengths": [
+  {
+   "principle": {
+    "code": "D.1.1.01",
+    "slug": "progressive-disclosure",
+    "title": "Progressive Disclosure"
+   },
+   "message": "O wizard decide pouco de cada vez: 4 passos com ≤ 3 decisões visíveis, «Rápido» como predefinição, «Aleatório» ligado por omissão e raça/origem escondidas num acordeão «Opções avançadas» — o caminho feliz exige zero escrita."
+  },
+  {
+   "principle": {
+    "code": "C.1.4.01",
+    "slug": "error-prevention",
+    "title": "Error Prevention"
+   },
+   "message": "Ações destrutivas/longas têm sempre escape e confirmação: cancelar tarefa pede confirmação com alternativa segura («Continuar a tarefa»), desligar o jogo explica SIGTERM→SIGKILL e o que NÃO é afetado, e as ações ficam bloqueadas com aviso claro enquanto há uma tarefa em curso (uma de cada vez por contrato)."
+  },
+  {
+   "principle": {
+    "code": "F.1.1.02",
+    "slug": "cognitive-load",
+    "title": "Cognitive Load"
+   },
+   "message": "Resumo em linguagem natural antes do commit («Vai criar o mundo «Terras de Valdram» (parâmetros rápidos) com um personagem gerado ao acaso») e estados finais distintos (concluída · cancelada · erro com relatório PT) sem memória de trabalho imposta ao utilizador."
+  },
+  {
+   "principle": {
+    "code": "S.1.3.01",
+    "slug": "ai-transparency",
+    "title": "AI Transparency Principle"
+   },
+   "message": "A tarefa mostra o que o agente está a ver (último ecrã traduzido por passo) e explica a automação («A tarefa conduz os menus do jogo automaticamente… o motor para de enviar teclas») — o humano entende quem age, o que vê e como parar."
+  },
+  {
+   "principle": {
+    "code": "H.1.1.01",
+    "slug": "perceivable-principle",
+    "title": "Perceivable Principle"
+   },
+   "message": "Empty states convidativos e específicos: o cartão de estado diz exatamente o que fazer («Nenhuma aventura ativa — escolhe uma existente ou cria uma nova») com dois CTAs de tamanhos diferentes; o escolhedor vazio diz onde os saves aparecem e como gerar o primeiro."
+  }
+ ],
+ "priority_fixes": ["finding-2", "finding-3", "finding-1", "finding-4", "finding-5", "finding-6", "finding-7", "finding-8"],
+ "api_enriched": false,
+ "api_note": "Install the uxuiprinciples API key for enriched findings with citations and business impact data. See uxuiprinciples.com/en/checkout"
+}

@@ -1,5 +1,6 @@
 import type { ComponentType, ReactElement } from 'react';
 import EditNote from '@mui/icons-material/EditNote';
+import Explore from '@mui/icons-material/Explore';
 import Flag from '@mui/icons-material/Flag';
 import Insights from '@mui/icons-material/Insights';
 import MenuBook from '@mui/icons-material/MenuBook';
@@ -8,6 +9,7 @@ import QuestionAnswer from '@mui/icons-material/QuestionAnswer';
 import Rule from '@mui/icons-material/Rule';
 import Tune from '@mui/icons-material/Tune';
 
+import AventuraPanel from './AventuraPanel';
 import ControlPanel from './ControlPanel';
 import DecisionsPanel from './DecisionsPanel';
 import InputsPanel from './InputsPanel';
@@ -18,6 +20,7 @@ import QuestionsPanel from './QuestionsPanel';
 import ScreenPanel from './ScreenPanel';
 
 export type PanelId =
+  | 'aventura'
   | 'memoria'
   | 'objetivo'
   | 'inputs'
@@ -39,10 +42,20 @@ export interface PanelDefinition {
 }
 
 /**
- * Os 8 painéis, pela ordem da arquitetura:
- * memória · objetivo · inputs · métricas · perguntas · decisões · ecrã · controlo.
+ * Os 9 painéis: aventura primeiro (ciclo de vida da aventura) e, pela ordem da
+ * arquitetura: memória · objetivo · inputs · métricas · perguntas · decisões ·
+ * ecrã · controlo.
  */
 export const PANELS: PanelDefinition[] = [
+  {
+    id: 'aventura',
+    label: 'Aventura',
+    title: 'Aventura',
+    description:
+      'Escolhe uma aventura existente ou cria um mundo e um personagem novos — com progresso ao vivo.',
+    icon: <Explore fontSize="small" />,
+    Component: AventuraPanel,
+  },
   {
     id: 'memoria',
     label: 'Memória',
@@ -111,16 +124,18 @@ export const PANELS: PanelDefinition[] = [
 ];
 
 /**
- * Painel de entrada = primeiro da navegação (auditoria v2, achado 6): a ordem
- * de abertura coincide com a ordem de navegação e com o trabalho do humano —
- * responder ao agente — nunca com o painel ambiental.
+ * Painel de entrada = primeiro da navegação (auditoria v3): «Aventura» está no
+ * topo do grupo Supervisão e abre por omissão — escolher/criar a aventura é a
+ * primeira decisão do humano e a porta de entrada de todo o resto (sem aventura
+ * não há sessão, nem perguntas, nem métricas). «Perguntas» continua a ser o
+ * primeiro item de trabalho humano logo a seguir.
  */
-export const DEFAULT_PANEL_ID: PanelId = 'perguntas';
+export const DEFAULT_PANEL_ID: PanelId = 'aventura';
 
 /**
- * Grupo de navegação (auditoria F.2.2.03): 8 itens planos davam o mesmo peso à
- * fila de perguntas — o trabalho do humano — e a métricas ambientais. Três grupos
- * ordenados pelo trabalho real, com «Perguntas» em primeiro lugar.
+ * Grupo de navegação (auditoria F.2.2.03): itens planos davam o mesmo peso à
+ * fila de perguntas — o trabalho do humano — e a métricas ambientais. Três
+ * grupos ordenados pelo trabalho real, com «Aventura» e «Perguntas» à frente.
  */
 export interface NavGroup {
   id: 'supervisao' | 'agente' | 'memoria';
@@ -133,8 +148,8 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     id: 'supervisao',
     label: 'Supervisão',
-    hint: 'O trabalho do humano: responder, decidir e parar',
-    panels: ['perguntas', 'controlo', 'ecra'],
+    hint: 'O trabalho do humano: escolher a aventura, responder, decidir e parar',
+    panels: ['aventura', 'perguntas', 'controlo', 'ecra'],
   },
   {
     id: 'agente',
@@ -150,7 +165,7 @@ export const NAV_GROUPS: NavGroup[] = [
   },
 ];
 
-/** Painéis na ordem de navegação (grupos), com «Perguntas» à frente. */
+/** Painéis na ordem de navegação (grupos), com «Aventura» à frente. */
 export const NAV_ORDER: PanelId[] = NAV_GROUPS.flatMap((group) => group.panels);
 
 const BY_ID = new Map<PanelId, PanelDefinition>(PANELS.map((panel) => [panel.id, panel]));

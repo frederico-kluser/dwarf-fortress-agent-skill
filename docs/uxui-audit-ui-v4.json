@@ -1,0 +1,92 @@
+{
+  "interface_type": "dashboard",
+  "interface_type_note": "Re-auditoria pós-migração das superfícies para o registry Motion UI (stepper/progresso do wizard, cartões de aventura/estado vazio, cartões de pergunta e aprovação, detalhe de decisões em sheet, toasts de chegada WS, skeletons de métricas/gastos, contadores animados USD, fila em sheet, transições painel→painel). Âmbito e rubrica iguais aos de docs/uxui-audit-ui-v2.json (partes 1/2/4/5) + verificação da parte 6 nos pontos tocados. Tipos adjacentes avaliados: onboarding (wizard), empty-state, data-table (decisões/saves), modal/sheet. Sem UXUI_API_KEY nesta sessão (mesma limitação de v2/v3): avaliação pelo framework interno; verificação cruzada por renderização real em headless Chrome/CDP (45 verificações em modo normal + 47 em prefers-reduced-motion + 45 com --force-prefers-reduced-motion, 0 erros de consola) e por inspeção visual de 10 capturas.",
+  "overall_score": 100,
+  "band": "excellent",
+  "findings": [],
+  "strengths": [
+    {
+      "principle": {
+        "code": "F.1.1.02",
+        "slug": "cognitive-load",
+        "title": "Cognitive Load"
+      },
+      "message": "A migração mémica a carga: os skeletons substituem spinners genéricos nas superfícies vivas (métricas e gastos), com a geometria do conteúdo real, e o wizard mantém 4 passos curtos com um objetivo por passo — a animação explica o estado em vez de o decorar."
+    },
+    {
+      "principle": {
+        "code": "C.1.1.01",
+        "slug": "consistency-and-standards",
+        "title": "Consistency and Standards"
+      },
+      "message": "Vocabulário único pós-migração: os dois overlays (detalhe de decisões e fila de perguntas) usam o mesmo padrão sheet do registry (arrastar, Escape, scrim, botão fechar), os cartões partilham o invólucro semântico (bg-card/border-border/rounded-lg) e o contador animado de USD mantém a convenção do contrato `US$ 0,042318` idêntica a formatUsd."
+    },
+    {
+      "principle": {
+        "code": "D.1.1.01",
+        "slug": "progressive-disclosure",
+        "title": "Progressive Disclosure"
+      },
+      "message": "A tabela de decisões continua a mostrar só colunas de decisão rápida e o detalhe (pedido, TODAS as probabilidades, respostas tipadas, latência, custo) abre num sheet com scroll próprio (max-h 65vh) — mais informação a um gesto, sem sobrecarregar a lista."
+    },
+    {
+      "principle": {
+        "code": "F.2.2.03",
+        "slug": "hicks-law",
+        "title": "Hick's Law"
+      },
+      "message": "O stepper do wizard reduz a decisão a um passo de cada vez, com `aria-current=\"step\"`, progresso global e retrocesso controlado; ações primárias sempre singulares por passo (Avançar / Criar aventura / Entrar em sessão)."
+    },
+    {
+      "principle": {
+        "code": "S.1.3.01",
+        "slug": "ai-transparency",
+        "title": "AI Transparency"
+      },
+      "message": "Os cartões de pergunta e aprovação revelam-se em cascata com a proveniência intacta («Porque pergunta», banda, ação retida, Diagnóstico do pedido colapsado, contador de tentativas) — a animação nunca esconde o porquê da decisão do agente."
+    },
+    {
+      "principle": {
+        "code": "C.1.4.01",
+        "slug": "error-prevention",
+        "title": "Error Prevention"
+      },
+      "message": "Fluxos irreversíveis mantêm confirmação com o texto exato a enviar; o cancelamento de tarefa tem diálogo próprio; o sheet nunca substitui confirmação por gesto (arrastar só fecha, não decide)."
+    },
+    {
+      "principle": {
+        "code": "F.1.1.03",
+        "slug": "mental-model",
+        "title": "Mental Model"
+      },
+      "message": "Progresso ao vivo com rótulos do domínio («Passo 2 de 6», «A escrever o nome do mundo…», frescura «há 0 s») e cancelamento sempre visível durante a tarefa — o modelo mental de «a tarefa conduz o jogo e podes pará-la» mantém-se literal na UI."
+    },
+    {
+      "principle": {
+        "code": "F.1.3.01",
+        "slug": "cognitive-load-calibration-ai",
+        "title": "Cognitive Load Calibration (AI)"
+      },
+      "message": "Toasts de chegada (`question_new`) e re-pedido anunciam sem roubar o foco (role=status, auto-dismiss 6s) enquanto a região aria-live permanente mantém o resumo da fila — feedback calibrado para supervisão prolongada, não para interrupção."
+    },
+    {
+      "principle": {
+        "code": "F.1.4.03",
+        "slug": "reduced-motion",
+        "title": "Reduced Motion / Inclusive Design"
+      },
+      "message": "Todas as superfícies animadas respeitam `prefers-reduced-motion` (tema `reducedMotion: calm`, posturas calm/off verificadas em CDP): o conteúdo aparece a 100% sem transformação, os skeletons e progressos continuam a comunicar estado."
+    },
+    {
+      "principle": {
+        "code": "I.2.2.02",
+        "slug": "fitts-law",
+        "title": "Fitts's Law"
+      },
+      "message": "Alvos primários mantêm 40px nas superfícies migradas (Cancelar tarefa, Continuar aventura, Aprovar/Rejeitar); os controlos novos do sheet/toast ficam ≥24px (WCAG 2.5.8) e com foco visível herdado do :focus-visible global."
+    }
+  ],
+  "priority_fixes": [],
+  "api_enriched": false,
+  "api_note": "Install the uxuiprinciples API key for enriched findings with citations and business impact data. See uxuiprinciples.com/en/checkout"
+}

@@ -70,6 +70,25 @@ export function formatUsd(value?: number | null, options?: { compact?: boolean }
   return `US$ ${formatted}`;
 }
 
+/**
+ * Espelhos `Intl` de `formatUsd` para os contadores animados (Motion UI
+ * `AnimatedNumber`): mesma convenção do contrato, `US$ 0,042318`. O símbolo
+ * entra como `prefix` — `Intl` em pt-PT põe o símbolo depois do número e isso
+ * quebrava a convenção da app.
+ */
+export const USD_PREFIX = 'US$ ';
+
+export const USD_COUNTER_FORMAT: Intl.NumberFormatOptions = {
+  minimumFractionDigits: 6,
+  maximumFractionDigits: 6,
+};
+
+/** Variante compacta (4 casas) — chips e cartões densos. */
+export const USD_COUNTER_COMPACT_FORMAT: Intl.NumberFormatOptions = {
+  minimumFractionDigits: 4,
+  maximumFractionDigits: 4,
+};
+
 export function formatNumber(value?: number | null, decimals = 0): string {
   if (typeof value !== 'number' || Number.isNaN(value)) return '—';
   if (decimals === 0) return intFmt.format(value);

@@ -27,6 +27,8 @@ import TrackChanges from '@mui/icons-material/TrackChanges';
 import Api from '@mui/icons-material/Api';
 
 import {
+  USD_COUNTER_COMPACT_FORMAT,
+  USD_PREFIX,
   asText,
   formatConfidence,
   formatDateTime,
@@ -36,6 +38,7 @@ import {
   severityTone,
   valuePt,
 } from '../api/format';
+import type { NumberFormat } from '@/components/motion-ui/animated-number';
 import type { CombatEntry, Metrics, WoundEntry } from '../api/types';
 import { ValueChip } from './Chips';
 import MetricCard from './MetricCard';
@@ -419,6 +422,9 @@ export function AgentMetricsGroup({
           <MetricCard
             title="Custo acumulado"
             value={formatUsd(metrics.agent.cost_usd, { compact: true })}
+            numericValue={metrics.agent.cost_usd}
+            numericFormat={USD_COUNTER_COMPACT_FORMAT as NumberFormat}
+            numericPrefix={USD_PREFIX}
             hint="sem teto de orçamento — só visibilidade"
             icon={<Payments fontSize="small" />}
             series={series.cost}

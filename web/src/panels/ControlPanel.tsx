@@ -33,7 +33,14 @@ import VpnKey from '@mui/icons-material/VpnKey';
 import Add from '@mui/icons-material/Add';
 
 import { errorMessage } from '../api/events';
-import { CONTROL_MODE_LABEL, formatDateTime, formatNumber, formatUsd } from '../api/format';
+import {
+  CONTROL_MODE_LABEL,
+  USD_COUNTER_FORMAT,
+  USD_PREFIX,
+  formatDateTime,
+  formatNumber,
+  formatUsd,
+} from '../api/format';
 import {
   useApiContext,
   useKeys,
@@ -51,6 +58,9 @@ import MetricCard from '../components/MetricCard';
 import PanelShell from '../components/PanelShell';
 import { PanelEmpty, PanelError, PanelLoading, PanelNotice } from '../components/PanelState';
 import SectionCard from '../components/SectionCard';
+import { SpendSkeleton } from '../components/SkeletonBlocks';
+import SystemSection from '../components/SystemSection';
+import { AnimatedNumber, type NumberFormat } from '@/components/motion-ui/animated-number';
 import { useAutonomyPersistence, modeLabel } from '../hooks/useAutonomyControl';
 import { useNow, useSparkSeries } from '../hooks/useSparkSeries';
 import { MONO_FONT } from '../theme';
@@ -377,6 +387,8 @@ export default function ControlPanel() {
           </Alert>
         ) : null}
 
+        <SystemSection />
+
         <SectionCard
           title="Modo de autonomia"
           subtitle="Bandas de ação: auto ≥ 0,90 · hitl 0,50–0,89 · abstain < 0,50"
@@ -503,7 +515,7 @@ export default function ControlPanel() {
             />
           }
         >
-          {spendQuery.isLoading ? <PanelLoading label="A carregar gastos…" /> : null}
+          {spendQuery.isLoading ? <SpendSkeleton /> : null}
           {spendQuery.isError ? (
             <PanelError message={errorMessage(spendQuery.error)} onRetry={() => void spendQuery.refetch()} />
           ) : null}
@@ -515,7 +527,13 @@ export default function ControlPanel() {
                   Total acumulado
                 </Typography>
                 <Typography variant="h3" component="p" sx={{ fontFamily: MONO_FONT }}>
-                  {formatUsd(spendQuery.data.total_usd)}
+                  <AnimatedNumber
+                    value={spendQuery.data.total_usd}
+                    transition="lively"
+                    format={USD_COUNTER_FORMAT as NumberFormat}
+                    prefix={USD_PREFIX}
+                    locales="pt-PT"
+                  />
                 </Typography>
               </Stack>
 
