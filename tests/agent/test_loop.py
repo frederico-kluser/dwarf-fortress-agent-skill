@@ -13,7 +13,11 @@ import logging
 import pytest
 
 from system_one_dwarf.agent.llm import LLMResult, LLMUsage
-from system_one_dwarf.agent.loop import AgentLoop, build_state_summary
+from system_one_dwarf.agent.loop import (
+    RELEASED_BY_APPROVAL,
+    AgentLoop,
+    build_state_summary,
+)
 from system_one_dwarf.agent.types import (
     ControlState,
     LoopConfig,
@@ -79,7 +83,7 @@ class Rig:
     def __init__(self, *, states=None, config=None, control=None, objective="Reach Boatmurdered alive.",
                  memory_items=None, jev=None, narrator=None, questions=None, memory=None,
                  translator=None, spend=None, runner=None, sink=None, executor=None,
-                 game=None):
+                 game=None, approval_checker=None):
         self.config = config or LoopConfig(
             screen_translation_async=False, advance_seconds=2.0, advance_on_execute=True,
         )
@@ -102,6 +106,7 @@ class Rig:
             self.jev, self.game, self.memory, self.narrator, self.questions, self.translator,
             self.spend, key_store=None, sink=self.sink, config=self.config,
             objective=objective, control=control, executor=self.executor,
+            approval_checker=approval_checker,
         )
 
     # -- atalhos -----------------------------------------------------------
@@ -122,6 +127,30 @@ class Rig:
 
     def decisions(self, agent):
         return [payload for payload in self.sink.of("decision") if payload["agent"] == agent]
+
+
+class FakeApprovals:
+    """``approval_checker`` falso: aprova o que o teste mandar, **uma vez** por ação.
+
+    Espelha o contrato do checker real (``approval_flow.ApprovalChecker``): dizer
+    que sim **consome** a aprovação (a mesma ação nunca liberta duas vezes).
+    """
+
+    def __init__(self) -> None:
+        self.approved: set[str] = set()
+        self.calls: list[str] = []
+        self.releases: list[str] = []
+
+    def approve(self, action_id: str) -> None:
+        self.approved.add(action_id)
+
+    def was_approved(self, action_id: str) -> bool:
+        self.calls.append(action_id)
+        if action_id in self.approved:
+            self.approved.discard(action_id)  # consome: liberta uma só vez
+            self.releases.append(action_id)
+            return True
+        return False
 
 
 # ---------------------------------------------------------------- caminho feliz
@@ -295,6 +324,181 @@ def test_question_formatter_failure_does_not_stop_the_question():
     assert result.status == STATUS_QUESTION
     assert any("question formatter failed" in error for error in result.errors)
     assert rig.questions_published()          # caiu na pergunta de aprovação
+
+
+# ------------------------------------------- proveniência e libertação (GAP 1/2)
+
+
+def test_a_formatter_question_publishes_its_provenance():
+    """GAP 1: ``source_data``/``why_pt``/``format`` do formatador chegam à fila."""
+    from system_one_dwarf.agent.questions import HumanQuestion, QuestionOption
+
+    question = HumanQuestion(
+        question_pt="Atravessar o rio a nadar ou procurar uma ponte?",
+        options=(QuestionOption(id="opt-1", label_pt="Nadar"),
+                 QuestionOption(id="opt-2", label_pt="Procurar ponte")),
+        format="binary",
+        why_pt="As duas alternativas ficaram empatadas.",
+        source_data={
+            "reason": "confidence_below_auto",
+            "band": "hitl",
+            "action_confidence": 0.62,
+            "near_tie": True,
+            "candidate_actions": ["attack:goblin_skulker — Attack goblin skulker"],
+        },
+        ts="2026-10-08T12:00:02.000Z",
+    )
+    rig = Rig(jev=FakeJev(action_id="attack:goblin_skulker", action_confidence=0.62),
+              questions=FakeQuestions(result=question))
+    result = rig.step()
+
+    payload = rig.questions_published()[0]
+    assert result.status == STATUS_QUESTION and result.question == payload
+    # a forma antiga (6 campos) continua válida…
+    assert {"id", "ts", "question", "options", "free_text_allowed", "status"} <= set(payload)
+    # …e o cartão de proveniência da UI recebe o contexto cru do formatador
+    assert payload["band"] == "hitl"
+    assert payload["action_id"] == "attack:goblin_skulker"
+    assert payload["format"] == "binary"
+    source = payload["source_data"]
+    assert source["reason"] == "confidence_below_auto"
+    assert source["route_reason"] == "band_hitl"
+    assert source["band"] == "hitl"
+    assert source["action_confidence"] == pytest.approx(0.62)
+    assert source["near_tie"] is True
+    assert source["candidate_actions"]
+    # o porquê junta o gate do loop à explicação do formatador
+    assert "banda hitl" in payload["why_pt"]
+    assert "As duas alternativas ficaram empatadas." in payload["why_pt"]
+
+
+def test_a_formatter_question_always_carries_the_routing_why():
+    """A razão do gate continua legível mesmo sem ``why_pt`` do formatador."""
+    rig = Rig(jev=FakeJev(action_id="attack:goblin_skulker", action_confidence=0.62),
+              questions=FakeQuestions(result=human_question(why_pt="")))
+    result = rig.step()
+
+    payload = rig.questions_published()[0]
+    assert result.status == STATUS_QUESTION
+    assert "banda hitl" in payload["why_pt"]
+    assert payload["source_data"]["route_reason"] == "band_hitl"
+
+
+def test_checkpoint_release_executes_a_human_approved_action_once():
+    """GAP 2: aprovar na fila liberta a ação retida; a aprovação é consumida."""
+    approvals = FakeApprovals()
+    rig = Rig(control=lambda: ControlState(mode=MODE_CHECKPOINT), approval_checker=approvals)
+
+    first = rig.step()                        # 1º passo: nada aprovado ⇒ pergunta
+    assert first.status == STATUS_QUESTION
+    assert rig.executed_ids() == [] and rig.batch_calls() == []
+    assert approvals.calls == ["attack:goblin_skulker"]
+    assert RELEASED_BY_APPROVAL not in first.decision("JEV-A").issues
+
+    approvals.approve("attack:goblin_skulker")   # o humano aprova (fila do app)
+    second = rig.step()
+    assert second.status == STATUS_EXECUTED
+    assert rig.executed_ids() == ["attack:goblin_skulker"]
+    assert rig.executor.advances == [2.0]     # executou como se a banda fosse auto
+    record = second.decision("JEV-A")
+    assert RELEASED_BY_APPROVAL in record.issues
+    assert RELEASED_BY_APPROVAL in record.to_payload()["issues"]
+    assert rig.sink.last("approval_released")["action_id"] == "attack:goblin_skulker"
+
+    third = rig.step()                        # consumida: volta a perguntar
+    assert third.status == STATUS_QUESTION
+    assert rig.executed_ids() == ["attack:goblin_skulker"]
+    assert approvals.releases == ["attack:goblin_skulker"]
+
+
+def test_a_rejected_action_is_asked_again_and_never_executes():
+    """Rejeitar não liberta: sem aprovação o loop pergunta a cada passo."""
+    approvals = FakeApprovals()               # nada aprovado = pendente/rejeitado
+    rig = Rig(control=lambda: ControlState(mode=MODE_CHECKPOINT), approval_checker=approvals)
+
+    for _ in range(3):
+        assert rig.step().status == STATUS_QUESTION
+
+    assert rig.executed_ids() == [] and rig.batch_calls() == []
+    assert len(rig.questions_published()) == 3
+    assert rig.sink.of("approval_released") == []
+    assert approvals.releases == []
+
+
+def test_the_default_checker_keeps_the_old_behaviour():
+    """Sem checker injetado (``NeverApproved``) o loop não liberta nada."""
+    rig = Rig(control=lambda: ControlState(mode=MODE_CHECKPOINT))
+
+    assert rig.loop.approval_checker.was_approved("attack:goblin_skulker") is False
+    result = rig.step()
+    assert result.status == STATUS_QUESTION
+    assert rig.executed_ids() == []
+    assert rig.sink.of("approval_released") == []
+
+
+def test_an_approval_for_another_action_does_not_release():
+    approvals = FakeApprovals()
+    approvals.approve("flee:sw")              # outra ação, não a escolhida
+    rig = Rig(control=lambda: ControlState(mode=MODE_CHECKPOINT), approval_checker=approvals)
+
+    assert rig.step().status == STATUS_QUESTION
+    assert rig.executed_ids() == [] and approvals.releases == []
+
+
+def test_the_checker_is_not_consulted_when_there_is_no_action_to_approve():
+    approvals = FakeApprovals()
+    rig = Rig(jev=FakeJev(action_id="other", action_confidence=0.9), approval_checker=approvals)
+
+    assert rig.step().status == STATUS_QUESTION
+    assert approvals.calls == []              # a opção de saída não tem ação para libertar
+
+
+@pytest.mark.parametrize("confidence,band,reason", [(0.7, "hitl", "band_hitl"),
+                                                    (0.2, "abstain", "band_abstain")])
+def test_an_approved_action_releases_from_the_hitl_and_abstain_bands(confidence, band, reason):
+    approvals = FakeApprovals()
+    rig = Rig(jev=FakeJev(action_id="attack:goblin_skulker", action_confidence=confidence),
+              approval_checker=approvals)
+
+    assert rig.step().status == STATUS_QUESTION
+    assert rig.questions_published()[0]["source_data"]["route_reason"] == reason
+
+    approvals.approve("attack:goblin_skulker")
+    result = rig.step()
+
+    assert result.status == STATUS_EXECUTED
+    assert rig.executed_ids() == ["attack:goblin_skulker"]
+    record = result.decision("JEV-A")
+    assert record.band == band                # a banda do JEV não é reescrita
+    assert RELEASED_BY_APPROVAL in record.issues
+
+
+def test_needs_human_is_satisfied_by_an_explicit_approval():
+    """Decisão documentada: a aprovação explícita é mais forte que ``needs_human``."""
+    approvals = FakeApprovals()
+    rig = Rig(jev=FakeJev(action_id="attack:goblin_skulker", action_confidence=0.97,
+                          needs_human=0.93),
+              approval_checker=approvals)
+
+    assert rig.step().status == STATUS_QUESTION
+    approvals.approve("attack:goblin_skulker")
+    result = rig.step()
+
+    assert result.status == STATUS_EXECUTED
+    assert rig.executed_ids() == ["attack:goblin_skulker"]
+    assert RELEASED_BY_APPROVAL in result.decision("JEV-A").issues
+
+
+def test_a_broken_checker_never_releases():
+    class Broken:
+        def was_approved(self, action_id):
+            raise RuntimeError("approval store down")
+
+    rig = Rig(control=lambda: ControlState(mode=MODE_CHECKPOINT), approval_checker=Broken())
+    result = rig.step()
+
+    assert result.status == STATUS_QUESTION
+    assert rig.executed_ids() == []
 
 
 # ----------------------------------------------------- pausa e kill-switch

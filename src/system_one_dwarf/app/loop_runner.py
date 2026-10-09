@@ -16,6 +16,11 @@ runner
 * **starts and stops it from the control mode** — ``autopilot``/``checkpoint``
   run the loop, ``paused``/``kill_switch`` stop it (the runner also stops the
   loop on app shutdown);
+* **releases what the human approved** — the loop gets an ``approval_checker``
+  (:class:`~system_one_dwarf.app.approval_flow.ApprovalChecker`) over the
+  campaign's approvals store: an ``approved`` action executes on the next step
+  (``released_by_approval``) and the approval is consumed, so it never releases
+  twice.  Rejects and pending approvals never release;
 * **never runs without keys.**  Both the JEV key (``typesafe``) and the LLM key
   (``openrouter``) are required; without them :func:`build_loop` raises
   :class:`LoopUnavailable`, the loop stays stopped and every endpoint keeps
@@ -158,6 +163,17 @@ def build_loop(
         fresh = services.manager.get_by_slug(campaign.slug) or campaign
         return fresh.control
 
+    # GAP 2: o *gate* humano do checkpoint liberta a ação aprovada.  O checker
+    # consulta a fila de aprovações da campanha e **consome** a aprovação (uma
+    # aprovação = uma execução); rejeitadas nunca libertam.  Import local: o
+    # módulo ``approval_flow`` importa ``state``, que importa este módulo.
+    from .approval_flow import ApprovalChecker
+
+    runtime = services.runtime(campaign.id)
+
+    def publish_release(approval: dict[str, Any]) -> None:
+        services.publish_event_threadsafe(campaign.id, "approval_updated", approval)
+
     return AgentLoop(
         jev,
         game,
@@ -176,6 +192,7 @@ def build_loop(
         objective_store=services.objective(campaign),
         control=control_source,
         executor=executor,
+        approval_checker=ApprovalChecker(runtime, on_release=publish_release),
     )
 
 

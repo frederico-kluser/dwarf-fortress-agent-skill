@@ -19,6 +19,7 @@ from __future__ import annotations
 import time
 from functools import partial
 
+import pytest
 from fastapi.testclient import TestClient
 
 from fakes_loop import (
@@ -316,12 +317,17 @@ class TestRealBuilder:
         assert question["role"] == "JEV-A"
         assert question["action_id"]  # a ação retida vem identificada
         assert "hitl" in question["why_pt"]
-        # O loop publica ``source_data`` sempre; numa pergunta do formatador ele
-        # vem vazio (o loop lê o ``to_queue_entry``, que não leva os metadados do
-        # formatador) — quem o preenche é a pergunta determinística de aprovação,
-        # coberta nos testes de approvals.  O que o achado #2 exige (banda, papel,
-        # ação e o porquê em PT) está todo cá.
-        assert question["source_data"] == {}
+        # A proveniência do formatador chega ao cartão da UI: o ``source_data``
+        # cru (confiança, candidatos, dúvida do JEV-D…) já não vem vazio.
+        source = question["source_data"]
+        assert source["band"] == "hitl"
+        assert source["reason"] and source["route_reason"] == "band_hitl"
+        assert source["action_confidence"] == pytest.approx(0.62)
+        assert source["candidate_actions"]  # os candidatos que o JEV-A pesou
+        # ``format`` é publicado na entrada da fila (o modelo de resposta atual
+        # ainda não o expõe; a UI tolera a ausência).
+        stored = client.app.state.services.runtime(cid).get_question(question["id"])
+        assert stored["format"] == "binary"
         assert question["question"] == "Atravessar o rio a nadar ou procurar uma ponte?"
 
         # O log de decisões e as métricas vêm do loop real.
@@ -334,3 +340,58 @@ class TestRealBuilder:
         set_control(client, cid, mode="paused")
         state_after = status(client, cid)
         assert state_after["running"] is False and state_after["reason"] == "paused"
+
+    def test_an_approved_action_is_released_by_the_next_step(self, client: TestClient, campaign):
+        """GAP 2 ponta-a-ponta: aprovar em ``checkpoint`` liberta a ação retida.
+
+        Com banda ``auto`` e sem dúvida do JEV-D, o único gate é o checkpoint: o
+        loop pergunta, o humano aprova na fila de aprovações e o passo seguinte
+        executa a **mesma** ação (a aprovação é consumida — uma só execução).
+        """
+        services = client.app.state.services
+        cid = campaign["id"]
+        client.post(f"/api/campaigns/{cid}/keys", json={"provider": "typesafe", "key": SECRET})
+        client.post(f"/api/campaigns/{cid}/keys", json={"provider": "openrouter", "key": SECRET})
+
+        # ``ask_human`` baixo + confiança auto ⇒ o formatador não vê dúvida e o loop
+        # publica a pergunta determinística de aprovação do checkpoint.
+        jev = FakeJev(action_id="attack:goblin_skulker", action_confidence=0.97, ask_human=0.05)
+        executor = FakeExecutor()
+        state = game_state(hostiles=[hostile()])
+
+        def builder():
+            return build_loop(
+                services,
+                services.resolve(cid),
+                game_factory=lambda: FakeGame(state),
+                jev_factory=lambda key, **kwargs: jev,
+                llm_factory=lambda get_key, **kwargs: FakeLLM(),
+                executor_factory=lambda game, config: executor,
+            )
+
+        services.loop_builder = builder
+        set_control(client, cid, mode="checkpoint")
+
+        approval = wait_until(
+            lambda: (client.get(f"/api/campaigns/{cid}/approvals").json() or [None])[0]
+        )
+        assert approval["action_id"] == "attack:goblin_skulker"
+        assert approval["status"] == "pending"
+        assert executor.action_ids == []      # retida: o checkpoint exige o humano
+
+        body = client.post(
+            f"/api/campaigns/{cid}/approvals/{approval['id']}/approve"
+        ).json()
+        assert body["status"] == "approved"
+
+        # O passo seguinte do loop libertou a ação (executou como se fosse auto).
+        assert wait_until(lambda: "attack:goblin_skulker" in executor.action_ids)
+
+        # A aprovação foi consumida: fica registada a libertação e não volta a usar
+        # — nenhuma outra aprovação foi aprovada, logo só houve uma execução.
+        stored = client.app.state.services.runtime(cid).get_approval(approval["id"])
+        assert stored["released_at"]
+        assert stored["released_action_id"] == "attack:goblin_skulker"
+        assert executor.action_ids == ["attack:goblin_skulker"]
+
+        set_control(client, cid, mode="paused")

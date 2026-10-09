@@ -22,7 +22,10 @@ Os 10 passos, tal como implementados em :meth:`AgentLoop.step`:
    (``needs_human``/``ask_human``).
 7. **Despachar por banda** — ``auto`` + ``needs_human=false`` + ``autopilot`` →
    executor (DSL com gates); ``hitl``/``abstain``, ``needs_human=true`` ou
-   ``checkpoint`` → pergunta em PT na fila (``question_new``) e ação retida;
+   ``checkpoint`` → pergunta em PT na fila (``question_new``) e ação retida, *a
+   menos que* o ``approval_checker`` injetado diga que o humano já aprovou aquela
+   ação exata (``checkpoint`` ou banda ``hitl``/``abstain``): aí a ação executa e
+   o registo de decisão fica marcado com ``released_by_approval``;
    ``paused`` → nada corre (nem snapshot, nem JEV, nem jogo).
 8. **Registar** — um evento ``decision`` por papel (probabilidades, confidence
    ``null`` quando indisponível, banda, latência, custo) + ``spend.record`` por
@@ -49,7 +52,7 @@ import math
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Callable, Mapping, Protocol, Sequence
 
 from ..jev.bands import band_for_choice_or_score, band_for_noul
@@ -83,8 +86,10 @@ log = logging.getLogger("system_one_dwarf.agent.loop")
 
 __all__ = [
     "AgentLoop",
+    "ApprovalChecker",
     "CallbackEventSink",
     "EventSink",
+    "NeverApproved",
     "NullEventSink",
     "build_metrics_payload",
     "build_state_summary",
@@ -95,6 +100,24 @@ ROLE_RETRIEVAL = "JEV-R"
 ROLE_ACTION = "JEV-A"
 ROLE_MEMORY = "JEV-M"
 ROLE_DOUBT = "JEV-D"
+
+#: Marca no registo de decisão do JEV-A quando a execução veio de uma aprovação
+#: humana já registada (o *gate* foi satisfeito pelo humano, não pela banda).
+RELEASED_BY_APPROVAL = "released_by_approval"
+
+#: Motivos de encaminhamento que uma aprovação humana explícita **satisfaz**.
+#:
+#: * ``checkpoint_mode`` — o modo exige aprovação humana de todas as ações;
+#: * ``needs_human`` — o JEV-A pediu ajuda humana: uma aprovação explícita é mais
+#:   forte do que a dúvida que a pediu (decisão documentada, não omissão);
+#: * ``band_hitl`` / ``band_abstain`` — confiança abaixo do limiar de autonomia.
+#:
+#: Fora do conjunto de propósito: ``mode_not_autopilot`` (é o *modo* que recusa,
+#: não a ação), ``exit_option``/``action_missing``/``action_not_in_candidates``
+#: (não há ação concreta para aprovar) e ``unknown_action``.
+RELEASABLE_REASONS = frozenset(
+    {"checkpoint_mode", "needs_human", "band_hitl", "band_abstain"}
+)
 
 
 # --------------------------------------------------------------------- sink
@@ -218,6 +241,26 @@ class QuestionFormatterLike(Protocol):
     def format(self, jev_d_answer: Any, context: str = ..., action_confidence: float | None = ...,
                candidate_actions: Sequence[str] = ..., **kw: Any) -> Any:  # pragma: no cover
         ...
+
+
+class ApprovalChecker(Protocol):
+    """Aprovações humanas já registadas (o *gate* que o humano já abriu).
+
+    ``was_approved(action_id)`` diz se **aquela ação exata** já foi aprovada pelo
+    humano e **consome** a aprovação: uma aprovação liberta uma execução, nunca
+    duas.  O loop só o consulta nos motivos que um humano pode satisfazer
+    (:data:`RELEASABLE_REASONS`); rejeições nunca chegam cá como aprovadas.
+    """
+
+    def was_approved(self, action_id: str) -> bool:  # pragma: no cover
+        ...
+
+
+class NeverApproved:
+    """Checker por omissão: nada está pré-aprovado — o loop não muda de comportamento."""
+
+    def was_approved(self, action_id: str) -> bool:
+        return False
 
 
 class TranslatorLike(Protocol):
@@ -439,6 +482,9 @@ class AgentLoop:
             :class:`~.executor.MacroExecutor` ligado ao cliente do jogo.
         sleeper / clock: injeção de tempo (testes não esperam de verdade).
         candidates_fn: gerador de candidatos (injeção/testes).
+        approval_checker: :class:`ApprovalChecker` — aprovações humanas já
+            registadas.  Por omissão :class:`NeverApproved` (diz sempre que não),
+            pelo que o comportamento do loop não muda sem uma app ligada.
     """
 
     def __init__(
@@ -461,6 +507,7 @@ class AgentLoop:
         sleeper: Callable[[float], Any] | None = None,
         clock: Callable[[], str] = utc_now_iso,
         candidates_fn: Callable[..., Sequence[MacroAction]] = generate_actions,
+        approval_checker: Any = None,
         logger: Any = None,
     ) -> None:
         if isinstance(config, Mapping):
@@ -482,6 +529,7 @@ class AgentLoop:
         self.sleeper = sleeper or time.sleep
         self.clock = clock
         self.candidates_fn = candidates_fn
+        self.approval_checker = approval_checker if approval_checker is not None else NeverApproved()
         self.executor = executor or MacroExecutor(game, self.config)
 
         self._lock = threading.Lock()
@@ -945,6 +993,21 @@ class AgentLoop:
         status = STATUS_HELD
 
         blocked_reason = _routing_reason(control, band, needs_human, choice)
+        if (blocked_reason in RELEASABLE_REASONS and action is not None and not action.is_exit
+                and self._approved(action)):
+            # O humano já aprovou ESTA ação (fila de aprovações do app): a
+            # aprovação satisfaz o gate, a ação executa como se fosse ``auto`` e o
+            # registo do JEV-A fica marcado — o histórico distingue "o loop
+            # decidiu sozinho" de "o humano libertou".  O registo marcado vai no
+            # evento aditivo ``approval_released`` (o ``decision`` já foi publicado
+            # no passo 6, quando a libertação ainda não era conhecida).
+            decisions = _released_decisions(decisions)
+            self.publish("approval_released", {
+                "action_id": action.id,
+                "ts": self.clock(),
+                "decision": _released_record(decisions),
+            })
+            blocked_reason = None
         if blocked_reason is None and action is not None:
             executed = self.executor.execute(action, state)
             status = _status_for(executed)
@@ -1123,6 +1186,23 @@ class AgentLoop:
             self._accumulate(usage)
         return payload, usage, None
 
+    def _approved(self, action: MacroAction) -> bool:
+        """O humano já aprovou esta ação exata? (checker injetado; falha ⇒ não).
+
+        O checker **consome** a aprovação quando diz que sim (a implementação do
+        app faz isso), pelo que uma aprovação liberta uma só execução.  Um checker
+        rebentado nunca liberta nada: em dúvida, a ação fica retida para o humano.
+        """
+        checker = self.approval_checker
+        getter = getattr(checker, "was_approved", None)
+        if not callable(getter):
+            return False
+        try:
+            return bool(getter(action.id))
+        except Exception:
+            self.log.warning("approval checker failed for %s", action.id, exc_info=True)
+            return False
+
     def _raise_question(self, doubt_result: Any, action: MacroAction | None, context: str,
                         confidence: float | None, candidates: Sequence[MacroAction], *,
                         band: str, reason: str, needs_human: bool = False) -> tuple[Mapping[str, Any] | None, str | None]:
@@ -1148,7 +1228,20 @@ class AgentLoop:
 
     def _question_payload(self, formatted: Any, action: MacroAction | None, *, band: str,
                           reason: str, needs_human: bool, context: str) -> Mapping[str, Any] | None:
-        """Normaliza ``HumanQuestion`` para a entrada da fila de ``docs/api.md``."""
+        """Normaliza ``HumanQuestion`` para a entrada da fila de ``docs/api.md``.
+
+        A entrada publicada é o *queue entry* congelado do contrato (``question``,
+        ``options``, ``free_text_allowed``, …) **acrescido** da proveniência que o
+        formatador expõe: ``source_data`` (contexto cru: confiança, banda,
+        candidatos…), ``why_pt``, ``format`` e um eventual ``role``.  A fusão é
+        **aditiva** — um consumidor da entrada antiga continua a ver os seis
+        campos — e é ela que alimenta o cartão de proveniência da UI.
+
+        O ``why_pt`` publicado começa pela razão de encaminhamento do loop (é ela
+        que explica o *gate*: checkpoint, hitl, ``needs_human``) e junta a
+        explicação do formatador quando ela existe e é diferente: o humano vê
+        porque o agente parou **e** qual era a dúvida.
+        """
         if formatted is None:
             return None
         if getattr(formatted, "asks", None) is False:
@@ -1164,8 +1257,24 @@ class AgentLoop:
                 if isinstance(data, Mapping) and data.get("question"):
                     break
                 data = None
+        # A proveniência vive no ``as_dict()`` (o ``to_queue_entry`` é o contrato
+        # mínimo de 6 campos e não a leva); é lida sempre, mesmo quando a entrada
+        # da fila já veio do ``to_queue_entry``.
+        provenance: Mapping[str, Any] = {}
+        as_dict = getattr(formatted, "as_dict", None)
+        if callable(as_dict):
+            try:
+                candidate = as_dict()
+            except Exception:
+                candidate = None
+            if isinstance(candidate, Mapping):
+                provenance = candidate
+        if not provenance and isinstance(formatted, Mapping):
+            provenance = formatted
         if data is None and isinstance(formatted, Mapping):
             data = formatted
+        if data is None and provenance:
+            data = provenance
         if not isinstance(data, Mapping):
             question = getattr(formatted, "question_pt", None) or getattr(formatted, "question", None)
             if not question:
@@ -1183,6 +1292,23 @@ class AgentLoop:
                 option_id, label = f"opt-{len(options) + 1}", str(option)
             if label:
                 options.append({"id": option_id, "text": str(label)})
+        source_data: dict[str, Any] = {}
+        raw_source = provenance.get("source_data")
+        if isinstance(raw_source, Mapping):
+            source_data = dict(raw_source)
+        source_data.setdefault("route_reason", reason)
+        if reason == "checkpoint_mode" and action is not None:
+            # No checkpoint toda a ação retida é um pedido de aprovação: a fila de
+            # aprovações do app tem de reconhecê-la mesmo quando quem escreveu a
+            # pergunta foi o formatador (a pergunta determinística já o marca).
+            source_data.setdefault("answer_mode", "approval")
+        formatter_why = str(
+            provenance.get("why_pt") or data.get("why_pt") or ""
+        ).strip()
+        route_why = _why_pt(band, reason, needs_human)
+        why_pt = route_why
+        if formatter_why and formatter_why != route_why:
+            why_pt = f"{route_why} — {formatter_why}"
         payload: dict[str, Any] = {
             "id": self._next_question_id(),
             "ts": self.clock(),
@@ -1190,11 +1316,17 @@ class AgentLoop:
             "options": options,
             "free_text_allowed": bool(data.get("free_text_allowed", True)),
             "status": "pending",
-            "format": str(data.get("format") or ("binary" if len(options) == 2 else "open")),
-            "why_pt": str(data.get("why_pt") or _why_pt(band, reason, needs_human)),
-            "source_data": dict(data.get("source_data") or {}),
+            "format": str(
+                provenance.get("format") or data.get("format")
+                or ("binary" if len(options) == 2 else "open")
+            ),
+            "why_pt": why_pt,
+            "source_data": source_data,
             "band": band,
         }
+        role = str(provenance.get("role") or data.get("role") or "").strip()
+        if role:
+            payload["role"] = role
         if action is not None:
             payload["action_id"] = action.id
         return payload
@@ -1648,6 +1780,30 @@ def _read_action(result: Any, candidates: Sequence[MacroAction], config: LoopCon
     return ActionChoice(action=action, band=band, confidence=confidence,
                         needs_human=needs_human, raw_value=value, is_exit=is_exit,
                         has_answer=answer is not None)
+
+
+def _released_decisions(decisions: Sequence[DecisionRecord]) -> list[DecisionRecord]:
+    """Marca o registo do JEV-A com :data:`RELEASED_BY_APPROVAL` (aditivo).
+
+    ``issues`` é o campo aditivo do registo de ``docs/api.md``: o histórico passa
+    a distinguir uma execução decidida pelo loop de uma execução libertada por uma
+    aprovação humana, sem mudar o resto do registo (banda e confiança continuam
+    as que o JEV-A devolveu).
+    """
+    return [
+        replace(record, issues=record.issues + (RELEASED_BY_APPROVAL,))
+        if record.agent == ROLE_ACTION and RELEASED_BY_APPROVAL not in record.issues
+        else record
+        for record in decisions
+    ]
+
+
+def _released_record(decisions: Sequence[DecisionRecord]) -> dict[str, Any] | None:
+    """O registo do JEV-A (já marcado) na forma do log de ``docs/api.md``."""
+    for record in decisions:
+        if record.agent == ROLE_ACTION:
+            return record.to_payload()
+    return None
 
 
 def _routing_reason(control: ControlState, band: str, needs_human: bool,

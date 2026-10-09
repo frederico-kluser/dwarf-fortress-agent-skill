@@ -227,3 +227,109 @@ class TestWebSocket:
             "approval_updated",
         ]
         assert after[-1]["payload"]["status"] == "approved"
+
+
+class TestRelease:
+    """GAP 2: uma aprovação **aprovada** liberta a ação retida — uma única vez.
+
+    O loop consulta o checker no passo de encaminhamento; o checker do app
+    (:class:`~system_one_dwarf.app.approval_flow.ApprovalChecker`) só responde
+    *sim* a uma aprovação ``approved`` da **mesma** ação, e consome-a ao usá-la.
+    """
+
+    def checker(self, client, cid, **kwargs):
+        from system_one_dwarf.app.approval_flow import ApprovalChecker
+
+        return ApprovalChecker(client.app.state.services.runtime(cid), **kwargs)
+
+    def runtime(self, client, cid):
+        return client.app.state.services.runtime(cid)
+
+    def test_an_approved_action_releases_once(self, client: TestClient, campaign):
+        from system_one_dwarf.app.approval_flow import RELEASED_ACTION_ID, RELEASED_AT
+
+        cid = campaign["id"]
+        checkpoint(client, cid)
+        publish_approval(client, cid)
+        checker = self.checker(client, cid)
+
+        # Pendente não liberta — e não é consumida por tentar.
+        assert checker.was_approved("goto:river_bank") is False
+        assert self.runtime(client, cid).get_approval("q-3-1").get(RELEASED_AT) is None
+
+        client.post(f"/api/campaigns/{cid}/approvals/q-3-1/approve")
+
+        assert checker.was_approved("goto:river_bank") is True
+        assert checker.was_approved("goto:river_bank") is False   # consumida
+        stored = self.runtime(client, cid).get_approval("q-3-1")
+        assert stored[RELEASED_AT]
+        assert stored[RELEASED_ACTION_ID] == "goto:river_bank"
+        assert stored["status"] == "approved"      # o histórico fica auditável
+
+    def test_a_rejected_action_never_releases(self, client: TestClient, campaign):
+        from system_one_dwarf.app.approval_flow import RELEASED_AT
+
+        cid = campaign["id"]
+        checkpoint(client, cid)
+        publish_approval(client, cid)
+        client.post(f"/api/campaigns/{cid}/approvals/q-3-1/reject")
+
+        checker = self.checker(client, cid)
+        assert checker.was_approved("goto:river_bank") is False
+        assert checker.was_approved("goto:river_bank") is False
+        assert self.runtime(client, cid).get_approval("q-3-1").get(RELEASED_AT) is None
+
+    def test_only_the_matching_action_releases(self, client: TestClient, campaign):
+        cid = campaign["id"]
+        checkpoint(client, cid)
+        publish_approval(client, cid)
+        client.post(f"/api/campaigns/{cid}/approvals/q-3-1/approve")
+
+        checker = self.checker(client, cid)
+        assert checker.was_approved("goto:nowhere") is False
+        assert checker.was_approved("") is False
+        assert checker.was_approved("goto:river_bank") is True   # intacta até à ação certa
+
+    def test_on_release_receives_the_consumed_record(self, client: TestClient, campaign):
+        cid = campaign["id"]
+        checkpoint(client, cid)
+        publish_approval(client, cid)
+        client.post(f"/api/campaigns/{cid}/approvals/q-3-1/approve")
+
+        released: list[dict] = []
+        checker = self.checker(client, cid, on_release=released.append)
+
+        assert checker.was_approved("goto:river_bank") is True
+        assert released and released[0]["id"] == "q-3-1"
+        assert released[0]["released_action_id"] == "goto:river_bank"
+        assert released[0]["status"] == "approved"
+
+    def test_an_old_approval_of_another_question_still_releases_the_action(
+        self, client: TestClient, campaign
+    ):
+        """Uma aprovação antiga (por id) liberta a ação; a mais recente fica pendente."""
+        cid = campaign["id"]
+        checkpoint(client, cid)
+        publish_approval(client, cid, qid="q-1-1")
+        publish_approval(client, cid, qid="q-2-1")
+        client.post(f"/api/campaigns/{cid}/approvals/q-1-1/approve")
+
+        checker = self.checker(client, cid)
+
+        assert checker.was_approved("goto:river_bank") is True
+        assert self.runtime(client, cid).get_approval("q-2-1").get("released_at") is None
+
+    def test_approving_through_the_question_answer_path_also_releases(
+        self, client: TestClient, campaign
+    ):
+        """Responder ``yes`` à pergunta espelha a aprovação — e também liberta."""
+        cid = campaign["id"]
+        checkpoint(client, cid)
+        publish_approval(client, cid)
+        client.post(
+            f"/api/campaigns/{cid}/questions/q-3-1/answer",
+            json={"answer_text": "Sim, executa", "option_id": "yes"},
+        )
+
+        assert self.runtime(client, cid).get_approval("q-3-1")["status"] == "approved"
+        assert self.checker(client, cid).was_approved("goto:river_bank") is True

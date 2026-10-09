@@ -15,18 +15,27 @@ this module turns an approve/reject into the **existing** question-answer path:
 3. clients are told: ``question_answered`` + ``memory_update`` (from the answer
    flow) and the additive ``approval_updated`` event.
 
-Honest limit, documented in ``docs/api.md``: the app **records and releases** the
-decision, but the loop has no callback to re-dispatch a held action — its next
-step re-decides with the answer already in memory.  Wiring a true "release this
-action" seam is a change in ``agent/loop.py`` (out of scope here; reported).
+Two layers decide an approval:
+
+* :func:`decide_approval` **records** it (approve/reject + note) and mirrors the
+  decision onto the underlying question through the **existing** question-answer
+  path, so the answer lands in the campaign memory with the audit trail;
+* :class:`ApprovalChecker` **releases** it: it is the loop's
+  ``approval_checker``, backed by this campaign's approvals store.
+  ``was_approved(action_id)`` consumes the oldest ``approved`` approval for that
+  exact action (marking ``released_at``/``released_action_id`` so it can never be
+  used twice) and answers *yes*, which lets the loop execute the held action as if
+  the band were ``auto``.  Pending and rejected approvals are never returned, so a
+  refusal (or a missing decision) keeps the loop asking.
 """
 
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, Callable
 
 from ..campaign import Campaign
+from ..campaign.clock import utc_now_iso
 from .runtime import APPROVAL_APPROVED, APPROVAL_PENDING, APPROVAL_REJECTED
 from .state import AppServices
 
@@ -39,6 +48,10 @@ NOTE_SUFFIX = " Nota: {note}"
 #: Option ids the loop's deterministic approval question offers.
 APPROVE_OPTIONS = ("yes",)
 REJECT_OPTIONS = ("no", "reject", "n")
+
+#: Additive fields marking that an approval was **used** to release an execution.
+RELEASED_AT = "released_at"
+RELEASED_ACTION_ID = "released_action_id"
 
 
 class ApprovalNotFound(LookupError):
@@ -129,13 +142,81 @@ async def decide_approval(
     return dict(payload)
 
 
+# ------------------------------------------------------------------- release
+
+
+def release_approved_action(
+    runtime: Any, action_id: str, *, ts: str | None = None
+) -> dict[str, Any] | None:
+    """Consume the oldest ``approved`` approval matching ``action_id``.
+
+    Only an **approved and still unused** approval releases an execution: the
+    entry is marked with :data:`RELEASED_AT`/:data:`RELEASED_ACTION_ID` and is
+    never returned again (one approval = one release).  Pending and rejected
+    approvals never release; an empty ``action_id`` never matches.
+    """
+    wanted = str(action_id or "").strip()
+    if not wanted:
+        return None
+    for approval in runtime.list_approvals(status=APPROVAL_APPROVED):
+        if str(approval.get("action_id") or "") != wanted:
+            continue
+        if approval.get(RELEASED_AT):
+            continue
+        approval[RELEASED_AT] = ts or utc_now_iso()
+        approval[RELEASED_ACTION_ID] = wanted
+        return approval
+    return None
+
+
+class ApprovalChecker:
+    """The loop's ``approval_checker`` over one campaign's approvals store.
+
+    ``was_approved(action_id)`` **consumes** the matching approval and returns
+    ``True``; ``on_release`` (when given) publishes the updated record so the UI
+    sees the release.  A missing store call simply answers ``False`` — the loop
+    then behaves exactly as it did before this seam existed.
+    """
+
+    def __init__(
+        self,
+        runtime: Any,
+        *,
+        on_release: Callable[[dict[str, Any]], Any] | None = None,
+        clock: Callable[[], str] = utc_now_iso,
+    ) -> None:
+        self.runtime = runtime
+        self.on_release = on_release
+        self.clock = clock
+
+    def was_approved(self, action_id: str) -> bool:
+        approval = release_approved_action(self.runtime, action_id, ts=self.clock())
+        if approval is None:
+            return False
+        if self.on_release is not None:
+            try:
+                self.on_release(dict(approval))
+            except Exception:
+                # A UI que não receba o evento não pode travar a execução já
+                # aprovada: o consumo está feito e é isso que impede o duplo uso.
+                log.warning(
+                    "could not publish the release of approval %s", approval.get("id"),
+                    exc_info=True,
+                )
+        return True
+
+
 __all__ = [
     "APPROVE_OPTIONS",
     "APPROVE_TEXT",
     "REJECT_OPTIONS",
     "REJECT_TEXT",
+    "RELEASED_ACTION_ID",
+    "RELEASED_AT",
     "ApprovalAlreadyDecided",
+    "ApprovalChecker",
     "ApprovalNotFound",
     "decide_approval",
     "mirror_answer",
+    "release_approved_action",
 ]
