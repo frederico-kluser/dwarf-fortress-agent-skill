@@ -1,0 +1,21 @@
+[
+  {"name": "title_to_create_world", "expect": ["focus:new_region/Basic (world params + welcome overlay)"], "keys": ["click \"Create new world\""], "wait": 1.2, "guessed": false},
+  {"name": "dismiss_welcome", "expect": ["screen: welcome gone (Welcome to Dwarf Fortress absent)"], "keys": ["click \"Okay\""], "wait": 0.7, "guessed": false},
+  {"name": "create_world_defaults", "expect": ["focus:new_region/Loading (Loading object files)"], "keys": ["click \"Create world\""], "wait": 1.2, "guessed": false},
+  {"name": "poll_worldgen", "expect": ["focus:new_region (world ready: Play now / Keep world)"], "keys": ["poll"], "wait": 9.0, "guessed": false},
+  {"name": "play_now", "expect": ["focus:export_region (Saving world / Offloading units)"], "keys": ["click \"Play now\""], "wait": 1.2, "guessed": false},
+  {"name": "poll_export", "expect": ["focus:choose_game_type (Select a game type)"], "keys": ["poll"], "wait": 8.0, "guessed": false},
+  {"name": "choose_adventurer", "expect": ["focus:update_region (Passing a few weeks)"], "keys": ["click \"Adventurer\""], "wait": 1.2, "guessed": false},
+  {"name": "poll_update", "expect": ["focus:setupadventure (Adventurer, choose your destiny)"], "keys": ["poll"], "wait": 7.0, "guessed": false},
+  {"name": "destiny_to_onward", "expect": ["focus:setupadventure (Create Your Character / race)"], "keys": ["click \"Onward to character creation\""], "wait": 1.2, "guessed": false},
+  {"name": "select_human", "expect": ["focus:setupadventure (origin: From <place>)"], "keys": ["click \"Select human\""], "wait": 1.2, "guessed": false},
+  {"name": "select_origin", "expect": ["focus:setupadventure (Name + Background tab)"], "keys": ["click_re ^Select [A-Z]"], "wait": 1.2, "guessed": false},
+  {"name": "accept_background", "expect": ["focus:setupadventure (Skills / Archetypes)"], "keys": ["click \"Accept background\""], "wait": 1.0, "guessed": false},
+  {"name": "accept_skills", "expect": ["focus:setupadventure (Appearance)"], "keys": ["click \"Accept attributes and skills\""], "wait": 1.0, "guessed": false},
+  {"name": "accept_appearance", "expect": ["focus:setupadventure (Personality)"], "keys": ["click \"Accept appearance\""], "wait": 1.0, "guessed": false},
+  {"name": "accept_personality", "expect": ["focus:setupadventure (Equipment / Your Items)"], "keys": ["click \"Accept personality\""], "wait": 1.0, "guessed": false},
+  {"name": "accept_equipment", "expect": ["focus:setupadventure (Mount and pets)"], "keys": ["click \"Accept equipment\""], "wait": 1.0, "guessed": false},
+  {"name": "ready_to_adventure", "expect": ["focus:setupadventure (Adventure awaits / Go!)"], "keys": ["click \"Ready to adventure!\""], "wait": 1.0, "guessed": false},
+  {"name": "go_launch", "expect": ["focus:dungeonmode (in-game map)"], "keys": ["click \"Go!\""], "wait": 2.5, "guessed": false},
+  {"name": "tutorial_pages", "expect": ["focus:dungeonmode (Help overlay - cosmetic, non-blocking)"], "keys": ["click \"Next\"|\"Okay\" (repeated)"], "wait": 0.7, "guessed": false}
+]
