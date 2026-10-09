@@ -288,6 +288,8 @@ class QuestionOut(_Model):
     action_id: str | None = None
     #: Explicação em PT do *porquê* da pergunta (human-facing, como ``question``).
     why_pt: str | None = None
+    #: Formato da pergunta (aditivo, ex. ``binary``/``open``/``multiple``).
+    format: str | None = None
     #: Dados de origem (aditivo, diagnóstico): razão, confiança, candidatos, …
     source_data: dict[str, Any] | None = None
 
@@ -311,7 +313,10 @@ class ApprovalOut(_Model):
     """Uma aprovação de ação (modo ``checkpoint``) — ver ``docs/api.md``.
 
     O ``id`` é o id da pergunta de aprovação que a originou: aprovar/rejeitar é
-    responder a essa pergunta, pelo caminho de resposta já existente.
+    responder a essa pergunta, pelo caminho de resposta já existente.  Uma
+    aprovação **aprovada** liberta a ação retida **uma única vez**: é consumida
+    (``released_at``/``released_action_id``) e o registo de decisão do JEV-A
+    fica marcado com ``released_by_approval``.  Recusas nunca libertam.
     """
 
     id: str
@@ -325,6 +330,10 @@ class ApprovalOut(_Model):
     note: str | None = None
     decided_at: str | None = None
     description_en: str | None = None
+    #: **Aditivo** — quando a aprovação foi consumida para libertar uma execução.
+    released_at: str | None = None
+    #: **Aditivo** — a ação exata que a aprovação libertou (id de macro-ação).
+    released_action_id: str | None = None
 
 
 class ApprovalDecision(_Model):

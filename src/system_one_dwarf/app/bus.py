@@ -40,6 +40,7 @@ EVENT_TYPES: tuple[str, ...] = (
     "question_answered",
     "approval_new",
     "approval_updated",
+    "approval_released",
     "error",
 )
 

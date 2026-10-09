@@ -366,6 +366,7 @@ Log das decisões JEV.
 | `band` | `auto` \| `hitl` \| `abstain` |
 | `latency_ms` | Latência da chamada |
 | `cost_usd` | Custo da chamada |
+| `issues` | **ADITIVO** — array de strings (notas de validação/qualidade do JEV e marcas de auditoria), **omitido quando vazio**. Quando a execução veio de uma aprovação humana já registada, o registo do JEV-A traz a marca `released_by_approval` |
 
 **`confidence` pode ser `null` (UNAVAILABLE).** O schema alpha permite que a
 confidence venha **ausente** (e os fallbacks devolvem `0`), pelo que *ausente* e
@@ -508,12 +509,24 @@ Descarta a ação e regista a recusa (mesmo corpo opcional). **200** → a aprov
 com `status: "rejected"`; **404**/**409** como acima.
 
 **Semântica (honesta).** Aprovar/rejeitar é **responder à pergunta** de
-aprovação: a resposta (com `option_id` `yes`/`no` quando o loop oferece essas
-opções) segue o caminho de resposta já existente — fica gravada na memória da
-campanha em EN, com o registo de auditoria da aprovação. O loop lê essa resposta
-na sua próxima recuperação de memória e volta a decidir; o backend **não**
-re-despacha a ação retida (não existe no loop um seam de "libertar esta ação" —
-é uma alteração a `agent/loop.py`, reportada como pendente fora desta peça).
+aprovação (a resposta segue o caminho de resposta já existente — fica gravada na
+memória da campanha em EN, com o registo de auditoria da aprovação). Além disso,
+a aprovação decide a ação retida diretamente:
+
+- **Aprovar liberta a ação retida exatamente UMA vez.** O `approval_checker` do
+  loop consome a aprovação **mais antiga aprovada** dessa ação exata quando a vai
+  despachar — fica marcada com `released_at`/`released_action_id` e **nunca**
+  volta a libertar nada — e a ação executa de imediato como se a banda fosse
+  `auto`. O registo de decisão do JEV-A fica sinalizado em `issues` com
+  `released_by_approval` e é emitido o evento aditivo `approval_released`. Uma
+  aprovação explícita também satisfaz o `needs_human` do JEV-A (quem aprova,
+  decide — decisão documentada, não omissão).
+- **Rejeitar nunca liberta.** Recusas (e aprovações pendentes) nunca satisfazem
+  o gate: a ação fica retida e o loop mantém a pergunta. Responder `no`/`reject`
+  à pergunta (fila ou WS) rejeita a aprovação espelhada; qualquer outra resposta
+  aprova-a (e liberta, pelas mesmas regras).
+- **kill_switch/paused ganham sempre**: com o kill-switch ativo ou o modo
+  `paused` o loop nem chega a correr, pelo que nada é libertado.
 
 ---
 
@@ -588,6 +601,7 @@ Canal de tempo real por campanha. Todas as mensagens são **JSON** com envelope 
 | `question_answered` | **Aditivo** — *mesmo corpo* da resposta de `POST .../questions/{qid}/answer` (`{ "id", "status", "answer_text", "option_id" }`); emitido após uma resposta vinda por REST **ou** por WS |
 | `approval_new` | **Aditivo** — uma entrada de `GET .../approvals` (aprovação criada em modo `checkpoint`) |
 | `approval_updated` | **Aditivo** — a mesma entrada depois de decidida (`status` `approved`/`rejected`), venha a decisão de `.../approvals/{id}/approve|reject` ou da resposta da pergunta |
+| `approval_released` | **Aditivo** — `{ "action_id", "ts", "decision" }`; emitido quando uma aprovação humana é **consumida** para libertar a ação retida (execução única). `decision` é o registo do JEV-A já sinalizado com `released_by_approval` em `issues` |
 | `error` | **Aditivo** — `{ "detail": "<mensagem>" }`; erro recuperável do canal (JSON inválido, `question_id` em falta, pergunta inexistente). O canal **não** fecha |
 
 Estes eventos aditivos mantêm-se **aditivos** face ao contrato original: um

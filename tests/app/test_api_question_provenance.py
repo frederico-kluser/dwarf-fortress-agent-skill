@@ -2,7 +2,7 @@
 
 A superfície de human-in-the-loop tem de dizer **porque** o agente pergunta.  A
 fila (``GET .../questions``) e os eventos WS ``question_new`` passam a levar os
-campos **aditivos** ``band``, ``role``, ``action_id``, ``why_pt`` e
+campos **aditivos** ``band``, ``role``, ``action_id``, ``why_pt``, ``format`` e
 ``source_data``, persistidos a partir do payload que o loop publica.
 
 Regra de compatibilidade: um ``question_new`` sem proveniência (o payload de 6
@@ -17,7 +17,7 @@ from fastapi.testclient import TestClient
 from fakes_loop import hitl_question
 from test_api_telemetry import QUESTION, publish
 
-PROVENANCE = {"band", "role", "action_id", "why_pt", "source_data"}
+PROVENANCE = {"band", "role", "action_id", "why_pt", "format", "source_data"}
 FROZEN = {"id", "ts", "question", "options", "free_text_allowed", "status"}
 
 
@@ -31,6 +31,7 @@ class TestGetQuestions:
         assert entry["band"] == "hitl"
         assert entry["role"] == "JEV-A"  # há uma ação retida → papel JEV-A
         assert entry["action_id"] == "goto:river_bank"
+        assert entry["format"] == "binary"
         assert "hitl" in entry["why_pt"]
         assert entry["source_data"]["reason"] == "band_hitl"
         assert entry["source_data"]["action_confidence"] == 0.62
