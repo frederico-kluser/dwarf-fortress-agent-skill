@@ -1,0 +1,22 @@
+{
+  "coala_manifest": 1,
+  "project": "conhecimento-dwarf",
+  "skill": "conhecimento-dwarf-agent-skill",
+  "db": "memory/coala.sqlite",
+  "engine": {
+    "file": "scripts/coala.py",
+    "version": "2.1.0",
+    "sha256": "10ca915b4c29c85d07b9db7e6e3bc81d6b45792fde78b91142f27bc3c392e3ac"
+  },
+  "schema_version": 3,
+  "git_policy": "ignore",
+  "installer": "coala-agent-skill/scripts/coala-install.py",
+  "installed_at": "2026-10-09T00:11:42+00:00",
+  "updated_at": "2026-10-09T00:11:42+00:00",
+  "managed": {
+    "SKILL.md": "48d0f9068dfbe669b2fd7bb729ab12b4b94d636c8c1646352d4f268b9431e026",
+    "memory/.gitignore": "5941079484623004d0493eda784610b14f22d89d4a7473df50f514a8a3b044d4",
+    "references/schema.md": "f6ca60093d8db2da4a525b5aae5889ce48781a9f0e32f61787d5daa97870f307",
+    "scripts/coala.py": "10ca915b4c29c85d07b9db7e6e3bc81d6b45792fde78b91142f27bc3c392e3ac"
+  }
+}
