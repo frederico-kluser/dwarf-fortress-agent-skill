@@ -6,8 +6,8 @@ import json
 
 from fastapi.testclient import TestClient
 
-SECRET = "sk-or-v1-0123456789abcdef3f9a"
-DEEPSEEK_SECRET = "sk-deepseek-aaaabbbbccccdddd"
+SECRET = "TEST-KEY-NOT-REAL-0001"
+DEEPSEEK_SECRET = "TEST-KEY-NOT-REAL-0002"
 
 
 def test_post_key_returns_only_the_masked_form(client: TestClient, campaign):
@@ -19,7 +19,7 @@ def test_post_key_returns_only_the_masked_form(client: TestClient, campaign):
     assert response.status_code == 200
     assert response.json() == {
         "provider": "openrouter",
-        "masked_key": "sk-or-v1-••••••••3f9a",
+        "masked_key": "TEST-KEY-••••••••0001",
         "set": True,
     }
     assert SECRET not in response.text
@@ -38,9 +38,9 @@ def test_get_keys_lists_all_three_providers_masked(client: TestClient, campaign)
     body = client.get(f"/api/campaigns/{campaign['id']}/keys").json()
 
     assert [item["provider"] for item in body] == ["openrouter", "typesafe", "deepseek"]
-    assert body[0] == {"provider": "openrouter", "masked_key": "sk-or-v1-••••••••3f9a", "set": True}
+    assert body[0] == {"provider": "openrouter", "masked_key": "TEST-KEY-••••••••0001", "set": True}
     assert body[1] == {"provider": "typesafe", "masked_key": None, "set": False}
-    assert body[2]["set"] is True and body[2]["masked_key"].endswith("dddd")
+    assert body[2]["set"] is True and body[2]["masked_key"].endswith("0002")
     for item in body:
         assert set(item) == {"provider", "masked_key", "set"}
 

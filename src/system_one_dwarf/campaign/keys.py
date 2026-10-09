@@ -7,7 +7,7 @@ Rules (authoritative):
   open, so a pre-existing file with a loose mode gets tightened).
 * Providers: ``openrouter``, ``typesafe``, ``deepseek``.
 * A full key is **never** returned through any interface: only the masked form
-  (``sk-or-v1-••••••••3f9a``) leaves this module.  ``get_key()`` is the only way
+  (``TEST-KEY-••••••••0001``) leaves this module.  ``get_key()`` is the only way
   code obtains a key in memory, and key material is never logged.
 """
 
@@ -59,7 +59,7 @@ def validate_provider(provider: str) -> str:
 def mask_key(key: str) -> str:
     """Return the only representation of a key that may cross an interface.
 
-    ``sk-or-v1-0123456789abcdef3f9a`` -> ``sk-or-v1-••••••••3f9a``.
+    ``TEST-KEY-NOT-REAL-0001`` -> ``TEST-KEY-••••••••0001``.
     Keys too short to mask safely collapse to bullets.
     """
     key = key or ""

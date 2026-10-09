@@ -18,12 +18,12 @@ from system_one_dwarf.campaign.keys import (
 )
 from system_one_dwarf.campaign.paths import PRIVATE_DIR_MODE, PRIVATE_FILE_MODE
 
-SECRET = "sk-or-v1-0123456789abcdef3f9a"
+SECRET = "TEST-KEY-NOT-REAL-0001"
 
 
 class TestMasking:
     def test_contract_example_mask(self):
-        assert mask_key(SECRET) == "sk-or-v1-••••••••3f9a"
+        assert mask_key(SECRET) == "TEST-KEY-••••••••0001"
 
     def test_short_keys_keep_only_the_tail_hidden(self):
         assert mask_key("abc") == "••••••••"
@@ -57,13 +57,13 @@ def store(tmp_path: Path) -> KeyStore:
 class TestKeyStore:
     def test_set_key_returns_only_the_masked_form(self, store):
         result = store.set_key("openrouter", SECRET)
-        assert result == {"provider": "openrouter", "masked_key": "sk-or-v1-••••••••3f9a", "set": True}
+        assert result == {"provider": "openrouter", "masked_key": "TEST-KEY-••••••••0001", "set": True}
         assert SECRET not in str(result)
 
     def test_get_key_is_the_only_full_accessor(self, store):
         store.set_key("openrouter", SECRET)
         assert store.get_key("openrouter") == SECRET
-        assert store.masked_key("openrouter") == "sk-or-v1-••••••••3f9a"
+        assert store.masked_key("openrouter") == "TEST-KEY-••••••••0001"
         assert store.has_key("openrouter") is True
 
     def test_unset_provider_reads_are_empty(self, store):
@@ -82,14 +82,14 @@ class TestKeyStore:
 
     def test_overwrite_keeps_a_single_row(self, store):
         store.set_key("openrouter", SECRET)
-        store.set_key("openrouter", "sk-or-v1-ffffffffffff9999")
+        store.set_key("openrouter", "TEST-KEY-NOT-REAL-0002")
         conn = sqlite3.connect(store.db_path)
         rows = conn.execute("SELECT provider, masked FROM keys").fetchall()
         conn.close()
-        assert rows == [("openrouter", "sk-or-v1-••••••••9999")]
+        assert rows == [("openrouter", "TEST-KEY-••••••••0002")]
 
     def test_delete_key(self, store):
-        store.set_key("deepseek", "sk-deep-000011112222")
+        store.set_key("deepseek", "TEST-KEY-NOT-REAL-0003")
         assert store.delete_key("deepseek") is True
         assert store.has_key("deepseek") is False
         assert store.delete_key("deepseek") is False
@@ -123,7 +123,7 @@ class TestKeyStore:
     def test_repr_leaks_nothing(self, store):
         store.set_key("openrouter", SECRET)
         text = repr(store)
-        assert SECRET not in text and "3f9a" not in text
+        assert SECRET not in text and "0001" not in text
         assert "chaves.sqlite" in text
 
     def test_masked_column_never_holds_the_full_key(self, store):
