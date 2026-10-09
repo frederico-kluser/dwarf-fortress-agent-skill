@@ -18,7 +18,7 @@
 
 **Ferramentas necessárias (Linux):** `python3` ≥ 3.10 · `node` ≥ 20 · `npm` · `curl` · `sha256sum` (e `tar`, `bzip2` para os tarballs). O instalador valida tudo isto — `bash install.sh --check` mostra o estado sem instalar nada.
 
-> ⚠️ **Som desligado por omissão no Linux (regra do utilizador):** `sod up` arranca o jogo com `SDL_AUDIODRIVER=dummy` e o instalador põe `[SOUND:NO]` + volumes 0 em `data/init/init_default.txt` (backup `.bak-nosound`). `sod up --sound` é a única exceção.
+> ⚠️ **Som desligado por omissão no Linux (regra do utilizador):** `df up` arranca o jogo com `SDL_AUDIODRIVER=dummy` e o instalador põe `[SOUND:NO]` + volumes 0 em `data/init/init_default.txt` (backup `.bak-nosound`). `df up --sound` é a única exceção.
 
 ---
 
@@ -30,7 +30,7 @@ cd dwarf-fortress-agent-skill
 bash install.sh
 ```
 
-O `install.sh` é **idempotente** (seguro de repetir) e, por ordem: verifica ferramentas → cria o `.venv` + `requirements.txt` → `npm install` em `web/` → descarrega e verifica por **SHA-256** o Dwarf Fortress 53.16 (não-Steam) e o DFHack 53.16-r2 para `~/Games/dwarf-fortress-53.16` → aplica o init sem som → verifica a ponte DFHack → instala o comando global `sod` em `~/.local/bin` → imprime os próximos passos.
+O `install.sh` é **idempotente** (seguro de repetir) e, por ordem: verifica ferramentas → cria o `.venv` + `requirements.txt` → `npm install` em `web/` → descarrega e verifica por **SHA-256** o Dwarf Fortress 53.16 (não-Steam) e o DFHack 53.16-r2 para `~/Games/dwarf-fortress-53.16` → aplica o init sem som → verifica a ponte DFHack → instala o comando global `df` em `~/.local/bin` (mais o alias depreciado `sod`) → imprime os próximos passos.
 
 **Flags:**
 
@@ -48,22 +48,39 @@ O `install.sh` é **idempotente** (seguro de repetir) e, por ordem: verifica fer
 ## Como rodar — UM comando
 
 ```bash
-sod up          # ou: ./scripts/sod.sh up
+df up          # ou: ./scripts/df.sh up
 ```
 
-`sod up` arranca **jogo + interface juntos** — o Dwarf Fortress (sem som), o backend FastAPI e a UI web — espera que tudo responda e imprime os URLs. Fica em primeiro plano a supervisionar.
+`df up` arranca **jogo + interface juntos** — o Dwarf Fortress (sem som), o backend FastAPI e a UI web — espera que tudo responda e imprime os URLs. Fica em primeiro plano a supervisionar.
 
-- **Ctrl-C (ou `sod stop`) fecha ambos:** o comando pára o jogo, o backend e a UI que **ele próprio** arrancou (Ctrl-C/SIGTERM → para os três); processos que já corriam antes nunca são mortos.
-- Outros comandos: `sod stop` · `sod status` · `sod logs --follow` · `sod up --no-game` (só backend + UI) · `sod up --sound` (exceção de áudio).
+- **Ctrl-C (ou `df stop`) fecha ambos:** o comando pára o jogo, o backend e a UI que **ele próprio** arrancou (Ctrl-C/SIGTERM → para os três); processos que já corriam antes nunca são mortos.
+- Outros comandos: `df stop` · `df status` · `df logs --follow` · `df up --no-game` (só backend + UI) · `df up --sound` (exceção de áudio).
 - **Portas:** `8000` (backend) · `5173` (UI) · `5000` (RPC do DFHack).
 - **Som desligado por omissão** no Linux (regra do utilizador) — ver aviso acima.
-- Sem instalar o link global: `./scripts/sod.sh up`; para o criar: `./scripts/sod.sh install-link`.
+- Sem instalar o link global: `./scripts/df.sh up`; para o criar: `./scripts/df.sh install-link` (cria `~/.local/bin/df` **e** o alias `~/.local/bin/sod`).
+
+### ⚠️ `df` vs. o `df` do sistema (colisão de nomes)
+
+O comando global chama-se `df` e **interceta o comando de disco do Linux quando chamado de forma interativa**; chamado de scripts ou com argumentos do `df` real (`df -h`, `df <path>`) passa diretamente para o `df` do sistema (`/usr/bin/df`) — os scripts do sistema nunca partem.
+
+| Chamada | Destino |
+|---|---|
+| `df` (interativo, stdout é TTY) | **nosso** — o mesmo que `df up` |
+| `df` (chamado de scripts/pipes, sem TTY) | `df` do sistema (`/usr/bin/df`) |
+| `df up` · `df stop` · `df status` · `df logs` · `df install-link` · `df help` | **nossos** |
+| `df -h` / `df --help` (único argumento **e** terminal interativo) | **nossa** ajuda |
+| `df --no-game` · `--no-backend` · `--no-web` · `--sound` · `--port` · `--web-port` · `--df-path` | **nossos** — o mesmo que `df up` com flags |
+| `df -k` · `df /` · `df /home` · `df --output=size` · qualquer outro 1.º argumento | `df` do sistema (`/usr/bin/df`) |
+
+`df help` é **sempre** a nossa ajuda; `df --help` só é nossa quando é o único argumento num terminal interativo — com outros argumentos (`df -h --si`) ou sem TTY segue para o `df` do sistema. Se `/usr/bin/df` não existir, o projeto resolve o `df` real por PATH (ignorando `~/.local/bin`) e avisa.
+
+**Alias depreciado (nota histórica):** o comando chamava-se `sod` até outubro de 2026 — `sod` continua a funcionar, imprime `⚠ 'sod' foi substituído por 'df' — usa 'df up'` (stderr) e delega em `df`.
 
 ---
 
 ## Primeira sessão
 
-1. Com `sod up` a correr, abre a UI em **http://localhost:5173** — o painel de entrada é **Aventura**.
+1. Com `df up` a correr, abre a UI em **http://localhost:5173** — o painel de entrada é **Aventura**.
 2. **Cria a aventura pelo site** (painel **Aventura**): o wizard cria o mundo e o personagem por ti (mundo novo / personagem novo ou a partir de saves existentes) e leva-te à sessão.
 3. Coloca a **chave OpenRouter** no painel **Controlo** → *Definir chave* (alternativas: `~/.secrets` com `SOD_OPENROUTER_KEY=...` ou `bash install.sh --with-key`; a chave nunca é impressa).
 4. No **Controlo**, escolhe o modo de controlo (`autopilot` ou `checkpoint`) para pôr o loop de decisão a correr; `paused` e o kill-switch param-no.
@@ -114,7 +131,7 @@ As contagens são as das suítes a correr neste venv (`.venv/bin/python -m pytes
 
 ## Procedimento manual (avançado)
 
-O `sod up` + `install.sh` cobrem tudo o que segue; estas secções documentam o processo peça a peça, para debug ou execução manual.
+O `df up` + `install.sh` cobrem tudo o que segue; estas secções documentam o processo peça a peça, para debug ou execução manual.
 
 ### 1. Pré-requisitos de detalhe
 
@@ -132,7 +149,7 @@ cd /home/ondokai/Agent-Skills/dwarf-fortress-agent-skill
 
 Conferir: `curl -s http://127.0.0.1:8000/api/health` → `{"status":"ok","version":"0.1.0"}`.
 
-O pacote é *src-layout* e não está instalado como wheel; neste venv existe um `.pth` que aponta para `src/`. Num venv novo, acrescenta `PYTHONPATH=src` ao comando (o `sod up` faz-no por ti).
+O pacote é *src-layout* e não está instalado como wheel; neste venv existe um `.pth` que aponta para `src/`. Num venv novo, acrescenta `PYTHONPATH=src` ao comando (o `df up` faz-no por ti).
 
 ### 3. Frontend (React + Vite + MUI), à mão
 
@@ -148,7 +165,7 @@ Sem `VITE_API_BASE` a UI arranca com **dados simulados** (`src/api/mock.ts`) e �
 
 1. Na UI, painel **Controlo**, criar ou abrir uma campanha (nome + *jogo novo* ou *gameplay existente*). Cada campanha tem memória CoALA própria.
 2. Ainda no **Controlo**, *Definir chave* → **OpenRouter**. A chave fica na SQLite da campanha (ficheiro `0600`) e é sempre devolvida mascarada.
-3. O jogo **com DFHack** é lançado pelo `sod up`; para o lançar à mão (fora do `sod up`):
+3. O jogo **com DFHack** é lançado pelo `df up`; para o lançar à mão (fora do `df up`):
 
    ```bash
    cd "/home/ondokai/.steam/steam/steamapps/common/Dwarf Fortress"   # ou o teu DF 53.16

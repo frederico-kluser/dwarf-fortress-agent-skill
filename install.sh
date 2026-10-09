@@ -22,7 +22,10 @@
 #   5. init sem som: data/init/init_default.txt → [SOUND:NO] + volumes 0
 #      (backup: init_default.txt.bak-nosound)   ⚠️ SOM DESATIVADO POR PREDEFINIÇÃO
 #   6. verificação: python3 dfhack/df_bridge.py status --json
-#   7. comando global: scripts/sod.sh install-link → ~/.local/bin/sod
+#   7. comando global: scripts/df.sh install-link → ~/.local/bin/df
+#      (+ alias DEPRECIADO ~/.local/bin/sod) — ⚠️ 'df' colide com o df de disco
+#      do Linux: interativo é nosso; de scripts/`df -h`/`df <path>` vai para o
+#      /usr/bin/df (vê --help)
 #   8. próximos passos
 # =============================================================================
 set -u
@@ -137,9 +140,16 @@ OPÇÕES:
 
 $(support_matrix)
 
+⚠️  COLISÃO DE NOMES: o comando global chama-se 'df' e interceta o comando de
+    disco do Linux quando chamado de forma interativa; chamado de scripts ou
+    com argumentos do 'df' real ('df -h', 'df <path>') passa diretamente para o
+    df do sistema (/usr/bin/df) — os scripts do sistema nunca partem. A tabela
+    de despacho completa está em 'df help' e no README. 'sod' continua a
+    funcionar como alias DEPRECIADO (imprime um aviso e delega em 'df').
+
 ⚠️  SOM DESATIVADO POR PREDEFINIÇÃO NO LINUX (regra do utilizador): o passo 6
     põe [SOUND:NO] + volumes 0 em data/init/init_default.txt (backup
-    .bak-nosound). O comando 'sod up' também arranca o jogo sem som
+    .bak-nosound). O comando 'df up' também arranca o jogo sem som
     (SDL_AUDIODRIVER=dummy); '--sound' é a única exceção.
 
 A chave OpenRouter NUNCA é impressa. Coloca-a: na UI (painel Controlo →
@@ -424,13 +434,41 @@ step_bridge() {
   fi
 }
 
-step_link() {
-  step "8/8 · Comando global (sod em ~/.local/bin)"
-  if [ "$DRY_RUN" = 1 ]; then
-    would "bash scripts/sod.sh install-link"
+system_df_check() { # o passthrough do comando 'df' precisa do df real do sistema
+  if [ -x /usr/bin/df ]; then
+    ok "df do sistema: /usr/bin/df (o comando 'df' delega para ele em 'df -h'/'df <path>')"
     return 0
   fi
-  bash "$REPO_ROOT/scripts/sod.sh" install-link && ok "comando global instalado"
+  # Sem /usr/bin/df: resolve por PATH ignorando os nossos diretórios
+  # (~/.local/bin e scripts/) — nunca o próprio comando do projeto.
+  local self dir rest cand
+  self="$(readlink -f "$REPO_ROOT/scripts/df.sh")"
+  rest="$PATH"
+  while [ -n "$rest" ]; do
+    dir="${rest%%:*}"
+    rest="${rest#*:}"
+    [ "$rest" = "$dir" ] && rest=""
+    [ -n "$dir" ] || continue
+    case "$dir" in
+      "$HOME/.local/bin"|"$REPO_ROOT/scripts") continue ;;
+    esac
+    cand="$dir/df"
+    if [ -x "$cand" ] && [ "$(readlink -f "$cand" 2>/dev/null || printf '%s' "$cand")" != "$self" ]; then
+      warn "/usr/bin/df não existe — o comando 'df' do projeto vai delegar em $cand (resolução por PATH, fora de ~/.local/bin)"
+      return 0
+    fi
+  done
+  warn "/usr/bin/df não existe e não há nenhum df do sistema no PATH — 'df' sem argumentos (não-TTY) e 'df -h'/'df <path>' vão falhar com erro claro"
+}
+
+step_link() {
+  step "8/8 · Comando global (df em ~/.local/bin)"
+  system_df_check
+  if [ "$DRY_RUN" = 1 ]; then
+    would "bash scripts/df.sh install-link  (→ ~/.local/bin/df + alias ~/.local/bin/sod)"
+    return 0
+  fi
+  bash "$REPO_ROOT/scripts/df.sh" install-link && ok "comando global instalado (df + alias depreciado sod)"
 }
 
 step_next() {
@@ -441,11 +479,15 @@ step_next() {
   detect_key
   say ""
   say "  1. UM comando para tudo (jogo + interface):"
-  say "       sod up                 # ou: ./scripts/sod.sh up"
+  say "       df up                  # ou: ./scripts/df.sh up"
   say "     Arranca o Dwarf Fortress + backend (8000) + UI (5173) juntos;"
-  say "     Ctrl-C (ou 'sod stop') fecha AMBOS — só o que ele iniciou."
+  say "     Ctrl-C (ou 'df stop') fecha AMBOS — só o que ele iniciou."
   say "     ⚠️  SOM DESATIVADO por predefinição no Linux (regra do utilizador);"
-  say "         'sod up --sound' é a única exceção (e o init tem backup .bak-nosound)."
+  say "         'df up --sound' é a única exceção (e o init tem backup .bak-nosound)."
+  say "     ⚠️  'df' interceta o comando de disco do Linux quando chamado de forma"
+  say "         interativa; chamado de scripts, 'df -h' ou 'df <path>' passa direto"
+  say "         para o df do sistema (/usr/bin/df) — os scripts nunca partem."
+  say "     'sod' ainda funciona como alias depreciado (usa 'df up')."
   say ""
   say "  2. Chave OpenRouter (uma destas formas, nunca impressa):"
   say "       • na UI: painel Controlo → Definir chave   (recomendado)"
@@ -455,7 +497,7 @@ step_next() {
   say "  3. Campanha: na UI → Controlo → criar campanha → modo de controlo"
   say "     (autopilot ou checkpoint)."
   say ""
-  say "  Comandos: sod up | sod stop | sod status | sod logs --follow"
+  say "  Comandos: df up | df stop | df status | df logs --follow | df help"
   say "  Docs:     README.md · docs/setup.md · docs/api.md · docs/arquitetura.md"
   say "==================================================================="
 }
