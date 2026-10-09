@@ -333,3 +333,86 @@ class TestRelease:
 
         assert self.runtime(client, cid).get_approval("q-3-1")["status"] == "approved"
         assert self.checker(client, cid).was_approved("goto:river_bank") is True
+
+
+class TestJevAHoldMirroring:
+    """Regressão (defeito B): uma pergunta JEV-A que retém uma ação **sem**
+    proveniência de aprovação (sem ``answer_mode``, ``source_data`` vazio) tem de
+    espelhar-se na fila de aprovações em ``checkpoint`` — é o único caminho que
+    liberta execuções nas bandas ``hitl``/``abstain``.  Idempotente: uma pergunta
+    = uma aprovação; o caminho explícito (``answer_mode == "approval"``) mantém o
+    id documentado (o id da pergunta).
+    """
+
+    def hold(self, *, qid: str = "q-7-7", action_id: str = "explore:savanna_temperate") -> dict:
+        """O payload ``question_new`` de uma retenção JEV-A sem proveniência."""
+        return {
+            "id": qid,
+            "ts": "2026-10-08T12:00:05.000Z",
+            "question": f"Posso executar «{action_id}»?",
+            "options": [
+                {"id": "yes", "text": "Sim, executar"},
+                {"id": "no", "text": "Não, escolher outra ação"},
+            ],
+            "free_text_allowed": True,
+            "status": "pending",
+            "format": "binary",
+            "why_pt": "o modo checkpoint exige aprovação humana para todas as ações (banda abstain)",
+            "band": "abstain",
+            "role": "JEV-A",
+            "action_id": action_id,
+            "source_data": {},
+        }
+
+    def test_the_hold_mirrors_approves_and_marks_the_released_decision(
+        self, client: TestClient, campaign
+    ):
+        cid = campaign["id"]
+        checkpoint(client, cid)
+        hold = self.hold()
+        publish(client, cid, "question_new", hold)
+        publish(client, cid, "question_new", hold)  # idempotente: 1 pergunta = 1 aprovação
+
+        approvals = client.get(f"/api/campaigns/{cid}/approvals?status=all").json()
+        assert [item["id"] for item in approvals] == [f"appr-{hold['id']}"]
+        assert approvals[0]["question_id"] == hold["id"]
+        assert approvals[0]["action_id"] == "explore:savanna_temperate"
+        assert approvals[0]["band"] == "abstain"
+        assert approvals[0]["status"] == "pending"
+
+        # responder à pergunta decide também a aprovação espelhada (align)
+        client.post(f"/api/campaigns/{cid}/questions/{hold['id']}/answer", json={"option_id": "yes"})
+        answered = client.get(f"/api/campaigns/{cid}/approvals?status=all").json()
+        assert answered[0]["status"] == "approved"
+
+        # o caminho explícito continua a espelhar com o id documentado (o da pergunta)
+        publish_approval(client, cid, qid="q-9-9")
+        ids = [item["id"] for item in client.get(f"/api/campaigns/{cid}/approvals?status=all").json()]
+        assert "q-9-9" in ids
+
+        # libertação (evento do loop): o registo do JEV-A publicado ANTES dela
+        # ganha a marca documentada — e só ele (a decisão sem marca fica sem o
+        # campo, "omitido quando vazio").
+        other = {
+            "id": "d-8", "ts": "2026-10-08T12:00:04.000Z", "agent": "JEV-D",
+            "request_summary": "noul(ask_human)", "answers": {"ask_human": 0.9},
+            "probabilities": None, "confidence": None, "band": "abstain",
+            "latency_ms": 10, "cost_usd": 0.0,
+        }
+        released = {
+            "id": "d-9", "ts": "2026-10-08T12:00:06.000Z", "agent": "JEV-A",
+            "request_summary": "choice(action)", "answers": {"action": hold["action_id"]},
+            "probabilities": {hold["action_id"]: 0.7}, "confidence": 0.48, "band": "abstain",
+            "latency_ms": 20, "cost_usd": 0.0,
+        }
+        publish(client, cid, "decision", other)
+        publish(client, cid, "decision", released)
+        publish(client, cid, "approval_released", {
+            "action_id": hold["action_id"],
+            "ts": "2026-10-08T12:00:06.100Z",
+            "decision": dict(released, issues=["released_by_approval"]),
+        })
+
+        log = client.get(f"/api/campaigns/{cid}/decisions").json()
+        assert "issues" not in log[0]  # omitido quando vazio (docs/api.md)
+        assert log[1]["issues"] == ["released_by_approval"]

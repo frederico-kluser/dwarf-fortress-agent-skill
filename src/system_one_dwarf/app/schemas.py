@@ -160,42 +160,45 @@ class InputOut(_Model):
 
 class HealthMetrics(_Model):
     wounds: list[Any] = Field(default_factory=list)
-    status: str = "healthy"
+    #: ``null`` = indisponível (contrato de nulls do snapshot — nunca ``0``/``""``).
+    status: str | None = "healthy"
 
 
 class NeedsMetrics(_Model):
-    hunger: str = "none"
-    thirst: str = "none"
-    sleep: str = "rested"
+    hunger: str | None = "none"
+    thirst: str | None = "none"
+    sleep: str | None = "rested"
 
 
 class InventoryMetrics(_Model):
-    weight_kg: float = 0.0
+    #: Peso total do snapshot (``inventory.total_weight_kg``): ``null`` quando o
+    #: jogo não expõe massa/capacidade — ``null`` explícito, nunca ``0.0``.
+    weight_kg: float | None = 0.0
     items: list[Any] = Field(default_factory=list)
 
 
 class ThreatsMetrics(_Model):
-    level: str = "low"
+    level: str | None = "low"
     combat: bool = False
     hostiles: list[Any] = Field(default_factory=list)
 
 
 class LocationMetrics(_Model):
-    region: str = ""
+    region: str | None = ""
     path: list[Any] = Field(default_factory=list)
 
 
 class ObjectiveProgressMetrics(_Model):
-    percent: float = 0.0
+    percent: float | None = 0.0
     active_subgoal_id: str | None = None
 
 
 class AgentMetrics(_Model):
-    decisions_per_min: float = 0.0
-    confidence_avg: float = 0.0
-    calls: int = 0
-    cost_usd: float = 0.0
-    latency_ms: int = 0
+    decisions_per_min: float | None = 0.0
+    confidence_avg: float | None = 0.0
+    calls: int | None = 0
+    cost_usd: float | None = 0.0
+    latency_ms: int | None = 0
 
 
 class MetricsOut(_Model):
@@ -254,6 +257,11 @@ class DecisionOut(_Model):
     band: DecisionBand | str = "auto"
     latency_ms: int = 0
     cost_usd: float = 0.0
+    #: **Aditivo** (``docs/api.md``): marcas de auditoria (ex.
+    #: ``released_by_approval`` quando a execução foi libertada por uma aprovação
+    #: humana).  **Omitida quando vazia** — o contrato manda-a faltar, não vir
+    #: ``[]``.
+    issues: list[str] | None = Field(default=None, exclude_if=lambda v: v is None)
 
 
 # --------------------------------------------------------------------- questions

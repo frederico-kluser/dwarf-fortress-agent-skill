@@ -219,6 +219,12 @@ class AppServices:
                 runtime.set_screen(str(data.get("translated_pt") or ""), ts=data.get("ts"))
             elif event_type == "decision":
                 runtime.add_decision(data)
+            elif event_type == "approval_released":
+                # A libertação é decidida depois de o evento ``decision`` ter sido
+                # publicado (passo 6 vs 7 do loop): o espelho marca aqui o registo
+                # do JEV-A com ``released_by_approval`` para o log mostrar a
+                # auditoria documentada em ``docs/api.md``.
+                runtime.mark_decision_released(data)
             elif event_type == "question_new":
                 data = runtime.add_question(data)
                 approval = self._mirror_approval(campaign_id, runtime, data)

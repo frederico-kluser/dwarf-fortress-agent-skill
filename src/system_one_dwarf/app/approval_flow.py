@@ -36,7 +36,12 @@ from typing import Any, Callable
 
 from ..campaign import Campaign
 from ..campaign.clock import utc_now_iso
-from .runtime import APPROVAL_APPROVED, APPROVAL_PENDING, APPROVAL_REJECTED
+from .runtime import (
+    APPROVAL_APPROVED,
+    APPROVAL_ID_PREFIX,
+    APPROVAL_PENDING,
+    APPROVAL_REJECTED,
+)
 from .state import AppServices
 
 log = logging.getLogger("system_one_dwarf.app.approval_flow")
@@ -89,14 +94,18 @@ def mirror_answer(runtime: Any, question_id: str, option_id: str | None) -> dict
     Answering the question directly (REST ``.../questions/{qid}/answer`` or the WS
     ``answer_question`` message) decides the approval too: an explicit refusal
     (``no``/``reject``) rejects it, anything else approves it.  Returns the
-    updated approval, or ``None`` when there is nothing to mirror.
+    updated approval, or ``None`` when there is nothing to mirror.  The approval
+    of a question is found under the question id (explicit approval questions) or
+    under :data:`~.runtime.APPROVAL_ID_PREFIX` + question id (bare JEV-A holds).
     """
     approval = runtime.get_approval(question_id)
+    if approval is None:
+        approval = runtime.get_approval(f"{APPROVAL_ID_PREFIX}{question_id}")
     if approval is None or approval.get("status") != APPROVAL_PENDING:
         return None
     option = str(option_id or "").strip().lower()
     status = APPROVAL_REJECTED if option in REJECT_OPTIONS else APPROVAL_APPROVED
-    return runtime.decide_approval(question_id, status=status)
+    return runtime.decide_approval(str(approval.get("id") or question_id), status=status)
 
 
 async def decide_approval(

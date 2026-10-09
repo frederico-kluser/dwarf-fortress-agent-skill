@@ -71,6 +71,40 @@ def publish(client: TestClient, campaign_id: str, event_type: str, payload: dict
     client.app.state.services.publish_event_threadsafe(campaign_id, event_type, payload)
 
 
+#: O que o loop publica quando o snapshot do jogo traz os nulls do contrato
+#: (``dfhack/df_bridge.py``: "nulls, nunca ausentes") — campos numéricos como
+#: ``weight_kg``/``capacity_kg``/``hp_current``/``hp_max``/``travel_destination``
+#: são ``None`` porque o Lua não os expõe.
+METRICS_NULLS = {
+    "ts": "2026-09-27T20:05:00.000Z",
+    "health": {
+        "wounds": [],
+        "status": None,
+        "pain": None,
+        "hp_current": None,
+        "hp_max": None,
+    },
+    "needs": {"hunger": None, "thirst": None, "sleep": None, "stress_level": None},
+    "inventory": {
+        "weight_kg": None,
+        "items": [],
+        "total_weight_kg": None,
+        "capacity_kg": None,
+    },
+    "threats": {"level": None, "combat": False, "hostiles": []},
+    "location": {"region": None, "path": [], "travel_destination": None},
+    "objective_progress": {"percent": None, "active_subgoal_id": None},
+    "combat_history": [],
+    "agent": {
+        "decisions_per_min": None,
+        "confidence_avg": None,
+        "calls": 0,
+        "cost_usd": 0.0,
+        "latency_ms": 0,
+    },
+}
+
+
 class TestMetrics:
     def test_stub_payload_is_zeroed_and_marked(self, client, campaign):
         response = client.get(f"/api/campaigns/{campaign['id']}/metrics")
@@ -119,6 +153,27 @@ class TestMetrics:
 
     def test_metrics_on_unknown_campaign_is_404(self, client):
         assert client.get("/api/campaigns/nope/metrics").status_code == 404
+
+    def test_snapshot_nulls_never_break_the_metrics_response(self, client, campaign):
+        """Regressão (defeito A): o snapshot emite ``null`` legítimo
+        (``weight_kg`` e afins) e o modelo de resposta não pode rebentar com um
+        ``500`` de validação — o ``null`` explícito do contrato continua ``null``.
+
+        Antes do fix: ``ResponseValidationError: float_type … inventory.weight_kg``
+        em ``routes/metrics.py`` logo que o jogo devolvesse peso desconhecido.
+        """
+        publish(client, campaign["id"], "metrics_update", METRICS_NULLS)
+
+        response = client.get(f"/api/campaigns/{campaign['id']}/metrics")
+
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert body["inventory"]["weight_kg"] is None
+        assert body["health"]["status"] is None
+        assert body["needs"] == {"hunger": None, "thirst": None, "sleep": None}
+        assert body["threats"]["level"] is None
+        assert body["location"]["region"] is None
+        assert body["objective_progress"]["percent"] is None
 
 
 class TestDecisions:
