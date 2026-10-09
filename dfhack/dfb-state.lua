@@ -1,7 +1,20 @@
 -- dfb-state.lua — leitura estruturada (JSON) do estado do jogo p/ agentes LLM.
 -- Instalado automaticamente pelo df_bridge.py em <DF>/dfhack-config/scripts/.
--- Uso (console ou dfhack-run):  dfb-state <adventurer|threats|units|inventory|date|all> [raio]
+-- Uso (console ou dfhack-run):
+--   dfb-state <adventurer|threats|units|inventory|date|all|snapshot> [raio]
 -- Saída: UMA linha/bloco JSON em stdout (consumida por `df_bridge.py state ...`).
+--
+-- `snapshot` alimenta `df_bridge.py snapshot`: {mode, adventurer, metrics}, com os
+-- 8 grupos de métricas pedidos pela camada de GAME STATE (nomes de campo em INGLÊS):
+--   health_injuries, needs_state, inventory, threats, location, game_clock,
+--   units_nearby, events.
+--
+-- Regras desta camada:
+--   * leitura DEFENSIVA (C.safe + pcall/guard): o script NUNCA estoura por causa de
+--     um campo que mudou de nome/versão;
+--   * o que o adventure mode / DFHack não expõe sai como `null` (ex.: hp_current,
+--     hp_max, capacity_kg, travel_destination) — nenhum valor é inventado;
+--   * unidades de peso: kg (massst.whole = kilograms; massst.fraction = milligrams).
 -- Licença: MIT (dwarf-fortress-agent-skill).
 
 local C = reqscript('dfb-common')
@@ -18,18 +31,36 @@ local MONTHS = { 'Granite','Slate','Felsite','Hematite','Malachite','Galena',
                  'Limestone','Sandstone','Timber','Moonstone','Opal','Obsidian' }
 local SEASONS = { 'spring','spring','spring','summer','summer','summer',
                   'autumn','autumn','autumn','winter','winter','winter' }
+local TICKS_PER_DAY = 1200               -- 1 dia = 1200 ticks; 1 hora = 50 ticks
 
 local function state_date()
   local tick = df.global.cur_year_tick
   local month = math.floor(tick / 33600) + 1       -- 28 dias x 1200 ticks
   local day = math.floor((tick % 33600) / 1200) + 1
+  local hour = math.floor((tick % TICKS_PER_DAY) / 50)
   return {
     year = df.global.cur_year,
     tick = tick,
     month = MONTHS[month] or month,
     day = day,
     season = SEASONS[month] or 'unknown',
+    hour = hour,
+    date_text = ('%s %d, year %d'):format(MONTHS[month] or tostring(month), day,
+                                          df.global.cur_year),
   }
+end
+
+-- ---------- helpers defensivos ----------
+-- envolve uma leitura/grupo: se algo estourar, devolve o fallback em vez de derrubar
+-- o script inteiro (structs do DF mudam de nome entre versões).
+local function guard(fn, fallback)
+  local ok, v = pcall(fn)
+  if ok and v ~= nil then return v end
+  return fallback
+end
+
+local function as_number(v)
+  return type(v) == 'number' and v or nil
 end
 
 -- ---------- aventureiro ----------
@@ -50,15 +81,18 @@ end
 
 local function state_adventurer()
   local u = adventurer_unit()
-  local c, c2, body = u.counters, u.counters2, u.body
+  local c, c2, body = C.safe(u, 'counters'), C.safe(u, 'counters2'), C.safe(u, 'body')
+  local wounds = C.safe(body, 'wounds')
+  local pos = C.safe(u, 'pos')
   return {
-    name = utf(dfhack.units.getReadableName(u)),
-    race = utf(dfhack.units.getRaceReadableName(u)),
-    profession = utf(dfhack.units.getProfessionName(u)),
-    pos = { x = u.pos.x, y = u.pos.y, z = u.pos.z },
+    name = guard(function() return utf(dfhack.units.getReadableName(u)) end, nil),
+    race = guard(function() return utf(dfhack.units.getRaceReadableName(u)) end, nil),
+    profession = guard(function() return utf(dfhack.units.getProfessionName(u)) end, nil),
+    pos = { x = as_number(C.safe(pos, 'x')), y = as_number(C.safe(pos, 'y')),
+            z = as_number(C.safe(pos, 'z')) },
     health = {
       blood = C.safe(body, 'blood_count', 0), blood_max = C.safe(body, 'blood_max', 0),
-      wounds = #body.wounds,
+      wounds = wounds and #wounds or 0,
       pain = C.safe(c, 'pain', 0), nausea = C.safe(c, 'nausea', 0),
       dizziness = C.safe(c, 'dizziness', 0), winded = C.safe(c, 'winded', 0),
       stunned = C.safe(c, 'stunned', 0), unconscious = C.safe(c, 'unconscious', 0),
@@ -66,8 +100,8 @@ local function state_adventurer()
       fever = C.safe(c2, 'fever', 0), exhaustion = C.safe(c2, 'exhaustion', 0),
     },
     needs = needs_block(c2),
-    kills = dfhack.units.getKillCount(u),
-    stress_category = dfhack.units.getStressCategory(u),
+    kills = guard(function() return dfhack.units.getKillCount(u) end, nil),
+    stress_category = guard(function() return dfhack.units.getStressCategory(u) end, nil),
   }
 end
 
@@ -76,7 +110,7 @@ local function direction(dx, dy, dz)
   local d = ''
   if dy < 0 then d = 'N' elseif dy > 0 then d = 'S' end
   if dx > 0 then d = d .. 'E' elseif dx < 0 then d = d .. 'W' end
-  if d == '' then d = 'aqui' end
+  if d == '' then d = 'here' end
   if dz > 0 then d = d .. ' +' .. dz .. 'z' elseif dz < 0 then d = d .. ' ' .. dz .. 'z' end
   return d
 end
@@ -131,6 +165,372 @@ local function state_inventory()
   return out
 end
 
+-- =====================================================================
+-- SNAPSHOT: os 8 grupos de métricas (camada de GAME STATE)
+-- =====================================================================
+local CAP_ITEMS, CAP_HOSTILES, CAP_UNITS = 30, 12, 8
+
+-- nome legível de uma parte do corpo (body_part_raw.name_singular[0] ou token)
+local function body_part_name(u, bp_id)
+  if type(bp_id) ~= 'number' or bp_id < 0 then return nil end
+  local ok, name = pcall(function()
+    local plan = u.body and u.body.body_plan
+    local parts = plan and plan.body_parts
+    local bp = parts and parts[bp_id]
+    if not bp then return nil end
+    local names = bp.name_singular
+    if names and names[0] then return utf(names[0]) end
+    return utf(bp.token)
+  end)
+  if ok and type(name) == 'string' and name ~= '' then return name end
+  return nil
+end
+
+-- ferimentos: 1 entrada por unit_wound; severity = maior surface_perc das camadas
+-- (0-100, área de contato atingida), bleeding = alguma camada sangrando.
+local function wounds_list(u)
+  local out = {}
+  local body = C.safe(u, 'body')
+  local wounds = C.safe(body, 'wounds')
+  if not wounds then return out end
+  for _, w in ipairs(wounds) do
+    local severity, bleeding, bp_id = 0, false, nil
+    local parts = C.safe(w, 'parts')
+    if parts then
+      for _, part in ipairs(parts) do
+        if bp_id == nil then bp_id = as_number(C.safe(part, 'body_part_id')) end
+        local surf = as_number(C.safe(part, 'surface_perc'))
+        if surf and surf > severity then severity = surf end
+        local bl = as_number(C.safe(part, 'bleeding'))
+        if bl and bl > 0 then bleeding = true end
+      end
+    end
+    local flags = C.safe(w, 'flags')
+    local bits = C.safe(flags, 'bits')
+    out[#out + 1] = {
+      body_part = body_part_name(u, bp_id),
+      severity = #(parts or {}) > 0 and severity or nil,
+      bleeding = bleeding,
+      severed = C.safe(bits, 'severed_part') and true or false,
+      pain = as_number(C.safe(w, 'pain')),
+    }
+    if #out >= CAP_ITEMS then break end
+  end
+  return out
+end
+
+-- condições de estado (inglesas) lidas dos counters; só entra o que está ativo
+local CONDITION_FIELDS = {
+  { 'counters', 'stunned', 'stunned' },
+  { 'counters', 'unconscious', 'unconscious' },
+  { 'counters', 'winded', 'winded' },
+  { 'counters', 'nausea', 'nauseous' },
+  { 'counters', 'dizziness', 'dizzy' },
+  { 'counters', 'webbed', 'webbed' },
+  { 'counters2', 'paralysis', 'paralyzed' },
+  { 'counters2', 'fever', 'feverish' },
+  { 'counters2', 'exhaustion', 'exhausted' },
+}
+
+local function health_injuries_group(u, wounds)
+  local conditions = {}
+  for _, spec in ipairs(CONDITION_FIELDS) do
+    local counter = C.safe(u, spec[1])
+    local v = as_number(C.safe(counter, spec[2]))
+    if v and v > 0 then conditions[#conditions + 1] = spec[3] end
+  end
+  local bleeding = false
+  for _, w in ipairs(wounds) do
+    if w.bleeding then bleeding = true end
+  end
+  if bleeding then conditions[#conditions + 1] = 'bleeding' end
+
+  local alive = guard(function() return dfhack.units.isAlive(u) end, nil)
+  local unconscious = as_number(C.safe(C.safe(u, 'counters'), 'unconscious'))
+  local status
+  if alive == false then
+    status = 'dead'
+  elseif unconscious and unconscious > 0 then
+    status = 'unconscious'
+  elseif bleeding then
+    status = 'bleeding'
+  elseif #wounds > 0 then
+    status = 'wounded'
+  else
+    status = 'healthy'
+  end
+
+  local body = C.safe(u, 'body')
+  local c = C.safe(u, 'counters')
+  return {
+    -- o adventure mode não tem número de HP: fica null em vez de inventar
+    hp_current = nil,
+    hp_max = nil,
+    blood_current = as_number(C.safe(body, 'blood_count')),
+    blood_max = as_number(C.safe(body, 'blood_max')),
+    wound_count = #wounds,
+    wounds = wounds,
+    pain = as_number(C.safe(c, 'pain')),
+    status = status,
+    status_conditions = conditions,
+  }
+end
+
+local function needs_state_group(u)
+  local c2 = C.safe(u, 'counters2')
+  return {
+    hunger = (function(t)
+      if not t then return nil end
+      if t >= 150000 then return 'starving' end
+      if t >= 75000 then return 'hungry' end
+      return 'none'
+    end)(as_number(C.safe(c2, 'hunger_timer'))),
+    thirst = (function(t)
+      if not t then return nil end
+      if t >= 50000 then return 'dehydrated' end
+      if t >= 25000 then return 'thirsty' end
+      return 'none'
+    end)(as_number(C.safe(c2, 'thirst_timer'))),
+    sleep = (function(t)
+      if not t then return nil end
+      if t >= 57600 then return 'drowsy' end
+      return 'rested'
+    end)(as_number(C.safe(c2, 'sleepiness_timer'))),
+    hunger_timer = as_number(C.safe(c2, 'hunger_timer')),
+    thirst_timer = as_number(C.safe(c2, 'thirst_timer')),
+    sleepiness_timer = as_number(C.safe(c2, 'sleepiness_timer')),
+    -- getStressCategory devolve 0-6 (0 = mais stressado, 6 = menos); número, não rótulo
+    stress_level = guard(function() return as_number(dfhack.units.getStressCategory(u)) end, nil),
+  }
+end
+
+-- peso em kg: massst = { whole = kilograms, fraction = milligrams }
+local function item_weight_kg(item)
+  local ok, kg = pcall(function()
+    local flags = item.flags
+    local computed = flags and flags.bits and flags.bits.weight_computed
+    if computed == false then return nil end
+    local m = item.weight
+    if not m then return nil end
+    local whole = tonumber(m.whole) or 0
+    local frac = tonumber(m.fraction) or 0
+    return whole + frac / 1000000
+  end)
+  if ok and type(kg) == 'number' then return kg end
+  return nil
+end
+
+local function item_material(item)
+  local ok, name = pcall(function()
+    local info = dfhack.matinfo.decode(item)
+    return info and info:toString() or nil
+  end)
+  if ok and type(name) == 'string' and name ~= '' then return name end
+  return nil
+end
+
+local WORN_MODES = { Worn = true, Piercing = true, Flask = true, WrappedAround = true,
+                     Strapped = true, InMouth = true, SewnInto = true }
+
+local function inventory_group(u)
+  local items, armor = {}, {}
+  local total_kg, known_kg = 0, false
+  local weapon = nil
+  for _, e in ipairs(C.safe(u, 'inventory') or {}) do
+    local item = C.safe(e, 'item')
+    local mode = C.safe(e, 'mode')
+    local mode_name = mode ~= nil and (df.inv_item_role_type[mode] or tostring(mode)) or nil
+    local kg = item and item_weight_kg(item) or nil
+    if kg then total_kg, known_kg = total_kg + kg, true end
+    local size = item and as_number(C.safe(item, 'stack_size')) or nil
+    local name = item and utf(dfhack.items.getReadableDescription(item)) or nil
+    local equipped = mode_name ~= nil and mode_name ~= 'NONE' and mode_name ~= 'Hauled'
+    items[#items + 1] = {
+      name = name,
+      quantity = (size and size > 0) and size or 1,
+      weight_kg = kg,
+      equipped = equipped,
+      slot = mode_name,
+      material = item and item_material(item) or nil,
+    }
+    if mode_name == 'Weapon' and not weapon then weapon = name end
+    if equipped and WORN_MODES[mode_name] and name then
+      armor[#armor + 1] = name
+    end
+    if #items >= CAP_ITEMS then break end
+  end
+  while #armor > CAP_HOSTILES do table.remove(armor) end
+  return {
+    items = items,
+    item_count = #items,
+    total_weight_kg = known_kg and total_kg or nil,
+    -- capacidade de carga do adventure mode não é exposta pelo DFHack: null
+    capacity_kg = nil,
+    equipped_weapon = weapon,
+    equipped_armor = armor,
+  }
+end
+
+-- varredura enxuta (só o que o prompt precisa): nome, distância, direção, hostil, visível
+local function units_lean(only_hostile, cap)
+  local adv = adventurer_unit()
+  local ax, ay, az = adv.pos.x, adv.pos.y, adv.pos.z
+  local out = {}
+  for _, u in ipairs(df.global.world.units.active) do
+    if u ~= adv and dfhack.units.isAlive(u) then
+      local dx, dy, dz = u.pos.x - ax, u.pos.y - ay, u.pos.z - az
+      local dist = math.max(math.abs(dx), math.abs(dy))
+      if dist <= radius and math.abs(dz) <= Z_RADIUS then
+        local hostile = dfhack.units.isDanger(u) and true or false
+        if not only_hostile or hostile then
+          out[#out + 1] = {
+            name = utf(dfhack.units.getReadableName(u)),
+            distance = dist,
+            direction = direction(dx, dy, dz),
+            hostile = hostile,
+            visible = (dfhack.units.isVisible(u) and not dfhack.units.isHidden(u)) and true or false,
+            great_danger = dfhack.units.isGreatDanger(u) and true or false,
+          }
+        end
+      end
+    end
+  end
+  table.sort(out, function(a, b) return a.distance < b.distance end)
+  while #out > cap do table.remove(out) end
+  return out
+end
+
+local function threats_group()
+  local hostiles = units_lean(true, CAP_HOSTILES)
+  -- nível derivado: none (nada) < low (hostil longe) < medium (hostil <= 10 tiles)
+  -- < high (great danger <= 10 tiles). Sem "break": great danger ganha sempre.
+  local close, great = false, false
+  for _, h in ipairs(hostiles) do
+    if h.distance <= 10 then
+      close = true
+      if h.great_danger then great = true end
+    end
+  end
+  local level = 'none'
+  if #hostiles > 0 then
+    level = close and (great and 'high' or 'medium') or 'low'
+  end
+  return { count = #hostiles, level = level, hostiles = hostiles }
+end
+
+local function biome_name(pos)
+  local ok, name = pcall(function()
+    local rx, ry = dfhack.maps.getTileBiomeRgn(pos)
+    local bt = dfhack.maps.getBiomeType(rx, ry)
+    local n = df.biome_type[bt]
+    if type(n) == 'string' then return n:lower():gsub('_', ' ') end
+    return nil
+  end)
+  if ok and type(name) == 'string' and name ~= '' then return name end
+  return nil
+end
+
+local function tile_name(pos)
+  local ok, name = pcall(function()
+    local tt = dfhack.maps.getTileType(pos)
+    local n = tt ~= nil and df.tiletype[tt] or nil
+    return type(n) == 'string' and n or nil
+  end)
+  if ok and type(name) == 'string' and name ~= '' then return name end
+  return nil
+end
+
+local function name_to_string(n)
+  if type(n) == 'string' then return utf(n) end
+  if n == nil then return nil end
+  local ok, s = pcall(function()
+    return dfhack.translation.translateName(n, true)
+  end)
+  if ok and type(s) == 'string' and s ~= '' then return utf(s) end
+  return nil
+end
+
+local function site_name()
+  local ok, site = pcall(function()
+    return dfhack.world.getCurrentSite and dfhack.world.getCurrentSite() or nil
+  end)
+  if not ok or not site then return nil, nil end
+  local type_name = nil
+  local ok2, t = pcall(function() return df.site_type[site.type] end)
+  if ok2 and type(t) == 'string' then type_name = t end
+  return name_to_string(C.safe(site, 'name')), type_name
+end
+
+local function location_group(u)
+  local pos = u.pos
+  local where, surroundings = nil, nil
+  local ok = pcall(function()
+    local desig = dfhack.maps.getTileFlags(pos)
+    local bits = desig and desig.bits or nil
+    if bits and bits.subterranean then
+      where = 'underground'
+    elseif bits and bits.outside then
+      where = 'outdoors'
+    elseif bits then
+      where = 'indoors'
+    end
+  end)
+  if not ok then where = nil end
+  local biome = biome_name(pos)
+  local parts = {}
+  if where then parts[#parts + 1] = where end
+  if biome then parts[#parts + 1] = biome end
+  if #parts > 0 then surroundings = table.concat(parts, ', ') end
+  local site, site_type = site_name()
+  local world = name_to_string(C.safe(C.safe(df.global.world, 'world_data'), 'name'))
+  return {
+    x = pos.x, y = pos.y, z = pos.z,
+    world = world,
+    region = biome,
+    site = site,
+    site_type = site_type,
+    surroundings = surroundings,
+    tile = tile_name(pos),
+    -- destino de viagem não é exposto pelas estruturas do adventure mode: null
+    travel_destination = nil,
+  }
+end
+
+local function snapshot_metrics()
+  local u = adventurer_unit()
+  return {
+    health_injuries = guard(function()
+      return health_injuries_group(u, wounds_list(u))
+    end, { hp_current = nil, hp_max = nil, wounds = {}, wound_count = 0,
+           pain = nil, status = nil, status_conditions = {} }),
+    needs_state = guard(function()
+      return needs_state_group(u)
+    end, { hunger = nil, thirst = nil, sleep = nil, stress_level = nil }),
+    inventory = guard(function()
+      return inventory_group(u)
+    end, { items = {}, item_count = 0, total_weight_kg = nil, capacity_kg = nil,
+           equipped_weapon = nil, equipped_armor = {} }),
+    threats = guard(function()
+      return threats_group()
+    end, { count = 0, level = nil, hostiles = {} }),
+    location = guard(function()
+      return location_group(u)
+    end, { x = nil, y = nil, z = nil, world = nil, region = nil, site = nil,
+           site_type = nil, surroundings = nil, tile = nil, travel_destination = nil }),
+    game_clock = guard(function()
+      return state_date()
+    end, { year = nil, tick = nil, month = nil, day = nil, season = nil, hour = nil,
+           date_text = nil }),
+    units_nearby = guard(function()
+      local units = units_lean(false, CAP_UNITS)
+      return { count = #units, units = units }
+    end, { count = 0, units = {} }),
+    -- o jogo não escreve o gamelog: o df_bridge.py preenche este grupo com o
+    -- tail do gamelog.txt (por isso sai vazio daqui)
+    events = {},
+  }
+end
+
 -- ---------- despacho ----------
 local result
 if what == 'adventurer' then
@@ -143,6 +543,8 @@ elseif what == 'inventory' then
   result = state_inventory()
 elseif what == 'date' then
   result = state_date()
+elseif what == 'snapshot' then
+  result = { mode = 'adventure', adventurer = state_adventurer(), metrics = snapshot_metrics() }
 elseif what == 'all' then
   result = {
     date = state_date(),
@@ -150,7 +552,7 @@ elseif what == 'all' then
     threats = scan_units(true),
   }
 else
-  qerror('uso: dfb-state <adventurer|threats|units|inventory|date|all> [raio]')
+  qerror('uso: dfb-state <adventurer|threats|units|inventory|date|all|snapshot> [raio]')
 end
 
 print(C.json.encode(result))

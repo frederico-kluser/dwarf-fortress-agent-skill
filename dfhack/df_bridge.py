@@ -12,6 +12,7 @@ Uso:
   python3 df_bridge.py log --new --json         # só o que aconteceu desde a última checagem
   python3 df_bridge.py watch --seconds 15       # segue eventos novos por 15s (termina sozinho)
   python3 df_bridge.py state all                # estado estruturado em JSON (aventureiro, ameaças, data)
+  python3 df_bridge.py snapshot --json          # SNAPSHOT completo: 8 grupos de métricas + tela + eventos
   python3 df_bridge.py act screen               # lê o texto visível na tela do jogo
   python3 df_bridge.py act move n --times 3     # anda 3 passos para o norte (adventure)
   python3 df_bridge.py act batch "goto 88,72; key A_TALK; wait short; read screen"  # array de ações
@@ -21,8 +22,13 @@ Uso:
 Flags comuns (logo após o subcomando): --df-path, --port, --json, --via auto|run|tcp.
 Códigos de saída: 0 ok · 10 DF não encontrado · 11 gamelog ausente ·
 12 DFHack/RPC inalcançável (jogo fechado?) · 13 o comando falhou dentro do jogo.
+O 13 cobre também `snapshot` quando o script Lua do jogo devolve uma resposta sem
+JSON legível (truncada/corrompida): é erro de ponte — sai com 13 e mensagem no
+stderr, NUNCA com traceback e nunca com 0. Snapshot JÁ parseado mas com campos
+malformados não é erro: os campos viram o default do contrato e o motivo sai em
+`warnings` (exit 0).
 """
-import argparse, glob, json, os, re, socket, struct, subprocess, sys, time
+import argparse, copy, datetime, glob, json, os, re, socket, struct, subprocess, sys, time
 
 # ---------- protocolo remoto do DFHack (fonte: RemoteClient.h / CoreProtocol.proto) ----------
 DEFAULT_PORT = 5000                 # default real do DFHack (remote-server.json)
@@ -683,6 +689,442 @@ def cmd_state(args):
     return EXIT_OK
 
 
+# ---------- snapshot: estado completo (8 grupos de métricas + tela + eventos) ----------
+# Contrato do `snapshot` (consumido pela camada de GAME STATE em Python):
+#   {"schema_version": 1, "ts": <ISO-8601 UTC>, "mode": "adventure", "adventurer": {...},
+#    "metrics": {8 grupos}, "screen_text": "...", "focus": "...",
+#    "gamelog_events": [...], "warnings": [...]}
+# Combina: dfb-state snapshot (Lua) + dfb-act screen (Lua) + tail do gamelog.txt.
+SNAPSHOT_SCHEMA_VERSION = 1
+MAX_SNAPSHOT_EVENTS = 200          # teto de eventos do gamelog por snapshot
+
+# Nomes de campo dos 8 grupos de métricas (EN) e o "shape nulo" de cada um: qualquer
+# grupo que o Lua não devolva vira null/[] em vez de quebrar o consumidor.
+EMPTY_METRICS = {
+    "health_injuries": {"hp_current": None, "hp_max": None, "blood_current": None,
+                        "blood_max": None, "wound_count": 0, "wounds": [], "pain": None,
+                        "status": None, "status_conditions": []},
+    "needs_state": {"hunger": None, "thirst": None, "sleep": None, "hunger_timer": None,
+                    "thirst_timer": None, "sleepiness_timer": None, "stress_level": None},
+    "inventory": {"items": [], "item_count": 0, "total_weight_kg": None,
+                  "capacity_kg": None, "equipped_weapon": None, "equipped_armor": []},
+    "threats": {"count": 0, "level": None, "hostiles": []},
+    "location": {"x": None, "y": None, "z": None, "world": None, "region": None,
+                 "site": None, "site_type": None, "surroundings": None, "tile": None,
+                 "travel_destination": None},
+    "game_clock": {"date_text": None, "year": None, "month": None, "day": None,
+                   "season": None, "tick": None, "hour": None},
+    "units_nearby": {"count": 0, "units": []},
+    "events": [],
+}
+
+GAMELOG_MONTHS = ("Granite", "Slate", "Felsite", "Hematite", "Malachite", "Galena",
+                  "Limestone", "Sandstone", "Timber", "Moonstone", "Opal", "Obsidian")
+
+# data DF no INÍCIO da linha — ex.: "(100) Granite 3, year 100" ou "Granite 3"
+_DATE_PREFIX = re.compile(
+    r"^\s*(?:\(?(?P<year1>\d{1,5})\)?\s*[,:.]?\s*)?"
+    r"(?P<month>" + "|".join(GAMELOG_MONTHS) + r")\s+(?P<day>\d{1,2})"
+    r"(?:\s*,?\s*(?:year\s+)?(?P<year2>\d{1,5}))?", re.IGNORECASE)
+
+
+def iso_utc_now():
+    """ISO-8601 em UTC com sufixo Z e milissegundos (convenção de docs/api.md)."""
+    return datetime.datetime.now(datetime.timezone.utc).strftime(
+        "%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
+
+
+def parse_game_date_prefix(text):
+    """Data do jogo no começo da linha do gamelog, ou None (nunca inventa data)."""
+    m = _DATE_PREFIX.match(text or "")
+    if not m:
+        return None
+    date = "%s %s" % (m.group("month").capitalize(), m.group("day"))
+    year = m.group("year2") or m.group("year1")
+    if year:
+        date += ", year %s" % year
+    return date
+
+
+def parse_gamelog_events(lines):
+    """Linhas do gamelog.txt → [{text, category, game_date}] (EN; category = triagem)."""
+    events = []
+    for raw in lines or []:
+        text = (raw or "").strip()
+        if not text:
+            continue
+        events.append({"text": text, "category": classify_event(text),
+                       "game_date": parse_game_date_prefix(text)})
+    return events
+
+
+def empty_metrics():
+    return copy.deepcopy(EMPTY_METRICS)
+
+
+def _json_kind(value):
+    """Nome legível do tipo JSON do valor (p/ mensagens de warning)."""
+    if isinstance(value, dict):
+        return "object"
+    if isinstance(value, list):
+        return "array"
+    if isinstance(value, str):
+        return "string"
+    if isinstance(value, bool):
+        return "boolean"
+    if value is None:
+        return "null"
+    return type(value).__name__
+
+
+def normalize_metrics(raw_metrics, warnings=None):
+    """Normaliza os 8 grupos contra o conjunto de campos documentado (EMPTY_METRICS).
+
+    Contrato "nulls, nunca ausentes": um campo que o Lua não emite (em Lua `nil`
+    desaparece da tabela — logo não existe no JSON) passa a existir com o default do
+    contrato (`null`, `[]` ou 0). Grupo que não seja objeto JSON vira o shape nulo
+    documentado + warning; nunca deixa passar lixo tipado para o consumidor.
+    (O `json.encode` do DFHack emite tabela vazia como `[]`, por isso um campo de
+    lista que chegue como objeto/string é anomalia real, não ambiguidade.)
+    """
+    warnings = warnings if warnings is not None else []
+    metrics = empty_metrics()
+    if raw_metrics is None:
+        return metrics
+    if not isinstance(raw_metrics, dict):
+        warnings.append("metrics is not a JSON object (%s) — using null defaults"
+                        % _json_kind(raw_metrics))
+        return metrics
+    for group, shape in EMPTY_METRICS.items():
+        value = raw_metrics.get(group)
+        if value is None:
+            continue                              # fica o shape nulo do contrato
+        if group == "events":                     # grupo que é lista, não objeto
+            if isinstance(value, list):
+                metrics[group] = copy.deepcopy(value)
+            else:
+                warnings.append("metrics.events is not a JSON array (%s) — using []"
+                                % _json_kind(value))
+            continue
+        if not isinstance(value, dict):
+            warnings.append("metrics.%s is not a JSON object (%s) — using null defaults"
+                            % (group, _json_kind(value)))
+            continue
+        merged = copy.deepcopy(value)             # preserva campos extra do produtor
+        for field, default in shape.items():
+            got = value.get(field)
+            if got is None:
+                merged[field] = copy.deepcopy(default)
+            elif isinstance(default, list) and not isinstance(got, list):
+                warnings.append("metrics.%s.%s is not a JSON array (%s) — using []"
+                                % (group, field, _json_kind(got)))
+                merged[field] = []
+            elif not isinstance(default, list) and isinstance(got, (dict, list)):
+                warnings.append("metrics.%s.%s is not a scalar (%s) — using %s"
+                                % (group, field, _json_kind(got), default))
+                merged[field] = copy.deepcopy(default)
+        metrics[group] = merged
+    return metrics
+
+
+def sanitize_snapshot(snap, warnings=None):
+    """Garante o contrato do snapshot em TODOS os níveis (nunca levanta exceção).
+
+    Topo: schema_version/ts/mode/adventurer/screen_text/focus/gamelog_events/warnings
+    com os tipos do contrato; `metrics` passa por :func:`normalize_metrics`. Qualquer
+    campo malformado vira o default do contrato + uma entrada em `warnings`.
+    """
+    if warnings is None:
+        own = snap.get("warnings") if isinstance(snap, dict) else None
+        warnings = list(own) if isinstance(own, list) else []
+    if not isinstance(snap, dict):
+        warnings.append("snapshot is not a JSON object (%s) — using empty snapshot"
+                        % _json_kind(snap))
+        snap = {}
+    out = dict(snap)
+    out["schema_version"] = SNAPSHOT_SCHEMA_VERSION
+    out["ts"] = out["ts"] if isinstance(out.get("ts"), str) and out["ts"] else iso_utc_now()
+    mode = out.get("mode")
+    if not isinstance(mode, str) or not mode:
+        if mode is not None:
+            warnings.append("mode is not a string (%s) — using \"adventure\"" % _json_kind(mode))
+        mode = "adventure"
+    out["mode"] = mode
+
+    adventurer = out.get("adventurer")
+    if adventurer is not None and not isinstance(adventurer, dict):
+        warnings.append("adventurer is not a JSON object (%s) — using null"
+                        % _json_kind(adventurer))
+        adventurer = None
+    out["adventurer"] = adventurer
+
+    out["metrics"] = normalize_metrics(out.get("metrics"), warnings)
+
+    screen_text = out.get("screen_text")
+    if not isinstance(screen_text, str):
+        if screen_text is not None:
+            warnings.append("screen_text is not a string (%s) — using \"\""
+                            % _json_kind(screen_text))
+        screen_text = ""
+    out["screen_text"] = screen_text
+
+    focus = out.get("focus")
+    if focus is not None and not isinstance(focus, str):
+        warnings.append("focus is not a string (%s) — using null" % _json_kind(focus))
+        focus = None
+    out["focus"] = focus
+
+    events = out.get("gamelog_events")
+    if not isinstance(events, list):
+        if events is not None:
+            warnings.append("gamelog_events is not a JSON array (%s) — using []"
+                            % _json_kind(events))
+        events = []
+    out["gamelog_events"] = events
+    if not out["metrics"]["events"]:
+        out["metrics"]["events"] = events        # placeholder do grupo espelha o gamelog
+
+    out["warnings"] = warnings
+    return out
+
+
+def collect_snapshot(args, df=None, state_data=None):
+    """Monta o dicionário do snapshot. Usado pelo CLI e pelo wrapper Python (via TCP).
+
+    O estado (Lua) é obrigatório; tela e gamelog são best-effort (viram `warnings`).
+    A saída passa sempre por :func:`sanitize_snapshot` (contrato de nulls + tipos).
+    """
+    warnings = []
+    if df is None:
+        df = require_df(args)
+    if state_data is None:
+        state_data, _via = run_game_script(
+            args, df, ["dfb-state", "snapshot", str(getattr(args, "radius", 25))])
+    if not isinstance(state_data, dict):
+        raise BridgeError("dfb-state snapshot devolveu %s em vez de um objeto JSON"
+                          % type(state_data).__name__, EXIT_CMD_FAILED)
+
+    metrics = normalize_metrics(state_data.get("metrics"), warnings)
+
+    screen_text, focus = "", None
+    try:
+        screen, _ = run_game_script(args, df, ["dfb-act", "screen"])
+        if isinstance(screen, dict):
+            lines = screen.get("lines")
+            if isinstance(lines, list):
+                screen_text = "\n".join("" if l is None else str(l) for l in lines)
+            f = screen.get("focus")
+            if isinstance(f, list) and f:
+                focus = "/".join(str(x) for x in f)
+            elif isinstance(f, str) and f:
+                focus = f
+    except BridgeError as e:
+        warnings.append("screen text unavailable: %s" % e)
+
+    events = []
+    try:
+        # teto de 200 linhas: o snapshot alimenta prompt de modelo (context rot)
+        try:
+            limit = min(MAX_SNAPSHOT_EVENTS, max(0, int(getattr(args, "events", 20))))
+        except (TypeError, ValueError):
+            limit = 20
+        path = gamelog_path(df)
+        events = parse_gamelog_events(tail_lines(path, limit) if limit else [])
+    except (BridgeError, OSError) as e:
+        warnings.append("gamelog unavailable: %s" % e)
+    if events or not metrics.get("events"):
+        metrics["events"] = events            # o Lua só devolve o placeholder vazio
+
+    return sanitize_snapshot({
+        "schema_version": SNAPSHOT_SCHEMA_VERSION,
+        "ts": iso_utc_now(),
+        "mode": state_data.get("mode") or "adventure",
+        "adventurer": state_data.get("adventurer"),
+        "metrics": metrics,
+        "screen_text": screen_text,
+        "focus": focus,
+        "gamelog_events": events,
+        "warnings": warnings,
+    }, warnings)
+
+
+def journal_snapshot_record(snap):
+    """Registo COMPACTO do snapshot pro journal JSONL (sem itens/tela).
+
+    Passa por :func:`sanitize_snapshot` (o registo nunca parte por snapshot malformado).
+    """
+    snap = sanitize_snapshot(snap)
+    m = snap.get("metrics") or {}
+    hl, nd, th, inv = (m.get("health_injuries") or {}, m.get("needs_state") or {},
+                       m.get("threats") or {}, m.get("inventory") or {})
+    adv = snap.get("adventurer") or {}
+    return {
+        "kind": "snapshot", "ts": snap.get("ts"), "mode": snap.get("mode"),
+        "adventurer": adv.get("name"), "pos": adv.get("pos"),
+        "health_status": hl.get("status"), "wound_count": hl.get("wound_count"),
+        "needs": {"hunger": nd.get("hunger"), "thirst": nd.get("thirst"),
+                  "sleep": nd.get("sleep")},
+        "threats": {"count": th.get("count"), "level": th.get("level")},
+        "inventory_items": inv.get("item_count"),
+        "focus": snap.get("focus"),
+        "event_count": len(snap.get("gamelog_events") or []),
+    }
+
+
+def render_snapshot_text(snap):
+    """Saída humana (EN) do snapshot — o texto do jogo é o próprio texto do jogo.
+
+    Defensivo por contrato: um snapshot malformado (grupo que não é objeto, posição
+    não numérica, condição que não é lista, evento que não é objeto) NUNCA levanta
+    exceção — o campo vira placeholder (`unknown`/`none`) e a anomalia sai como linha
+    `warning:` no fim do texto, com o CLI a devolver exit 0.
+    """
+    notes = []                                   # anomalias de render (viram `warning:`)
+    if not isinstance(snap, dict):
+        notes.append("snapshot is not a JSON object (%s) — rendered as empty"
+                     % _json_kind(snap))
+        snap = {}
+
+    def show(value):
+        """Valor para exibição: contêiner/ausente nunca vira repr de estrutura."""
+        if value is None or isinstance(value, (dict, list)):
+            return "unknown"
+        return str(value)
+
+    def text(value, what):
+        """Campo textual do contrato; tipo errado → None + warning."""
+        if value is None or isinstance(value, str):
+            return value
+        notes.append("%s is not a string (%s) — rendered as unknown"
+                     % (what, _json_kind(value)))
+        return None
+
+    def group(name):
+        """Grupo de métricas como dict; valor malformado → {} + warning."""
+        value = metrics.get(name)
+        if isinstance(value, dict):
+            return value
+        if value is not None:
+            notes.append("metrics.%s is not a JSON object (%s) — rendered as unknown"
+                         % (name, _json_kind(value)))
+        return {}
+
+    metrics = snap.get("metrics")
+    if not isinstance(metrics, dict):
+        if metrics is not None:
+            notes.append("metrics is not a JSON object (%s) — rendered as unknown"
+                         % _json_kind(metrics))
+        metrics = {}
+
+    hl, nd = group("health_injuries"), group("needs_state")
+    inv, th = group("inventory"), group("threats")
+    loc, clk = group("location"), group("game_clock")
+
+    adv = snap.get("adventurer")
+    if not isinstance(adv, dict):
+        if adv is not None:
+            notes.append("adventurer is not a JSON object (%s) — rendered as unknown"
+                         % _json_kind(adv))
+        adv = {}
+    pos = adv.get("pos")
+    if not isinstance(pos, dict):
+        if pos is not None:
+            notes.append("adventurer.pos is not a JSON object (%s) — rendered as unknown"
+                         % _json_kind(pos))
+        pos = {}
+
+    conditions = hl.get("status_conditions")
+    if not isinstance(conditions, list):
+        if conditions is not None:
+            notes.append("metrics.health_injuries.status_conditions is not a JSON array "
+                         "(%s) — rendered as none" % _json_kind(conditions))
+        conditions = []
+    conditions_text = ", ".join(show(c) for c in conditions) or "none"
+
+    weight = inv.get("total_weight_kg")
+    site = text(loc.get("site"), "metrics.location.site")
+    surroundings = (text(loc.get("surroundings"), "metrics.location.surroundings")
+                    or "unknown surroundings")
+
+    out = ["Game snapshot [%s] at %s" % (show(snap.get("mode")), show(snap.get("ts")))]
+    out.append("Adventurer: %s — %s %s"
+               % (text(adv.get("name"), "adventurer.name") or "(unknown)",
+                  text(adv.get("race"), "adventurer.race") or "",
+                  text(adv.get("profession"), "adventurer.profession") or ""))
+    out.append("Position: x=%s y=%s z=%s — %s%s"
+               % (show(pos.get("x")), show(pos.get("y")), show(pos.get("z")),
+                  surroundings,
+                  (" — site: " + site) if site else ""))
+    out.append("Health: %s — %s wound(s), pain %s, conditions: %s"
+               % (text(hl.get("status"), "metrics.health_injuries.status") or "unknown",
+                  show(hl.get("wound_count")), show(hl.get("pain")), conditions_text))
+    out.append("Needs: hunger=%s thirst=%s sleep=%s stress_level=%s"
+               % (show(nd.get("hunger")), show(nd.get("thirst")), show(nd.get("sleep")),
+                  show(nd.get("stress_level"))))
+    out.append("Inventory: %s item(s), %s, weapon: %s"
+               % (show(inv.get("item_count")),
+                  "weight unknown" if weight is None or isinstance(weight, (dict, list))
+                  else "%s kg" % weight,
+                  text(inv.get("equipped_weapon"), "metrics.inventory.equipped_weapon")
+                  or "none"))
+    out.append("Threats: %s (%s)" % (show(th.get("count")), show(th.get("level"))))
+    out.append("Clock: %s — %s" % (show(clk.get("date_text")), show(clk.get("season"))))
+    out.append("Focus: %s"
+               % (text(snap.get("focus"), "focus") or "(unknown)"))
+    out.append("Screen:")
+    out.append(text(snap.get("screen_text"), "screen_text") or "  (no screen text)")
+
+    events = snap.get("gamelog_events")
+    if not isinstance(events, list):
+        if events is not None:
+            notes.append("gamelog_events is not a JSON array (%s) — rendered as empty"
+                         % _json_kind(events))
+        events = []
+    out.append("Recent events (%d):" % len(events))
+    for e in events:
+        if not isinstance(e, dict):
+            notes.append("gamelog_events entry is not a JSON object (%s) — rendered raw"
+                         % _json_kind(e))
+            out.append("  %s" % show(e))
+            continue
+        prefix = "[%s]" % (text(e.get("category"), "gamelog_events.category") or "?")
+        if e.get("game_date"):
+            prefix = "%s %s" % (prefix, show(e["game_date"]))
+        out.append("  %s %s" % (prefix, text(e.get("text"), "gamelog_events.text") or ""))
+
+    raw_warnings = snap.get("warnings")
+    if not isinstance(raw_warnings, list):
+        if raw_warnings is not None:
+            notes.append("warnings is not a JSON array (%s) — rendered as none"
+                         % _json_kind(raw_warnings))
+        raw_warnings = []
+    for w in raw_warnings + notes:
+        out.append("warning: %s" % show(w))
+    return "\n".join(out)
+
+
+def cmd_snapshot(args):
+    """`snapshot`: colhe, normaliza (contrato de nulls) e imprime JSON ou texto humano.
+
+    Nunca levanta por campo malformado (vira default + `warnings`, exit 0); só a
+    ausência de JSON legível vindo do script Lua é erro de ponte (exit 13).
+    """
+    df = require_df(args)
+    snap = collect_snapshot(args, df)
+    jpath = None
+    if args.journal:
+        jpath = os.path.join(journal_dir(), "snapshots.jsonl")
+        journal_append(jpath, journal_snapshot_record(snap))
+    if args.json:
+        print(json.dumps(snap, ensure_ascii=False, indent=2))
+    else:
+        text = render_snapshot_text(snap)
+        if jpath:
+            text += "\njournal: " + jpath
+        print(text)
+    return EXIT_OK
+
+
 def _goto(args, df, tx, ty, max_steps):
     """Anda até (tx,ty) com verificação por passo e recomputação de rota ao travar."""
     steps_taken, recomputes = 0, 0
@@ -1091,6 +1533,16 @@ def main():
                    help="qual recorte do estado ler")
     p.add_argument("--radius", type=int, default=25,
                    help="raio de varredura para units/threats (padrão 25)")
+    p = sub.add_parser("snapshot", parents=[common],
+                       help="snapshot do jogo: 8 grupos de métricas + tela + eventos recentes "
+                            "(campos ausentes no Lua saem como null; campos malformados viram "
+                            "default + warning, exit 0; resposta Lua sem JSON legível = exit 13)")
+    p.add_argument("--radius", type=int, default=25,
+                   help="raio da varredura de unidades do snapshot (padrão 25)")
+    p.add_argument("--events", type=int, default=20,
+                   help="quantos eventos do gamelog.txt incluir (padrão 20)")
+    p.add_argument("--journal", action="store_true",
+                   help="grava também um registo compacto no journal JSONL")
     p = sub.add_parser("act", parents=[common],
                        help="observa a tela e age no jogo (camada de copiloto)")
     p.add_argument("action", choices=("focus", "screen", "key", "click", "move", "goto", "batch"),
@@ -1126,6 +1578,7 @@ def main():
         "pause": lambda a: cmd_pause(a, True),
         "unpause": lambda a: cmd_pause(a, False),
         "state": cmd_state,
+        "snapshot": cmd_snapshot,
         "act": cmd_act,
     }
     try:
