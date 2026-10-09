@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="System One Dwarf">
+  <rect width="64" height="64" rx="12" fill="#0B0F14"/>
+  <path d="M18 44V20h7l7 12 7-12h7v24h-6V30l-8 13-8-13v14z" fill="#5BC8FF"/>
+  <circle cx="32" cy="50" r="3" fill="#5DD19A"/>
+</svg>

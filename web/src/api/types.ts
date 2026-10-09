@@ -1,0 +1,435 @@
+/**
+ * Tipos do contrato REST + WebSocket — espelho EXATO de `docs/api.md`.
+ *
+ * Convenções do contrato (docs/api.md §Convenções):
+ *  - erros: `{ "detail": "<mensagem>" }` com o código HTTP adequado;
+ *  - timestamps: ISO-8601 em UTC com sufixo `Z` (ex.: `2026-09-27T19:44:03.512Z`);
+ *  - dinheiro: `number` em USD com 6 casas decimais (ex.: `0.042318`);
+ *  - texto: campos em EN, exceto os marcados `*_pt` (traduzidos para português);
+ *  - ids: string opaca (UUID4) — o cliente nunca a interpreta;
+ *  - chaves de API: nunca devolvidas em claro (só mascaradas).
+ *
+ * Nada aqui deve divergir de `docs/api.md`; o backend é a outra metade do contrato.
+ */
+
+/* ------------------------------------------------------------------ base --- */
+
+/** ISO-8601 UTC com sufixo `Z`. */
+export type Iso8601 = string;
+
+/** USD com 6 casas decimais. */
+export type Usd = number;
+
+/** `POST /api/campaigns/{id}/control` — `mode` ∈ autopilot | checkpoint | paused. */
+export type ControlMode = 'autopilot' | 'checkpoint' | 'paused';
+
+/** `POST /api/campaigns/{id}/keys` — `provider` ∈ openrouter | typesafe | deepseek. */
+export type Provider = 'openrouter' | 'typesafe' | 'deepseek';
+
+/** `agent` do log de decisões JEV. */
+export type JevAgent = 'JEV-R' | 'JEV-A' | 'JEV-M' | 'JEV-D';
+
+/** Banda de ação: auto ≥ 0.90 · hitl 0.50–0.89 · abstain < 0.50. */
+export type DecisionBand = 'auto' | 'hitl' | 'abstain';
+
+/** Estado da pergunta na fila. */
+export type QuestionStatus = 'pending' | 'answered';
+
+/** Caminhos canónicos — um só sítio para todos os endpoints do contrato. */
+export const API_PATHS = {
+  health: '/api/health',
+  campaigns: '/api/campaigns',
+  campaign: (id: string) => `/api/campaigns/${encodeURIComponent(id)}`,
+  keys: (id: string) => `/api/campaigns/${encodeURIComponent(id)}/keys`,
+  memory: (id: string) => `/api/campaigns/${encodeURIComponent(id)}/memory`,
+  objective: (id: string) => `/api/campaigns/${encodeURIComponent(id)}/objective`,
+  inputs: (id: string) => `/api/campaigns/${encodeURIComponent(id)}/inputs`,
+  metrics: (id: string) => `/api/campaigns/${encodeURIComponent(id)}/metrics`,
+  spend: (id: string) => `/api/campaigns/${encodeURIComponent(id)}/spend`,
+  decisions: (id: string) => `/api/campaigns/${encodeURIComponent(id)}/decisions`,
+  questions: (id: string) => `/api/campaigns/${encodeURIComponent(id)}/questions`,
+  answer: (id: string, qid: string) =>
+    `/api/campaigns/${encodeURIComponent(id)}/questions/${encodeURIComponent(qid)}/answer`,
+  control: (id: string) => `/api/campaigns/${encodeURIComponent(id)}/control`,
+  screen: (id: string) => `/api/campaigns/${encodeURIComponent(id)}/screen`,
+  ws: (id: string) => `/ws/campaigns/${encodeURIComponent(id)}`,
+} as const;
+
+/** Erro devolvido pelo backend (formato FastAPI `HTTPException`). */
+export interface ApiErrorBody {
+  detail: string;
+}
+
+/* -------------------------------------------------------------- campanhas --- */
+
+/** `GET /api/health` */
+export interface HealthResponse {
+  status: string;
+  version: string;
+}
+
+/** Controlo de autonomia guardado na campanha. */
+export interface CampaignControl {
+  mode: ControlMode;
+  kill_switch: boolean;
+}
+
+/** `GET /api/campaigns` → item · `GET /api/campaigns/{id}` → objeto. */
+export interface Campaign {
+  id: string;
+  name: string;
+  is_new_game: boolean;
+  created_at: Iso8601;
+  updated_at: Iso8601;
+  control: CampaignControl;
+}
+
+/** `POST /api/campaigns` body */
+export interface CreateCampaignRequest {
+  /** Nome da campanha; define o caminho da memória CoALA. */
+  name: string;
+  /** `true` = jogo novo (memória vazia); `false` = gameplay existente. */
+  is_new_game: boolean;
+}
+
+/** `POST /api/campaigns/{id}/keys` body */
+export interface SetKeyRequest {
+  provider: Provider;
+  key: string;
+}
+
+/** `POST|GET /api/campaigns/{id}/keys` — sempre mascarada. */
+export interface KeyInfo {
+  provider: Provider;
+  masked_key: string | null;
+  set: boolean;
+}
+
+/* ---------------------------------------------------------------- memória --- */
+
+export interface MemoryEpisode {
+  id: string;
+  ts: Iso8601;
+  /** episodic | semantic | procedural | … */
+  kind: string;
+  /** Conteúdo canónico em EN. */
+  content: string;
+  /** Exibição traduzida em PT. */
+  content_pt: string;
+}
+
+/** `GET /api/campaigns/{id}/memory` */
+export interface Memory {
+  /** Linha narrativa canónica (EN). */
+  narrative: string;
+  /** Linha narrativa traduzida (PT) — o que a UI mostra. */
+  narrative_pt: string;
+  episodes: MemoryEpisode[];
+  /** Memória de trabalho (EN; o contrato não define variante `_pt`). */
+  working_memory: string;
+  updated_at: Iso8601;
+}
+
+/**
+ * `PATCH /api/campaigns/{id}/memory` body (parcial — enviar só o que muda).
+ * O servidor traduz PT→EN antes de guardar. A UI envia apenas `narrative`.
+ */
+export interface PatchMemoryRequest {
+  narrative?: string;
+  episodes?: MemoryEpisode[];
+}
+
+/* --------------------------------------------------------------- objetivo --- */
+
+export interface Subgoal {
+  id: string;
+  text: string;
+  done: boolean;
+}
+
+/** `GET|PUT /api/campaigns/{id}/objective` */
+export interface Objective {
+  narrative: string;
+  subgoals: Subgoal[];
+}
+
+/* ----------------------------------------------------------------- inputs --- */
+
+/** `POST /api/campaigns/{id}/inputs` body — texto livre do utilizador (PT). */
+export interface CreateInputRequest {
+  text: string;
+}
+
+/** `201` do `POST /api/campaigns/{id}/inputs` — `text` já traduzido para EN. */
+export interface InputInjection {
+  id: string;
+  text: string;
+  ts: Iso8601;
+}
+
+/**
+ * Entrada do histórico de inputs.
+ *
+ * `docs/api.md` define apenas o `POST .../inputs` (não há `GET`), por isso o
+ * histórico é mantido **localmente pelo cliente** (localStorage por campanha) e
+ * junta o texto em PT que o utilizador escreveu ao texto em EN devolvido pelo
+ * servidor. Não é um endpoint novo: se o backend passar a expor `GET .../inputs`,
+ * basta trocar a implementação de `listInputs`.
+ */
+export interface InputHistoryEntry extends InputInjection {
+  /** Texto tal como o utilizador o escreveu (PT). */
+  text_pt: string;
+}
+
+/* --------------------------------------------------------------- métricas --- */
+
+export interface MetricsHealth {
+  /**
+   * Forma não fixada em `docs/api.md` (o exemplo traz `[]`): a UI mostra o que
+   * existir e ignora o resto. Campos esperados: parte do corpo, gravidade, ts.
+   */
+  wounds: WoundEntry[];
+  /** healthy | wounded | … */
+  status: string;
+}
+
+export interface WoundEntry {
+  part?: string;
+  severity?: string;
+  ts?: Iso8601;
+  [key: string]: unknown;
+}
+
+export interface MetricsNeeds {
+  /** none | … */
+  hunger: string;
+  /** none | … */
+  thirst: string;
+  /** rested | drowsy | … */
+  sleep: string;
+}
+
+export interface MetricsInventory {
+  weight_kg: number;
+  /** Lista de itens (o exemplo traz `[]`). */
+  items: string[];
+}
+
+export interface MetricsThreats {
+  /** low | medium | high | … */
+  level: string;
+  combat: boolean;
+  hostiles: string[];
+}
+
+export interface MetricsLocation {
+  region: string;
+  path: string[];
+}
+
+export interface MetricsObjectiveProgress {
+  /** 0..1 */
+  percent: number;
+  active_subgoal_id: string | null;
+}
+
+/**
+ * `combat_history` — forma não fixada em `docs/api.md` (o exemplo traz `[]`).
+ * Renderização defensiva: os campos são opcionais.
+ */
+export interface CombatEntry {
+  ts?: Iso8601;
+  opponent?: string;
+  outcome?: string;
+  damage?: string;
+  notes?: string;
+  [key: string]: unknown;
+}
+
+/** Métricas do agente (decisões/min, confidence média, chamadas, custo, latência). */
+export interface MetricsAgent {
+  decisions_per_min: number;
+  /** 0..1 */
+  confidence_avg: number;
+  calls: number;
+  cost_usd: Usd;
+  latency_ms: number;
+}
+
+/** `GET /api/campaigns/{id}/metrics` — os 8 grupos exatos do contrato. */
+export interface Metrics {
+  ts: Iso8601;
+  health: MetricsHealth;
+  needs: MetricsNeeds;
+  inventory: MetricsInventory;
+  threats: MetricsThreats;
+  location: MetricsLocation;
+  objective_progress: MetricsObjectiveProgress;
+  combat_history: CombatEntry[];
+  agent: MetricsAgent;
+}
+
+/* ---------------------------------------------------------------- gastos --- */
+
+export interface SpendModel {
+  model: string;
+  calls: number;
+  input_tokens: number;
+  output_tokens: number;
+  cost_usd: Usd;
+}
+
+export interface SpendProvider {
+  provider: Provider;
+  models: SpendModel[];
+}
+
+/** `GET /api/campaigns/{id}/spend` — sem teto de orçamento, só visibilidade. */
+export interface Spend {
+  total_usd: Usd;
+  providers: SpendProvider[];
+  ts: Iso8601;
+}
+
+/* -------------------------------------------------------------- decisões --- */
+
+/** `GET /api/campaigns/{id}/decisions` → item do log JEV. */
+export interface Decision {
+  id: string;
+  ts: Iso8601;
+  agent: JevAgent;
+  /** Resumo do pedido (tipos de pergunta + nº de candidatos). */
+  request_summary: string;
+  /** Respostas tipadas devolvidas pelo JEV. */
+  answers: Record<string, unknown>;
+  /** Distribuição por opção (`choice`). */
+  probabilities: Record<string, number>;
+  /**
+   * Pode vir **ausente ou 0** = indisponível — NUNCA ler como "certo".
+   * A UI mostra "indisponível" nesses casos.
+   */
+  confidence?: number | null;
+  band: DecisionBand;
+  latency_ms: number;
+  cost_usd: Usd;
+}
+
+/* -------------------------------------------------------------- perguntas --- */
+
+export interface QuestionOption {
+  id: string;
+  text: string;
+}
+
+/** `GET /api/campaigns/{id}/questions` → item da fila (hitl/abstain). */
+export interface Question {
+  id: string;
+  ts: Iso8601;
+  /** Pergunta em PT. */
+  question: string;
+  options: QuestionOption[];
+  free_text_allowed: boolean;
+  status: QuestionStatus;
+  /**
+   * Presentes na resposta do `POST .../answer`; o `GET` do contrato não os
+   * garante, por isso a UI mantém a resposta localmente quando faltarem.
+   */
+  answer_text?: string | null;
+  option_id?: string | null;
+}
+
+/** `POST /api/campaigns/{id}/questions/{qid}/answer` body. */
+export interface AnswerQuestionRequest {
+  answer_text: string;
+  option_id?: string;
+}
+
+/** `200` do `POST .../answer` (a resposta vai para a memória). */
+export interface AnswerQuestionResponse {
+  id: string;
+  status: QuestionStatus;
+  /** Já traduzida para EN pelo servidor. */
+  answer_text: string;
+  option_id?: string | null;
+}
+
+/* --------------------------------------------------------------- controlo --- */
+
+/** `POST /api/campaigns/{id}/control` body. */
+export interface ControlRequest {
+  mode: ControlMode;
+  kill_switch: boolean;
+}
+
+/** `200` do `POST .../control` (o `control_state` do WS não traz `ts`). */
+export interface ControlState {
+  mode: ControlMode;
+  kill_switch: boolean;
+  ts?: Iso8601;
+}
+
+/* ------------------------------------------------------------------ ecrã --- */
+
+/** `GET /api/campaigns/{id}/screen` — só PT; o original nunca é mostrado. */
+export interface ScreenTranslation {
+  translated_pt: string;
+  ts: Iso8601;
+}
+
+/* ------------------------------------------------------------- websocket --- */
+
+/**
+ * Estado crítico estruturado em EN enviado ao JEV (o mesmo que alimenta o
+ * prompt). `docs/api.md` não fixa a forma — o cliente ignora-o.
+ */
+export type GameState = Record<string, unknown>;
+
+/** `payload` por tipo de evento servidor → cliente. */
+export interface ServerEventPayloads {
+  metrics_update: Metrics;
+  screen_translation: { translated_pt: string };
+  decision: Decision;
+  question_new: Question;
+  memory_update: Memory;
+  spend_update: Spend;
+  game_state: GameState;
+  control_state: ControlState;
+}
+
+export type ServerEventType = keyof ServerEventPayloads;
+
+/** Envelope comum: `{ "type": …, "ts": …, "payload": { … } }`. */
+export type ServerEvent = {
+  [K in ServerEventType]: {
+    type: K;
+    ts: Iso8601;
+    payload: ServerEventPayloads[K];
+  };
+}[ServerEventType];
+
+export const SERVER_EVENT_TYPES: readonly ServerEventType[] = [
+  'metrics_update',
+  'screen_translation',
+  'decision',
+  'question_new',
+  'memory_update',
+  'spend_update',
+  'game_state',
+  'control_state',
+];
+
+/** Mensagens cliente → servidor. */
+export interface AnswerQuestionMessage {
+  type: 'answer_question';
+  question_id: string;
+  answer_text: string;
+  option_id?: string;
+}
+
+export interface SetControlMessage {
+  type: 'set_control';
+  mode: ControlMode;
+  kill_switch: boolean;
+}
+
+export type ClientMessage = AnswerQuestionMessage | SetControlMessage;
