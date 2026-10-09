@@ -50,6 +50,19 @@ As contagens são as das suítes a correr agora neste venv (`.venv/bin/python -m
 
 ## Como correr
 
+### 0. Arranque rápido (instalação + um comando)
+
+```bash
+./install.sh          # idempotente: .venv, npm, DF 53.16 + DFHack, init sem som, link `sod`
+sod up                # sobe JOGO + BACKEND + UI e fica em primeiro plano
+```
+
+`sod up` arranca o Dwarf Fortress (sem som), o backend em `127.0.0.1:8000` e a UI em `http://localhost:5173`, espera por `/api/health` e pela porta da UI, e imprime os URLs. **Ctrl-C (ou `sod stop`) para TUDO o que ele iniciou** — processos que já corriam antes nunca são mortos. Outros comandos: `sod status`, `sod logs --follow`, `sod up --no-game`, `sod up --sound`, `./scripts/sod.sh install-link` (o comando global `sod`; sem instalar, usa-se `./scripts/sod.sh`).
+
+> ⚠️ **Som desativado por predefinição no Linux** (regra do utilizador): `sod up` lança o jogo com `SDL_AUDIODRIVER=dummy` e o instalador põe `[SOUND:NO]` + volumes 0 em `data/init/init_default.txt` (backup `.bak-nosound`). `sod up --sound` é a única exceção. A chave OpenRouter vem da UI, de env (`SOD_OPENROUTER_KEY`/`OPENROUTER_API_KEY`) ou de `~/.secrets` — nunca é impressa.
+
+As secções 1–5 abaixo mantêm o procedimento manual detalhado.
+
 ### 1. Pré-requisitos
 
 - **Dwarf Fortress 53.16 + DFHack 53.16-r2** instalados e a casar de versão, no diretório do jogo. O registo completo da instalação (URL, SHA-256, o que foi criado, RPC, troubleshooting) está em **[docs/setup.md](docs/setup.md)**.

@@ -23,6 +23,9 @@ web/dist/
 # Memórias CoALA das campanhas de jogo (estado local, não versionado).
 campanhas/
 
+# Runtime do comando global `sod` (PID files e logs de game/backend/frontend).
+.runtime/
+
 # Versionado:
 #   .agents/skills/**                      (produto: skills + artigos markdown)
 #   .agents/skills/scripts/*.py *.tsv      (busca + glossário)
