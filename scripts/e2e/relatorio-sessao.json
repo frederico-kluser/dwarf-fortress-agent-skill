@@ -1,0 +1,2094 @@
+{
+  "generated_at": "2026-10-09T04:03:22.442Z",
+  "campaign": {
+    "id": "1bde4d26-f621-4b78-9102-f12a07b6a2ed",
+    "name": "campanha-e2e",
+    "mode": "checkpoint",
+    "kill_switch": false
+  },
+  "key_status": "encontrada",
+  "objective": {
+    "narrative": "Survive and explore as an adventurer. Immediate goal: reach safety and rest."
+  },
+  "game": {
+    "adventurer": "Omba Ziltacathi \"Amazedwonders\", Hammerman",
+    "mode": "adventure",
+    "snapshot_ts": "2026-10-09T04:02:18.667Z"
+  },
+  "metrics": {
+    "snapshot": [
+      "health_injuries",
+      "needs_state",
+      "inventory",
+      "threats",
+      "location",
+      "game_clock",
+      "units_nearby",
+      "events"
+    ],
+    "api": [
+      "health",
+      "needs",
+      "inventory",
+      "threats",
+      "location",
+      "objective_progress",
+      "combat_history",
+      "agent"
+    ],
+    "api_error": "GET .../metrics devolveu HTTP 500",
+    "source": null
+  },
+  "decisions": {
+    "count": 500,
+    "bands": {
+      "hitl": 235,
+      "abstain": 265
+    },
+    "last": {
+      "id": "d-501",
+      "ts": "2026-10-09T04:03:07.454Z",
+      "agent": "JEV-A",
+      "request_summary": "choice(9 action candidates) + score(urgency) + noul(needs_human)",
+      "answers": {
+        "action": "explore:savanna_temperate",
+        "urgency": 0.02,
+        "needs_human": 0.19
+      },
+      "probabilities": {
+        "talk:quesa_gustewom_violencesink_road_commissioner": 0.0,
+        "talk:thrun_ñorlemhuh_judgestirred_child": 0.0,
+        "talk:setoc_asnasimo_flingechoes_child": 0.0,
+        "wait:one_turn": 0.03,
+        "talk:esmin_atalbewa_cloudpeaces_child": 0.0,
+        "explore:savanna_temperate": 0.59,
+        "talk:gib_buzñithstruslot_carmineframed_law_giver": 0.03,
+        "talk:nique_cathiñor_wonderjudges_chamberlain": 0.33,
+        "other": 0.02
+      },
+      "confidence": 0.54,
+      "band": "hitl",
+      "latency_ms": 463,
+      "cost_usd": 0.000102
+    }
+  },
+  "questions": {
+    "count": 392,
+    "pending": 391,
+    "items": [
+      {
+        "id": "q-1-1",
+        "question": "Omba nunca pisou nesta savana e não sabe o que há por perto: com quem falar ou para onde ir primeiro?",
+        "status": "answered"
+      },
+      {
+        "id": "q-2-2",
+        "question": "Omba acabou de chegar numa savana desconhecida com a maça na mão e não faz ideia de onde está. O que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-3-3",
+        "question": "Omba acabou de chegar a Morningflashes, uma savana aberta; com quem falar ou o que fazer primeiro?",
+        "status": "pending"
+      },
+      {
+        "id": "q-4-4",
+        "question": "Omba acabou de se equipar no meio da savana e não sabe onde está; o que ele faz com o primeiro movimento?",
+        "status": "pending"
+      },
+      {
+        "id": "q-5-5",
+        "question": "Você acabou de chegar na savana de Morningflashes e ainda não sabe onde está nem o que há por perto. O que Omba faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-6-6",
+        "question": "Omba acabou de chegar à savana de Morningflashes sem plano; o que ela faz agora para garantir abrigo e informação?",
+        "status": "pending"
+      },
+      {
+        "id": "q-7-7",
+        "question": "Omba está parada na savana ao amanhecer, equipada mas sem rumo definido — o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-8-8",
+        "question": "Omba acabou de se equipar e está parado na savana Morningflashes; a baronesa e três crianças estão por perto. O que fazer agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-9-9",
+        "question": "Você acaba de montar seu equipamento em Morningflashes e ainda não sabe onde está nem quem são as pessoas ao redor. O que faz primeiro?",
+        "status": "pending"
+      },
+      {
+        "id": "q-10-10",
+        "question": "Você acabou de chegar à savana de Morningflashes com seu equipamento. O que Omba faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-11-11",
+        "question": "Omba está parada numa savana temperada cercada de gente, ainda sem rumo — o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-12-12",
+        "question": "Omba está parada na savana ao amanhecer, equipada mas sem rumo definido — o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-13-13",
+        "question": "Omba acabou de chegar à savana de Morningflashes sem rumo definido — o que ele faz neste primeiro momento?",
+        "status": "pending"
+      },
+      {
+        "id": "q-14-14",
+        "question": "Omba acabou de equipar tudo que tem e ainda não se moveu; o que ele faz agora para se orientar e achar um lugar seguro?",
+        "status": "pending"
+      },
+      {
+        "id": "q-15-15",
+        "question": "Você acabou de chegar à savana Morningflashes sem rumo definido; o que Omba faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-16-16",
+        "question": "Omba está parado na savana com equipamento completo, sem ameaças à vista e sem destino definido — o que fazer agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-17-17",
+        "question": "Omba acabou de se equipar no meio da savana e não sabe onde está nem para onde ir. Qual é o primeiro passo agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-18-18",
+        "question": "Você acaba de chegar à savana e ainda não sabe onde está; o que Omba faz primeiro?",
+        "status": "pending"
+      },
+      {
+        "id": "q-19-19",
+        "question": "Omba acabou de acordar no meio da savana sem lembrar o caminho — o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-20-20",
+        "question": "Omba acabou de começar no meio da savana, com a maça de ferro pronta e ninguém à vista; o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-21-21",
+        "question": "Você está parado na savana ao amanhecer sem rumo definido — o que Omba faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-22-22",
+        "question": "Omba está parado na savana ao amanhecer, sem destino definido e com tudo o que tem no corpo. O que ele faz primeiro?",
+        "status": "pending"
+      },
+      {
+        "id": "q-23-23",
+        "question": "Omba está parado na savana com equipamento completo e sem rumo definido; o que fazer agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-24-24",
+        "question": "Omba acabou de acordar no meio da savana com o maul na mão e nenhum destino — o que ela faz neste primeiro instante?",
+        "status": "pending"
+      },
+      {
+        "id": "q-25-25",
+        "question": "Omba acabou de montar o equipamento numa savana desconhecida e não sabe para onde ir: o que ela faz primeiro?",
+        "status": "pending"
+      },
+      {
+        "id": "q-26-26",
+        "question": "A manhã começa na savana e você ainda não sabe onde está nem o que há por perto. O que fazer agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-27-27",
+        "question": "Omba acabou de se equipar e não sabe onde está; o que ele faz neste primeiro passo?",
+        "status": "pending"
+      },
+      {
+        "id": "q-28-28",
+        "question": "Omba está numa savana ao amanhecer com várias figuras por perto e precisa decidir seu primeiro passo. O que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-29-29",
+        "question": "Omba está parada na savana ao amanhecer, sem rumo definido e com crianças e uma baronesa por perto — o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-30-30",
+        "question": "Omba está parado na savana ao amanhecer, sem saber para onde ir; o que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-31-31",
+        "question": "Você acabou de chegar à savana de Morningflashes com sua maça de ferro, ainda sem rumo definido. O que Omba faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-32-32",
+        "question": "Omba acabou de chegar nesta savana sem rumo definido; o que ela faz agora para começar a aventura?",
+        "status": "pending"
+      },
+      {
+        "id": "q-33-33",
+        "question": "Omba está parado na savana com a manhã começando — o que fazer primeiro?",
+        "status": "pending"
+      },
+      {
+        "id": "q-34-34",
+        "question": "Omba está parado numa savana temperada de manhã, com equipamento completo e nenhum perigo à vista; qual o primeiro passo agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-35-35",
+        "question": "Omba está parado numa savana ao amanhecer, cercado de estranhos: com quem ele fala ou o que faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-36-36",
+        "question": "Omba está parada na savana ao amanhecer, cercada por figuras amigáveis; o que você faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-37-37",
+        "question": "Você saiu de Morningflashes e não sabe para onde ir: fala com o primeiro que encontrar ou segue viagem?",
+        "status": "pending"
+      },
+      {
+        "id": "q-38-38",
+        "question": "Omba acordou no meio da savana sem saber onde está: fala com a baronesa e as crianças à vista ou parte para explorar?",
+        "status": "pending"
+      },
+      {
+        "id": "q-39-39",
+        "question": "Omba acabou de chegar numa savana temperada ao amanhecer; o que ele faz primeiro?",
+        "status": "pending"
+      },
+      {
+        "id": "q-40-40",
+        "question": "Omba acaba de montar seu equipamento numa savana desconhecida, sem rumo definido: o que ele faz neste primeiro momento?",
+        "status": "pending"
+      },
+      {
+        "id": "q-41-41",
+        "question": "Omba está parada na savana com a manhã avançando e nenhum destino claro; o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-42-42",
+        "question": "Você acabou de chegar à savana de Morningflashes e ainda não sabe com quem está lidando: falar com a baronesa Nimu Cathiushcen ou com as crianças locais, ou apenas explorar?",
+        "status": "pending"
+      },
+      {
+        "id": "q-43-43",
+        "question": "Você acabou de chegar à savana de Morningflashes sem rumo definido. O que Omba faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-44-44",
+        "question": "Omba acabou de começar a aventura numa savana e há uma nobre e crianças por perto: qual é o primeiro passo?",
+        "status": "pending"
+      },
+      {
+        "id": "q-45-45",
+        "question": "Omba acorda na savana sem rumo definido; o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-46-46",
+        "question": "Omba está numa savana temperada com aldeões por perto; o que ele faz neste primeiro momento?",
+        "status": "pending"
+      },
+      {
+        "id": "q-47-47",
+        "question": "Omba acabou de chegar na savana de Morningflashes e não sabe para onde ir: falar com quem está por perto ou seguir viagem?",
+        "status": "pending"
+      },
+      {
+        "id": "q-48-48",
+        "question": "Omba acabou de chegar à savana Morningflashes sem rumo definido; o que ela faz primeiro?",
+        "status": "pending"
+      },
+      {
+        "id": "q-49-49",
+        "question": "Omba acordou na savana sem rumo, com crianças e uma baronesa à vista; o que ele faz primeiro?",
+        "status": "pending"
+      },
+      {
+        "id": "q-50-50",
+        "question": "Omba está parada na savana com a maça de ferro pronta, sem rumo definido — o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-51-51",
+        "question": "Omba acabou de chegar na savana de Morningflashes e ainda não sabe onde está nem o que há por perto. O que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-52-52",
+        "question": "Parado na savana ao amanhecer, o que Omba faz primeiro para se orientar e achar um lugar seguro?",
+        "status": "pending"
+      },
+      {
+        "id": "q-53-53",
+        "question": "Omba acabou de chegar à savana de Morningflashes sem rumo definido: o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-54-54",
+        "question": "Omba acabou de montar o equipamento e ainda não sabe onde está nem para onde ir; o que fazer agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-55-55",
+        "question": "Omba acabou de chegar à savana de Morningflashes com o equipamento pronto, mas ainda não sabe para onde ir; o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-56-56",
+        "question": "Omba está parado numa savana ao amanhecer, sem rumo definido; o que ele faz agora para começar a exploração?",
+        "status": "pending"
+      },
+      {
+        "id": "q-57-57",
+        "question": "Omba acabou de juntar o equipamento numa savana desconhecida e não sabe para onde ir. O que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-58-58",
+        "question": "Omba acabou de chegar à savana de Morningflashes e não sabe onde está. O que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-59-59",
+        "question": "Você acabou de se equipar e está em uma savana temperada, sem rumo definido; o que Omba faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-60-60",
+        "question": "Omba acabou de chegar na savana de Morningflashes com equipamento reunido, mas sem rumo definido — o que fazer agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-61-61",
+        "question": "Omba acabou de chegar na savana e não sabe para onde ir; o que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-62-62",
+        "question": "Você acaba de chegar à savana de Morningflashes e ainda não sabe onde está nem para onde ir. O que Omba faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-63-63",
+        "question": "Omba acabou de se equipar e está parada numa savana, sem rumo definido. Qual deve ser o primeiro passo para garantir segurança e informação?",
+        "status": "pending"
+      },
+      {
+        "id": "q-64-64",
+        "question": "Omba acabou de se equipar no meio da savana, sem rumo definido — o que fazer agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-65-65",
+        "question": "Omba acabou de chegar à savana de Morningflashes e não sabe para onde ir — o que faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-66-66",
+        "question": "Omba acabou de se equipar e está parado na savana ao amanhecer; o que ele faz neste primeiro passo?",
+        "status": "pending"
+      },
+      {
+        "id": "q-67-67",
+        "question": "Você acabou de chegar à savana de Morningflashes sem rumo definido; o que Omba faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-68-68",
+        "question": "Omba está num savanna aberto com equipamento completo e nenhum perigo à vista; o que fazer neste primeiro passo?",
+        "status": "pending"
+      },
+      {
+        "id": "q-69-69",
+        "question": "Omba está parada numa savana temperada ao amanhecer, sem rumo definido — para onde ela segue agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-70-70",
+        "question": "Omba acabou de chegar na savana e não sabe o que a região oferece. Qual deve ser o primeiro passo agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-71-71",
+        "question": "Omba está parada na savana com uma maça de ferro e sem rumo definido; o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-72-72",
+        "question": "Omba está parado na savana ao amanhecer sem rumo definido; o que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-73-73",
+        "question": "Você acabou de chegar na savana de Morningflashes sem rumo definido; com quem ou como você começa a agir agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-74-74",
+        "question": "Omba está no meio da savana com equipamento completo e sem rumo: o que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-75-75",
+        "question": "Omba está parada na savana ao amanhecer, sem rumo definido — o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-76-76",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes e sem rumo definido — o que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-77-77",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes e sem rumo definido — o que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-78-78",
+        "question": "Omba está numa savana desconhecida, cercado de figuras importantes e sem saber onde está — o que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-79-79",
+        "question": "Omba está parada na savana ao amanhecer, cercada de figuras importantes que ainda não conhece — o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-80-80",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes da região; com quem falar primeiro ou o que fazer agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-81-81",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes e sem rumo definido — o que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-82-82",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes e sem rumo definido — o que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-83-83",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes e sem rumo definido — o que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-84-84",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes e sem rumo definido — o que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-85-85",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes e crianças — com quem falar primeiro ou o que fazer agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-86-86",
+        "question": "Omba está parada na savana com várias figuras por perto; o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-87-87",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes da região; com quem falar primeiro ou o que fazer agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-88-88",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes e crianças; com quem falar primeiro ou o que fazer agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-89-89",
+        "question": "Omba está numa savana ao amanhecer, cercado por figuras importantes e crianças — com quem falar primeiro?",
+        "status": "pending"
+      },
+      {
+        "id": "q-90-90",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes e sem saber onde está — o que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-91-91",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes e crianças — com quem falar primeiro ou o que fazer agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-92-92",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes da região; com quem falar primeiro?",
+        "status": "pending"
+      },
+      {
+        "id": "q-93-93",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes e sem rumo definido — o que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-94-94",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes e crianças — com quem falar primeiro ou o que fazer agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-95-95",
+        "question": "Omba acabou de chegar à savana de Morningflashes e há várias figuras por perto; o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-96-96",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes da região — com quem falar primeiro?",
+        "status": "pending"
+      },
+      {
+        "id": "q-97-97",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes e sem rumo definido — o que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-98-98",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes da região — com quem falar primeiro?",
+        "status": "pending"
+      },
+      {
+        "id": "q-99-99",
+        "question": "Omba está numa savana ao amanhecer, cercado por figuras importantes da região — com quem falar primeiro?",
+        "status": "pending"
+      },
+      {
+        "id": "q-100-100",
+        "question": "Omba está parado na savana de Morningflashes com cinco moradores por perto; com quem falar primeiro ou o que fazer agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-101-101",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes e sem rumo definido — o que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-102-102",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes e sem rumo definido. O que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-103-103",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes e crianças — com quem falar primeiro ou o que fazer agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-104-104",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes e crianças; com quem falar primeiro ou o que fazer agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-105-105",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes e sem rumo definido — o que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-106-106",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes e sem rumo definido — o que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-107-107",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes e sem saber com quem falar primeiro — o que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-108-108",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes da região — com quem falar primeiro?",
+        "status": "pending"
+      },
+      {
+        "id": "q-109-109",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes e sem rumo definido — o que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-110-110",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes da região — com quem falar primeiro?",
+        "status": "pending"
+      },
+      {
+        "id": "q-111-111",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes e crianças; com quem falar primeiro ou o que fazer agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-112-112",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes e sem rumo definido — o que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-113-113",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes e sem rumo definido — o que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-114-114",
+        "question": "Omba está numa savana ao amanhecer, cercado por figuras importantes da região; com quem falar primeiro?",
+        "status": "pending"
+      },
+      {
+        "id": "q-115-115",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes e sem rumo definido — o que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-116-116",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes e crianças — com quem falar primeiro ou o que fazer agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-117-117",
+        "question": "Omba está numa savana temperada de manhã, cercado por figuras importantes da região; com quem falar ou o que fazer primeiro?",
+        "status": "pending"
+      },
+      {
+        "id": "q-118-118",
+        "question": "Omba está numa savana ao amanhecer, cercado por figuras importantes da região; com quem falar primeiro?",
+        "status": "pending"
+      },
+      {
+        "id": "q-119-119",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes da região; com quem falar primeiro?",
+        "status": "pending"
+      },
+      {
+        "id": "q-120-120",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes e crianças; com quem falar ou o que fazer agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-121-121",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes e sem rumo definido. O que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-122-122",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes da região — com quem falar primeiro?",
+        "status": "pending"
+      },
+      {
+        "id": "q-123-123",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes e sem saber onde está — o que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-124-124",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes da região — com quem falar primeiro?",
+        "status": "pending"
+      },
+      {
+        "id": "q-125-125",
+        "question": "Omba está parada na savana ao amanhecer, cercada de figuras importantes que ainda não conhece. Qual é o primeiro passo?",
+        "status": "pending"
+      },
+      {
+        "id": "q-126-126",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes da região; com quem falar primeiro ou o que fazer agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-127-127",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes que ainda não conhece — com quem falar primeiro?",
+        "status": "pending"
+      },
+      {
+        "id": "q-128-128",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes e sem rumo definido — o que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-129-129",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes e sem rumo definido — o que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-130-130",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes e sem rumo definido. O que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-131-131",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes da região; com quem falar primeiro ou o que fazer agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-132-132",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes e sem rumo definido — o que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-133-133",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes e sem rumo definido — o que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-134-134",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes e sem rumo definido. O que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-135-135",
+        "question": "Omba está numa savana temperada cercada de figuras importantes e crianças; o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-136-136",
+        "question": "Omba está parada na savana com gente por perto e nenhum perigo à vista: com quem falar ou o que fazer agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-137-137",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes e sem rumo definido. O que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-138-138",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes, e precisa decidir seu primeiro passo. O que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-139-139",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes e sem rumo definido. O que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-140-140",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes e sem rumo definido — o que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-141-141",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes da região; com quem falar primeiro?",
+        "status": "pending"
+      },
+      {
+        "id": "q-142-142",
+        "question": "Omba está numa savana desconhecida, cercado de figuras importantes, sem saber onde está. Qual é o primeiro passo?",
+        "status": "pending"
+      },
+      {
+        "id": "q-143-143",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes e sem saber com quem falar primeiro — o que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-144-144",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes e crianças; com quem falar primeiro ou o que fazer agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-145-145",
+        "question": "Omba está numa savana temperada de manhã, cercado por figuras importantes da região; com quem falar primeiro ou o que fazer agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-146-146",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes e sem saber o que fazer primeiro — com quem falar ou para onde ir?",
+        "status": "pending"
+      },
+      {
+        "id": "q-147-147",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes e sem rumo definido — o que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-148-148",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes e sem rumo definido — o que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-149-149",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes da região; com quem falar primeiro ou o que fazer agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-150-150",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes e sem rumo definido — o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-151-151",
+        "question": "Omba está parado na savana de Morningflashes com várias figuras por perto; o que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-152-152",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes da região — com quem falar primeiro?",
+        "status": "pending"
+      },
+      {
+        "id": "q-153-153",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes e sem rumo definido — o que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-154-154",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes e sem rumo definido — o que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-155-155",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes da região — com quem falar primeiro ou o que fazer agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-156-156",
+        "question": "Omba está numa savana desconhecida, cercado de figuras importantes e sem saber onde está — o que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-157-157",
+        "question": "Omba está numa savana desconhecida, cercado de figuras importantes e sem saber onde está — o que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-158-158",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes e sem rumo definido — o que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-159-159",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes e crianças — com quem falar primeiro ou o que fazer agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-160-160",
+        "question": "Omba está numa savana temperada de manhã, cercado por figuras importantes da região; o que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-161-161",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes e crianças — com quem falar primeiro?",
+        "status": "pending"
+      },
+      {
+        "id": "q-162-162",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes da região; com quem falar primeiro?",
+        "status": "pending"
+      },
+      {
+        "id": "q-163-163",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes e sem rumo definido — o que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-164-164",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes e crianças — com quem falar primeiro ou o que fazer agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-165-165",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes e sem rumo definido — o que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-166-166",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes da região — com quem falar primeiro?",
+        "status": "pending"
+      },
+      {
+        "id": "q-167-167",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes e sem rumo definido — o que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-168-168",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes e sem rumo definido — o que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-169-169",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes e sem rumo definido — o que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-170-170",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes e sem rumo definido — o que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-171-171",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes e sem rumo definido — o que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-172-172",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes e sem rumo definido — o que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-173-173",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes e sem rumo definido. O que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-174-174",
+        "question": "Omba está numa vila da savana cercada de moradores; com quem falar primeiro para conseguir abrigo e informação?",
+        "status": "pending"
+      },
+      {
+        "id": "q-175-175",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes e sem rumo definido — com quem falar ou o que fazer agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-176-176",
+        "question": "Omba acabou de chegar à savana de Morningflashes e há vários moradores por perto; o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-177-177",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes e sem rumo definido — o que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-178-178",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes, e precisa decidir seu primeiro passo: com quem falar ou o que fazer agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-179-179",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes que ainda não conhece — com quem falar primeiro?",
+        "status": "pending"
+      },
+      {
+        "id": "q-180-180",
+        "question": "Omba acabou de chegar à savana de Morningflashes e há várias figuras por perto; o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-181-181",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes e sem rumo definido — o que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-182-182",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes e sem rumo definido — o que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-183-183",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes da região; com quem falar primeiro?",
+        "status": "pending"
+      },
+      {
+        "id": "q-184-184",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes e crianças — com quem falar primeiro?",
+        "status": "pending"
+      },
+      {
+        "id": "q-185-185",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes e sem rumo definido. O que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-186-186",
+        "question": "Omba está parada na savana de Morningflashes com vários moradores por perto; o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-187-187",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes e sem rumo definido — o que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-188-188",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes e sem rumo definido — o que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-189-189",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes da região; o que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-190-190",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes e sem rumo definido — o que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-191-191",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes e sem rumo definido. O que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-192-192",
+        "question": "Omba está numa savana perto de figuras importantes e crianças; com quem falar ou o que fazer agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-193-193",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes e crianças; com quem falar ou o que fazer agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-194-194",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes e sem rumo definido — o que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-195-195",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes e sem rumo definido — o que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-196-196",
+        "question": "Omba está parada na savana ao amanhecer, cercada por figuras importantes da região. O que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-197-197",
+        "question": "Omba está numa savana perto de uma fortaleza e precisa decidir o primeiro passo: com quem falar ou o que fazer agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-198-198",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes e sem rumo definido — o que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-199-199",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes e sem saber onde está — com quem falar primeiro?",
+        "status": "pending"
+      },
+      {
+        "id": "q-200-200",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes da região — com quem falar primeiro?",
+        "status": "pending"
+      },
+      {
+        "id": "q-201-201",
+        "question": "Omba está parada na savana de Morningflashes, cercada por figuras importantes da região. O que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-202-202",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes e sem rumo definido — o que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-203-203",
+        "question": "Omba está numa savana ao amanhecer, cercado por figuras importantes da região; com quem falar primeiro ou o que fazer agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-204-204",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes da região — com quem falar primeiro?",
+        "status": "pending"
+      },
+      {
+        "id": "q-205-205",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes que ainda não conhece — com quem falar primeiro?",
+        "status": "pending"
+      },
+      {
+        "id": "q-206-206",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes e sem rumo definido — o que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-207-207",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes e sem rumo definido — o que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-208-208",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes da região — com quem falar primeiro?",
+        "status": "pending"
+      },
+      {
+        "id": "q-209-209",
+        "question": "Omba está parada na savana ao amanhecer, cercada por figuras importantes que ainda não conhece; o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-210-210",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes da região — com quem falar primeiro?",
+        "status": "pending"
+      },
+      {
+        "id": "q-211-211",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes da região — com quem falar primeiro?",
+        "status": "pending"
+      },
+      {
+        "id": "q-212-212",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes e sem rumo definido — o que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-213-213",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes e sem rumo definido — o que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-214-214",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes e sem rumo definido — o que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-215-215",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes e sem rumo definido. O que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-216-216",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes e sem rumo definido — o que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-217-217",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes e sem saber onde está — o que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-218-218",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes da região — com quem falar primeiro?",
+        "status": "pending"
+      },
+      {
+        "id": "q-219-219",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes que ainda não conhece — com quem falar primeiro?",
+        "status": "pending"
+      },
+      {
+        "id": "q-220-220",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes da região — com quem falar primeiro?",
+        "status": "pending"
+      },
+      {
+        "id": "q-221-221",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes e sem rumo definido — com quem falar ou o que fazer primeiro?",
+        "status": "pending"
+      },
+      {
+        "id": "q-222-222",
+        "question": "Omba está parada na savana com a maça pronta e vários moradores por perto; o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-223-223",
+        "question": "Omba está parada na savana com vários moradores por perto e nenhum perigo imediato. O que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-224-224",
+        "question": "Omba está parada na savana com a maça pronta e vários moradores por perto; o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-225-225",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes e sem rumo definido — o que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-226-226",
+        "question": "Omba está parada na savana com a maça pronta e vários moradores por perto; o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-227-227",
+        "question": "Você acabou de chegar à savana de Morningflashes com seu maul de ferro e ainda não sabe onde está. O que faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-228-228",
+        "question": "Omba está parada na savana com várias figuras por perto e nenhuma ameaça à vista — o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-229-229",
+        "question": "Omba está numa savana ao amanhecer, cercado de moradores que podem dar rumo ou missão — o que fazer agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-230-230",
+        "question": "Omba está parada na savana com várias figuras por perto e nenhuma ameaça imediata. O que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-231-231",
+        "question": "Omba está parada na savana com a maça pronta e vários moradores por perto; o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-232-232",
+        "question": "Omba está numa savana temperada, cercado de moradores que podem ter informação ou tarefas. O que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-233-233",
+        "question": "Omba está parada na savana com a maça de ferro pronta, sem saber para onde ir nem com quem falar. O que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-234-234",
+        "question": "Omba está parada numa savana ao amanhecer, cercada de gente da região; o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-235-235",
+        "question": "Omba está numa savana ao amanhecer, cercado de moradores que podem dar rumo ou tarefa — o que fazer agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-236-236",
+        "question": "Omba está parada numa savana ao amanhecer, cercada de moradores que podem ou não ajudar; o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-237-237",
+        "question": "Omba está parada na savana com várias figuras por perto e nenhuma ameaça à vista — o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-238-238",
+        "question": "Omba está parada na savana com a maça pronta e vários moradores por perto; o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-239-239",
+        "question": "Omba está parado na savana com várias figuras por perto e nenhuma ameaça à vista. O que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-240-240",
+        "question": "Omba está parado na savana com várias figuras por perto e ainda não sabe onde está nem o que fazer. Qual é o primeiro passo?",
+        "status": "pending"
+      },
+      {
+        "id": "q-241-241",
+        "question": "Omba está numa savana ao amanhecer, cercado de moradores que podem ter informação ou trabalho. O que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-242-242",
+        "question": "Omba está parada numa savana ao amanhecer, cercada de moradores que ainda não conhece. O que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-243-243",
+        "question": "Omba está parada na savana com a maça pronta e vários moradores por perto; o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-244-244",
+        "question": "Omba está parada na savana com a maça pronta e vários moradores por perto; o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-245-245",
+        "question": "Omba está numa savana ao amanhecer, cercado de moradores que podem ter informação ou missões. O que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-246-246",
+        "question": "Omba está parada na savana ao amanhecer, cercada de figuras importantes e sem saber o que fazer primeiro — qual é o próximo passo?",
+        "status": "pending"
+      },
+      {
+        "id": "q-247-247",
+        "question": "Omba está numa savana temperada cercado de moradores, sem ameaça imediata e sem rumo definido — o que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-248-248",
+        "question": "Omba está parada na savana com a maça pronta e vários moradores por perto; o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-249-249",
+        "question": "Omba está parada na savana com a maça pronta e vários moradores por perto; o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-250-250",
+        "question": "Omba está parada na savana com a maça pronta e vários moradores por perto; o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-251-251",
+        "question": "Você acabou de chegar à savana de Morningflashes com seu maul de ferro e ainda não sabe onde está nem o que há por perto. O que faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-252-252",
+        "question": "Omba está numa savana temperada cercada de moradores, sem ameaças e sem rumo definido — o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-253-253",
+        "question": "Omba está parada na savana com várias figuras por perto e nenhuma ameaça à vista — o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-254-254",
+        "question": "Omba está parada na savana ao amanhecer, sem rumo definido e sem ameaças à vista — o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-255-255",
+        "question": "Omba está numa savana ao amanhecer, cercado de moradores que podem dar rumo ou tarefa. O que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-256-256",
+        "question": "Omba está parada na savana ao amanhecer, sem rumo definido e cercada de figuras importantes — o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-257-257",
+        "question": "Omba está parada na savana ao amanhecer, cercada de figuras importantes e crianças — com quem falar ou o que fazer primeiro?",
+        "status": "pending"
+      },
+      {
+        "id": "q-258-258",
+        "question": "Omba está parada na savana com a maça pronta e vários moradores por perto; o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-259-259",
+        "question": "Omba está parada numa savana ao amanhecer, cercada de moradores que podem ter informação ou missão. O que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-260-260",
+        "question": "Omba está numa savana ao amanhecer, cercado de moradores que podem dar rumo ou missão. O que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-261-261",
+        "question": "Omba está parada na savana ao amanhecer, sem rumo definido e cercada de figuras importantes — o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-262-262",
+        "question": "Omba está parada na savana com várias figuras por perto e nenhuma ameaça à vista — o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-263-263",
+        "question": "Omba está parada na savana com a maça pronta e vários moradores por perto; o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-264-264",
+        "question": "Omba está parada numa savana ao amanhecer, cercada de moradores que podem ou não ser úteis — o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-265-265",
+        "question": "Omba está numa savana ao amanhecer, cercado de moradores que podem ter informação ou trabalho. O que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-266-266",
+        "question": "Omba está parada na savana com a maça pronta e vários moradores por perto; o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-267-267",
+        "question": "Omba está parado na savana com várias figuras por perto e nenhuma ameaça imediata. O que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-268-268",
+        "question": "Omba está parada na savana com várias figuras por perto e nenhuma ameaça à vista — o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-269-269",
+        "question": "Omba está numa savana ao amanhecer, cercado de moradores que podem ter informação ou trabalho. O que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-270-270",
+        "question": "Omba está numa savana ao amanhecer, cercado de moradores que podem ter informação ou trabalho. O que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-271-271",
+        "question": "Omba está parada na savana com a maça pronta e vários moradores por perto; o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-272-272",
+        "question": "Omba está parada na savana com a maça pronta e vários moradores por perto; o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-273-273",
+        "question": "Omba está parada numa savana ao amanhecer, cercada de moradores que podem ou não ajudar; o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-274-274",
+        "question": "Omba está numa savana ao amanhecer, cercado de moradores que podem ter informação ou trabalho. O que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-275-275",
+        "question": "Omba está parado na savana com várias figuras por perto e nenhuma ameaça à vista — o que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-276-276",
+        "question": "Omba está numa savana temperada de manhã, cercado de moradores, sem rumo definido. O que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-277-277",
+        "question": "Omba está parado na savana ao amanhecer, sem rumo definido e com gente por perto — o que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-278-278",
+        "question": "Omba está parada na savana com várias figuras por perto e nenhuma ameaça à vista — o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-279-279",
+        "question": "Omba está parada na savana com a maça pronta e vários moradores por perto; o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-280-280",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes e crianças; o que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-281-281",
+        "question": "Você acabou de chegar à savana de Morningflashes sem rumo definido; o que Omba faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-282-282",
+        "question": "Omba está parada na savana com a maça pronta e vários moradores por perto; o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-283-283",
+        "question": "Omba está numa savana temperada cercado de moradores, sem ameaça imediata e sem rumo definido — o que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-284-284",
+        "question": "Omba está parada na savana ao amanhecer, sem rumo definido e com gente por perto — o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-285-285",
+        "question": "Omba está parada na savana com a maça na mão e vários moradores por perto; o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-286-286",
+        "question": "Omba está parada na savana ao amanhecer, sem rumo definido e com gente por perto — o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-287-287",
+        "question": "Omba está numa savana temperada, cercado de gente para conversar e sem rumo definido — o que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-288-288",
+        "question": "Omba está parada na savana com a maça pronta e vários moradores por perto; o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-289-289",
+        "question": "Omba está parada numa savana ao amanhecer, cercada de figuras importantes e sem rumo definido — o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-290-290",
+        "question": "Omba está numa savana temperada de manhã, cercado de moradores que podem ter informação ou tarefas — o que fazer agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-291-291",
+        "question": "Omba está numa savana ao amanhecer, cercado de estranhos numa cidade desconhecida. O que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-292-292",
+        "question": "Omba está parada na savana com várias figuras por perto e nenhuma ameaça à vista — o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-293-293",
+        "question": "Omba está parado na savana ao amanhecer, sem rumo definido e sem ameaças à vista — o que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-294-294",
+        "question": "Omba está parada na savana com várias figuras por perto e nenhuma ameaça à vista — o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-295-295",
+        "question": "Omba está parada na savana com a maça pronta e vários moradores por perto; o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-296-296",
+        "question": "Omba está parada na savana com várias figuras por perto e nenhuma ameaça à vista — o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-297-297",
+        "question": "Omba está numa savana ao amanhecer, cercado de figuras importantes e crianças — com quem falar primeiro ou o que fazer agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-298-298",
+        "question": "Omba está parada na savana com a maça pronta e sem rumo definido; o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-299-299",
+        "question": "Omba está numa savana temperada cercado de moradores, sem ameaça imediata e sem rumo definido — o que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-300-300",
+        "question": "Você acabou de chegar à savana de Morningflashes sem rumo definido; o que Omba faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-301-301",
+        "question": "Omba está parada na savana com a maça pronta e vários moradores por perto; o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-302-302",
+        "question": "Omba está parada na savana com várias figuras por perto e nenhuma ameaça à vista — o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-303-303",
+        "question": "Omba acabou de chegar à savana de Morningflashes com o equipamento pronto, mas sem rumo definido. O que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-304-304",
+        "question": "Omba está numa savana temperada de manhã, cercado de moradores que podem ter informação ou tarefas. O que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-305-305",
+        "question": "Omba está numa savana ao amanhecer, cercado de moradores que podem ter informação ou trabalho. O que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-306-306",
+        "question": "Omba está parado na savana com várias figuras por perto e nenhuma ameaça à vista — o que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-307-307",
+        "question": "Omba está parada na savana com várias figuras por perto e nenhuma ameaça à vista — o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-309-308",
+        "question": "Omba está parada na savana com a maça de ferro pronta, sem ameaças à vista e sem saber para onde ir. O que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-310-309",
+        "question": "Omba está parada na savana com a maça pronta e sem rumo definido; o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-311-310",
+        "question": "Omba está parada na savana ao amanhecer, cercada por figuras que parecem querer falar. O que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-312-311",
+        "question": "Omba está parada na savana ao amanhecer, cercada de estranhos; o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-313-312",
+        "question": "Omba está parada na savana ao amanhecer, cercada por figuras que ainda não reconhece — o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-314-313",
+        "question": "Omba está parada na savana ao amanhecer, cercada por figuras que ainda não reconhece — o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-315-314",
+        "question": "Omba está parada na savana ao amanhecer, cercada de figuras que ainda não reconhece — o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-316-315",
+        "question": "Omba está parada na savana ao amanhecer, cercada por estranhos que ainda não falaram com ela. O que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-317-316",
+        "question": "Omba está parada na savana ao amanhecer, cercada por estranhos que ainda não avaliou — com quem falar ou o que fazer agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-318-317",
+        "question": "Omba está parada na savana com o maul pronto e sem ameaças à vista; o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-319-318",
+        "question": "Omba está parada na savana ao amanhecer, cercada por figuras que ainda não reconhece — falar com quem primeiro?",
+        "status": "pending"
+      },
+      {
+        "id": "q-320-319",
+        "question": "Omba está parada na savana com o saqueador de ferro pronto e vários moradores por perto; o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-321-320",
+        "question": "Omba está parada na savana ao amanhecer, cercada de estranhos que ainda não a notaram. O que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-322-321",
+        "question": "Omba está parada na savana ao amanhecer, cercada por figuras que parecem querer falar com ela. O que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-323-322",
+        "question": "Omba está parada na savana com o maul pronto e sem rumo definido; o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-324-323",
+        "question": "Omba está parada na savana ao amanhecer, sem rumo definido e sem ameaças à vista. O que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-325-324",
+        "question": "Omba está parada na savana ao amanhecer, sem rumo definido e com gente por perto — o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-326-325",
+        "question": "Omba está parado na savana com a maça de ferro pronta, sem ameaças à vista e sem saber para onde ir. O que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-327-326",
+        "question": "Omba está parada na savana ao amanhecer, cercada de figuras que parecem querer falar. O que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-328-327",
+        "question": "Omba está parada na savana com várias figuras por perto e nenhuma ameaça à vista — o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-329-328",
+        "question": "Omba está parada na savana ao amanhecer, cercada de figuras que ainda não reconhece. O que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-330-329",
+        "question": "Omba está parada na savana ao amanhecer, cercada de estranhos e sem rumo definido — o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-331-330",
+        "question": "Omba está parada na savana ao amanhecer, cercada por estranhos que ainda não avaliou; o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-332-331",
+        "question": "Omba está parada na savana ao amanhecer, cercada por estranhos que ainda não a notaram. O que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-333-332",
+        "question": "Omba está parada na savana ao amanhecer, cercada de gente desconhecida — o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-334-333",
+        "question": "Omba está parada na savana ao amanhecer, cercada de estranhos e sem rumo definido — o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-335-334",
+        "question": "Omba está parada na savana ao amanhecer, cercada de estranhos, sem rumo definido — o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-336-335",
+        "question": "Omba está parada na savana ao amanhecer, cercada de gente que ainda não conhece. O que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-337-336",
+        "question": "Omba está parada na savana ao amanhecer, cercada por estranhos que ainda não avaliou; o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-338-337",
+        "question": "Omba está parada na savana ao amanhecer, cercada por figuras que parecem querer falar; o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-339-338",
+        "question": "Omba está parada na savana ao amanhecer, cercada por estranhos que ainda não falou; o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-340-339",
+        "question": "Omba está parada na savana ao amanhecer, sem rumo definido e com gente por perto — o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-341-340",
+        "question": "Omba está parada na savana ao amanhecer, cercada de estranhos e sem rumo definido — o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-342-341",
+        "question": "Omba está parada na savana ao amanhecer, cercada por estranhos; o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-343-342",
+        "question": "Omba está parada na savana ao amanhecer, cercada por figuras que ainda não reconhece. O que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-344-343",
+        "question": "Omba está parada na savana ao amanhecer, cercada por estranhos que ainda não falaram com ela — o que fazer agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-345-344",
+        "question": "Omba está parada na savana ao amanhecer, cercada por estranhos; o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-346-345",
+        "question": "Omba está parada na savana ao amanhecer, cercada de estranhos; o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-347-346",
+        "question": "Omba está parada na savana ao amanhecer, cercada de estranhos e sem rumo definido. O que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-348-347",
+        "question": "Omba está parada na savana ao amanhecer, cercada por estranhos; o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-349-348",
+        "question": "Omba está parada na savana ao amanhecer, cercada por figuras que parecem falar entre si; o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-350-349",
+        "question": "Omba está parada na savana ao amanhecer, cercada por figuras que parecem querer falar. O que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-351-350",
+        "question": "Omba está parada na savana ao amanhecer, sem rumo definido e com várias figuras por perto — o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-352-351",
+        "question": "Omba está parada na savana ao amanhecer, cercada por figuras que parecem querer falar. O que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-353-352",
+        "question": "Omba está parado na savana ao amanhecer, sem rumo definido e com fome zero — o que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-354-353",
+        "question": "Omba está parada na savana ao amanhecer, cercada de estranhos e sem rumo definido. O que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-355-354",
+        "question": "Omba está parada na savana ao amanhecer, cercada por estranhos que ainda não falaram com ela. O que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-356-355",
+        "question": "Omba está parada na savana com o maul pronto e sem ameaças à vista; o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-357-356",
+        "question": "Omba está parada na savana ao amanhecer, cercada de estranhos; o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-358-357",
+        "question": "Omba está parada na savana ao amanhecer, cercada por estranhos; o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-359-358",
+        "question": "Omba está parada na savana ao amanhecer, cercada de estranhos; o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-360-359",
+        "question": "Omba está numa savana aberta ao amanhecer, cercada de estranhos; o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-361-360",
+        "question": "Omba está parada na savana ao amanhecer, sem rumo definido e sem ameaças à vista. O que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-362-361",
+        "question": "Omba está parada na savana ao amanhecer, cercada por estranhos; o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-363-362",
+        "question": "Omba está parada na savana com o maul pronto e sem ameaças à vista; o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-364-363",
+        "question": "Omba está parada na savana ao amanhecer, cercada por figuras que ainda não reconhece — o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-365-364",
+        "question": "Omba está parada na savana ao amanhecer, cercada por estranhos que ainda não avaliou. O que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-366-365",
+        "question": "Omba está parado na savana ao amanhecer, cercado de estranhos; o que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-367-366",
+        "question": "Omba está parada na savana ao amanhecer, cercada por figuras que ainda não reconhece — o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-368-367",
+        "question": "Omba está parada na savana ao amanhecer, cercada de gente que pode ou não ajudar; o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-369-368",
+        "question": "Omba está parada na savana ao amanhecer, cercada de figuras que ainda não cumprimentou — o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-370-369",
+        "question": "Omba está parada na savana ao amanhecer, cercada por estranhos; o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-371-370",
+        "question": "Omba está parada na savana com a maça de ferro pronta, sem ameaças à vista e sem saber para onde ir. O que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-372-371",
+        "question": "Omba está parada na savana com a maça de ferro pronta e sem rumo definido; o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-373-372",
+        "question": "Omba está parada na savana ao amanhecer, cercada de estranhos que ainda não falaram com ela. O que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-374-373",
+        "question": "Omba está parada na savana com a maça pronta e sem ameaças à vista; o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-375-374",
+        "question": "Omba está parado na savana ao amanhecer, cercado por estranhos; o que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-376-375",
+        "question": "Omba está parada na savana ao amanhecer, cercada de figuras que ainda não cumprimentou. O que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-377-376",
+        "question": "Omba está parada na savana ao amanhecer, cercada por estranhos; o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-378-377",
+        "question": "Omba está parada na savana ao amanhecer, sem rumo definido e com gente por perto — o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-379-378",
+        "question": "Omba está parada na savana ao amanhecer, cercada por estranhos; o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-380-379",
+        "question": "Omba está parada na savana ao amanhecer, cercada por figuras que ainda não reconhece — o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-381-380",
+        "question": "Omba está parada na savana ao amanhecer, cercada por figuras que ainda não reconhece — o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-382-381",
+        "question": "Omba está parada na savana ao amanhecer, cercada de estranhos; o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-383-382",
+        "question": "Omba está parada na savana ao amanhecer, cercada por figuras que ainda não reconhece — o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-384-383",
+        "question": "Omba está parada na savana ao amanhecer, cercada de figuras que parecem querer falar com ela. O que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-385-384",
+        "question": "Omba está parado na savana com várias figuras por perto; o que ele faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-386-385",
+        "question": "Omba está parada na savana ao amanhecer, cercada de figuras que podem falar ou não. O que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-387-386",
+        "question": "Omba está parada na savana com a maça pronta e sem ameaças à vista; o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-388-387",
+        "question": "Omba está parada na savana ao amanhecer, cercada por figuras que parecem conversar entre si. O que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-389-388",
+        "question": "Omba está parada na savana ao amanhecer, cercada de estranhos; o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-390-389",
+        "question": "Omba está parada na savana ao amanhecer, cercada por figuras que ainda não reconhece — o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-391-390",
+        "question": "Omba está parada na savana ao amanhecer, cercada por estranhos; o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-392-391",
+        "question": "Omba está parada na savana ao amanhecer, cercada de estranhos; o que ela faz agora?",
+        "status": "pending"
+      },
+      {
+        "id": "q-393-392",
+        "question": "Omba está parada na savana ao amanhecer, cercada por figuras que parecem querer falar com ela. O que ela faz agora?",
+        "status": "pending"
+      }
+    ]
+  },
+  "approvals": {
+    "count": 392,
+    "pending": 391,
+    "approved": 1,
+    "rejected": 0,
+    "auto_approved": 0
+  },
+  "spend": {
+    "total_usd": 0.264527,
+    "providers": [
+      {
+        "provider": "typesafe",
+        "models": [
+          {
+            "model": "typesafe/jev-1.13-20260917",
+            "calls": 2664,
+            "input_tokens": 4432218,
+            "output_tokens": 381060,
+            "cost_usd": 0.186257
+          }
+        ]
+      },
+      {
+        "provider": "openrouter",
+        "models": [
+          {
+            "model": "deepseek/deepseek-v4.1-flash",
+            "calls": 686,
+            "input_tokens": 894401,
+            "output_tokens": 84123,
+            "cost_usd": 0.07827
+          }
+        ]
+      }
+    ]
+  },
+  "memory": {
+    "episodes_count": 1,
+    "episodes": [
+      {
+        "id": "4",
+        "ts": "2026-10-09T03:31:06.000Z",
+        "kind": "episodic",
+        "content_pt": "2026-10-09T03:31:02.549Z: Um novo jogo foi iniciado, gerando um mundo novo para esta campanha no modo aventura. Nenhum personagem, local ou objetivo foi escolhido ainda, e nenhum evento ocorreu além da criação do mundo."
+      }
+    ],
+    "narrative_pt": "Uma nova campanha começa em 2026-10-09. Nenhum personagem, local, objetivo ou companheiro foi estabelecido ainda; o mundo acabou de ser gerado e o aventureiro ainda não deu o primeiro passo nem sofreu qualquer ferimento."
+  },
+  "watch": {
+    "cycles": 20,
+    "interval_s": 3.0,
+    "auto_approve": false
+  }
+}
