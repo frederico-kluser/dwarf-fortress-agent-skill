@@ -8,6 +8,10 @@
    (contract: "A resposta vai para a memória");
 3. clients are told: a contract-typed ``memory_update`` event, plus the additive
    ``question_answered`` event carrying the same body as the REST response.
+
+A question that is a *checkpoint approval* also decides the mirrored approval
+entry (queue → approvals is a mirror, never a second source of truth), which is
+echoed as the additive ``approval_updated`` event.
 """
 
 from __future__ import annotations
@@ -58,7 +62,9 @@ async def answer_question(
     if runtime.get_question(question_id) is None:
         return None
 
-    answer_en = safe_translate(services.translator, (answer_text or "").strip(), "en") or None
+    answer_en = safe_translate(
+        services.translator_for(campaign), (answer_text or "").strip(), "en"
+    ) or None
     runtime.answer_question(question_id, answer_text=answer_en, option_id=option_id)
     payload = runtime.question_answer(question_id) or {
         "id": question_id,
@@ -67,6 +73,12 @@ async def answer_question(
         "option_id": option_id,
     }
 
+    # Imported here: approval_flow imports this module (the decision flows back
+    # through the question-answer path, so the two modules are mutually visible).
+    from .approval_flow import mirror_answer
+
+    mirrored = mirror_answer(runtime, question_id, option_id)
+
     await run_in_threadpool(_persist_answer, services, campaign, question_id, answer_en, option_id)
     await services.publish_event(campaign.id, "question_answered", payload)
     try:
@@ -74,4 +86,6 @@ async def answer_question(
         await services.publish_event(campaign.id, "memory_update", fresh)
     except CoalaError as exc:  # pragma: no cover - memory hiccup after a valid answer
         log.warning("memory_update after answer %s skipped: %s", question_id, exc)
+    if mirrored is not None:
+        await services.publish_event(campaign.id, "approval_updated", dict(mirrored))
     return payload

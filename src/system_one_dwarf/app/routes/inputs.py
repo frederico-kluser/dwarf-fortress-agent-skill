@@ -32,7 +32,7 @@ def add_input(
     campaign: Campaign = Depends(get_campaign),
     services: AppServices = Depends(get_services),
 ) -> dict:
-    text_en = safe_translate(services.translator, body.text.strip(), "en")
+    text_en = safe_translate(services.translator_for(campaign), body.text.strip(), "en")
     runtime = services.runtime(campaign.id)
     item = runtime.add_input(text_en)
     try:

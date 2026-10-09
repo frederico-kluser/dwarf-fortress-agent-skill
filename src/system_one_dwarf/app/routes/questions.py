@@ -3,6 +3,11 @@
 The queue is fed by the agent loop (band ``hitl``/``abstain``) through the bus
 event ``question_new``; empty until then.  ``status`` distinguishes ``pending``
 from ``answered`` entries, so a client can render recent answers too.
+
+The additive provenance fields (``band``, ``role``, ``action_id``, ``why_pt``,
+``source_data`` — finding #2 of ``docs/uxui-audit-ui.json``) travel only when the
+loop published them, so the 6-field entry of the original contract is unchanged
+for a client that never learned about them (``response_model_exclude_none``).
 """
 
 from __future__ import annotations
@@ -19,7 +24,11 @@ from ..state import AppServices
 router = APIRouter(tags=["questions"])
 
 
-@router.get("/api/campaigns/{campaign_id}/questions", response_model=list[QuestionOut])
+@router.get(
+    "/api/campaigns/{campaign_id}/questions",
+    response_model=list[QuestionOut],
+    response_model_exclude_none=True,
+)
 def list_questions(
     response: Response,
     campaign: Campaign = Depends(get_campaign),

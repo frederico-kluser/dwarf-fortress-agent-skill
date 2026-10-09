@@ -19,6 +19,7 @@ ControlMode = Literal["autopilot", "checkpoint", "paused"]
 AgentName = Literal["JEV-R", "JEV-A", "JEV-M", "JEV-D"]
 DecisionBand = Literal["auto", "hitl", "abstain"]
 QuestionStatus = Literal["pending", "answered"]
+ApprovalStatus = Literal["pending", "approved", "rejected"]
 
 PROVIDERS: tuple[str, ...] = ("openrouter", "typesafe", "deepseek")
 MODES: tuple[str, ...] = ("autopilot", "checkpoint", "paused")
@@ -125,6 +126,8 @@ class SubgoalOut(_Model):
     id: str
     text: str
     done: bool
+    #: Aditivo — exibição PT do ``text`` canónico (EN).
+    text_pt: str | None = None
 
 
 class ObjectiveIn(_Model):
@@ -134,6 +137,8 @@ class ObjectiveIn(_Model):
 
 class ObjectiveOut(_Model):
     narrative: str
+    #: Aditivo — exibição PT do ``narrative`` canónico (EN).
+    narrative_pt: str | None = None
     subgoals: list[SubgoalOut] = Field(default_factory=list)
 
 
@@ -241,7 +246,10 @@ class DecisionOut(_Model):
     agent: AgentName | str
     request_summary: str = ""
     answers: dict[str, Any] = Field(default_factory=dict)
-    probabilities: dict[str, float] = Field(default_factory=dict)
+    #: ``null`` nas decisões sem distribuição (JEV-R/M/D só com ``noul``/``score``)
+    #: — o loop publica ``None`` e o valor **não** pode virar ``{}`` (mentiria
+    #: sobre uma distribuição que não existe).
+    probabilities: dict[str, float] | None = None
     confidence: float | None = None
     band: DecisionBand | str = "auto"
     latency_ms: int = 0
@@ -257,7 +265,14 @@ class QuestionOption(_Model):
 
 
 class QuestionOut(_Model):
-    """Exactly the 6 fields of the contract's queue entry (answers live elsewhere)."""
+    """The 6 frozen fields of the queue entry + the additive provenance fields.
+
+    The provenance fields (finding #2 of ``docs/uxui-audit-ui.json``) are
+    **optional**: they are present only when the loop's ``question_new`` payload
+    carries them (``band``, ``action_id``, ``why_pt``, ``source_data``) or when
+    they can be imputed from it (``role``).  A client written against the
+    original 6-field entry keeps working unchanged.
+    """
 
     id: str
     ts: str
@@ -265,6 +280,16 @@ class QuestionOut(_Model):
     options: list[QuestionOption] = Field(default_factory=list)
     free_text_allowed: bool = True
     status: QuestionStatus | str = "pending"
+    #: Banda de ação que originou a pergunta.
+    band: DecisionBand | str | None = None
+    #: Papel JEV que originou a pergunta (``JEV-A`` ação retida, ``JEV-D`` dúvida).
+    role: str | None = None
+    #: Ação retida à espera da resposta (quando existe).
+    action_id: str | None = None
+    #: Explicação em PT do *porquê* da pergunta (human-facing, como ``question``).
+    why_pt: str | None = None
+    #: Dados de origem (aditivo, diagnóstico): razão, confiança, candidatos, …
+    source_data: dict[str, Any] | None = None
 
 
 class AnswerRequest(_Model):
@@ -277,6 +302,35 @@ class AnswerOut(_Model):
     status: str
     answer_text: str | None = None
     option_id: str | None = None
+
+
+# -------------------------------------------------------------------- approvals
+
+
+class ApprovalOut(_Model):
+    """Uma aprovação de ação (modo ``checkpoint``) — ver ``docs/api.md``.
+
+    O ``id`` é o id da pergunta de aprovação que a originou: aprovar/rejeitar é
+    responder a essa pergunta, pelo caminho de resposta já existente.
+    """
+
+    id: str
+    question_id: str | None = None
+    ts: str
+    action_id: str
+    action_name_en: str
+    question: str | None = None
+    band: DecisionBand | str = "hitl"
+    status: ApprovalStatus | str = "pending"
+    note: str | None = None
+    decided_at: str | None = None
+    description_en: str | None = None
+
+
+class ApprovalDecision(_Model):
+    """Corpo (opcional) de ``approve``/``reject``: só uma nota humana."""
+
+    note: str | None = None
 
 
 # ------------------------------------------------------------------------ screen

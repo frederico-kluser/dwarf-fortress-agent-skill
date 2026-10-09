@@ -38,12 +38,39 @@ quebrada. O cliente precisa de distinguir os dois casos:
 | Tipo de payload | Endpoints | Onde vem o marcador |
 |---|---|---|
 | **Objeto** | `GET .../metrics`, `GET .../screen` | Campo **inline** `"source": "stub"` \| `"live"` dentro do próprio objeto |
-| **Array** | `GET .../decisions`, `GET .../questions` | Cabeçalho de resposta **`X-Source: stub`** \| `"live"` (não há onde pôr um campo dentro de um array JSON) |
+| **Array** | `GET .../decisions`, `GET .../questions`, `GET .../approvals` | Cabeçalho de resposta **`X-Source: stub`** \| `"live"` (não há onde pôr um campo dentro de um array JSON) |
 
 `X-Source` é um cabeçalho **de resposta** e está exposto por CORS
 (`expose_headers`), para que a UI o possa ler. Os valores são exatamente `stub` e
 `live`. O objeto `metrics`/`screen` traz **sempre** `source`, e o mesmo endpoint
 pode devolver `stub` para uma campanha e `live` para outra.
+
+---
+
+## Loop de decisão: quando corre e o que precisa
+
+O loop de decisão (`AgentLoop`, com JEV + narrador + executor) é **um por
+campanha**, criado e gerido pelo backend. Regras (comportamento observável pelo
+cliente, não detalhe interno):
+
+| Situação | O loop | O que o app serve |
+|---|---|---|
+| `mode: "autopilot"` ou `"checkpoint"`, com **chaves** guardadas | corre | dados `live` |
+| `mode: "paused"` | parado (e nenhuma chamada a API é feita) | última leitura `live`, sem atualizações novas |
+| `kill_switch: true` | paragem imediata | idem |
+| **Falta a chave `typesafe` (JEV) ou `openrouter` (LLM)** | **nunca arranca** | os stubs documentados acima |
+
+O modo é gravado por `POST .../control` (e pela mensagem WS `set_control`); é
+essa chamada que arranca/para o loop — não há endpoint separado de arranque.
+`autopilot` e `checkpoint` correm ambos o loop: a diferença é que em
+`checkpoint` **todas** as ações ficam retidas para aprovação (ver
+`GET .../approvals`). Sem chaves, `POST .../control` continua a responder `200`
+com o modo gravado — só o loop é que não arranca.
+
+O **tradutor** PT↔EN segue a mesma regra de chaves: é construído a partir da
+chave `openrouter` **da campanha**; sem chave, o comportamento é o *identity*
+documentado (o texto é guardado como foi escrito e os campos `*_pt` repetem o
+canónico EN).
 
 ---
 
@@ -186,32 +213,41 @@ utilizador escreve em português, a memória canónica fica em inglês.
 
 ### `GET /api/campaigns/{id}/objective`
 
+Os campos `narrative_pt` e `subgoals[].text_pt` são **aditivos** (exibição PT);
+o canónico continua a ser o texto EN. Regra: o campo `*_pt` só aparece quando há
+uma tradução de exibição **diferente** do canónico — sem chave (identity) o
+payload é exatamente o do contrato original, por isso a UI tem de tolerar a
+ausência do campo e cair no texto canónico.
+
 **200**
 
 ```json
 {
   "narrative": "Reach the fortress of Boatmurdered alive.",
+  "narrative_pt": "Chegar vivo à fortaleza de Boatmurdered.",
   "subgoals": [
-    { "id": "sg-1", "text": "Find water", "done": true },
-    { "id": "sg-2", "text": "Cross the river", "done": false }
+    { "id": "sg-1", "text": "Find water", "done": true, "text_pt": "Encontrar água" },
+    { "id": "sg-2", "text": "Cross the river", "done": false, "text_pt": "Atravessar o rio" }
   ]
 }
 ```
 
 ### `PUT /api/campaigns/{id}/objective`
 
-Substitui o objetivo completo.
+Substitui o objetivo completo. **O servidor traduz PT→EN** antes de guardar (o
+objetivo é material de prompt) e devolve o mesmo objeto do `GET`, já com os
+campos `*_pt` calculados a partir do canónico.
 
 **Body**
 
 ```json
 {
-  "narrative": "Reach the fortress of Boatmurdered alive.",
-  "subgoals": [{ "id": "sg-1", "text": "Find water", "done": true }]
+  "narrative": "Chegar vivo à fortaleza.",
+  "subgoals": [{ "id": "sg-1", "text": "Encontrar água", "done": true }]
 }
 ```
 
-**200** → o objetivo guardado.
+**200** → o objetivo guardado (canónico EN + `*_pt` quando existir tradução).
 
 ---
 
@@ -336,6 +372,11 @@ confidence venha **ausente** (e os fallbacks devolvem `0`), pelo que *ausente* e
 `0` são indistinguíveis de uma distribuição plana. Ambos significam
 **indisponível** — não "0 % de confiança" e não "certo".
 
+**`probabilities` também pode ser `null`**: as decisões que só fazem perguntas
+`noul`/`score` (JEV-R, JEV-M, JEV-D) não têm distribuição por opção. `null` nunca
+pode ser convertido em `{}` — um objeto vazio afirmaria uma distribuição que não
+existe. (Só o JEV-A, que responde `choice`, traz `probabilities` preenchido.)
+
 - A UI **nunca** pode renderizar `null` como um `0` real: mostre `—` / `indisponível`
   (um `0` desenhado como barra vazia é uma mentira visual).
 - Sem confidence utilizável, a banda fica **limitada a `hitl`** — nunca `auto`
@@ -347,7 +388,8 @@ confidence venha **ausente** (e os fallbacks devolvem `0`), pelo que *ausente* e
 
 ### `GET /api/campaigns/{id}/questions`
 
-Fila de perguntas/dúvidas ao humano (geradas nas bandas `hitl`/`abstain`).
+Fila de perguntas/dúvidas ao humano (geradas nas bandas `hitl`/`abstain`, nas
+ações retidas pelo modo `checkpoint` e nas escaladas do JEV-D).
 
 **200**
 
@@ -362,10 +404,32 @@ Fila de perguntas/dúvidas ao humano (geradas nas bandas `hitl`/`abstain`).
       { "id": "opt-2", "text": "Procurar ponte" }
     ],
     "free_text_allowed": true,
-    "status": "pending"
+    "status": "pending",
+    "band": "hitl",
+    "role": "JEV-A",
+    "action_id": "goto:river_bank",
+    "why_pt": "a confiança ficou na banda hitl (0.50–0.89): confirmar antes de executar (banda hitl)",
+    "source_data": { "answer_mode": "approval", "reason": "checkpoint_mode", "band": "auto" }
   }
 ]
 ```
+
+Os cinco últimos campos são **ADITIVOS** (achado #2 de
+`docs/uxui-audit-ui.json`: a fila tem de dizer *porque* o agente pergunta). A UI
+**tem de tolerar a ausência** de qualquer um deles, porque só vêm quando são
+conhecidos:
+
+| Campo | Tipo | Notas |
+|---|---|---|
+| `band` | `"auto"` \| `"hitl"` \| `"abstain"` | Banda que originou a pergunta (presente quando o loop a publicou ou quando vem no `source_data`) |
+| `role` | `"JEV-A"` \| `"JEV-D"` (roles do log) | Papel JEV que originou a pergunta: `JEV-A` quando há uma ação retida, `JEV-D` na escalada de dúvida. Calculado pelo backend a partir da proveniência disponível |
+| `action_id` | string | A ação retida à espera de resposta (id de macro-ação, ex. `goto:river_bank`) |
+| `why_pt` | string | **PT** (camada human-facing, como `question`): uma frase a explicar o motivo |
+| `source_data` | object | Diagnóstico opcional: `reason`, `band`, `action_mode`/`answer_mode`, `action_en`, `description_en`, confiança, candidatos… Pode vir `{}` |
+
+Uma pergunta sem proveniência (um produtor antigo) continua a devolver
+**exatamente** os 6 campos originais — os campos aditivos só aparecem quando
+existem (o servidor omite os nulos).
 
 ### `POST /api/campaigns/{id}/questions/{qid}/answer`
 
@@ -375,13 +439,81 @@ Fila de perguntas/dúvidas ao humano (geradas nas bandas `hitl`/`abstain`).
 { "answer_text": "Procurar uma ponte a leste", "option_id": "opt-2" }
 ```
 
-`option_id` é opcional (resposta por campo livre). A resposta **vai para a memória**.
+`option_id` é opcional (resposta por campo livre). A resposta **vai para a
+memória**. Se a pergunta for uma **aprovação** de checkpoint (ver
+`GET .../approvals`), a resposta decide também essa aprovação (uma recusa
+explícita — `no`/`reject` — rejeita; qualquer outra resposta aprova).
 
 **200**
 
 ```json
 { "id": "q-4", "status": "answered", "answer_text": "Look for a bridge to the east.", "option_id": "opt-2" }
 ```
+
+---
+
+### `GET /api/campaigns/{id}/approvals`
+
+**Aditivo** (achado #4 de `docs/uxui-audit-ui.json`): a superfície de aprovação
+do modo `checkpoint`. No modo `checkpoint` o loop retém **todas** as ações e
+levanta uma pergunta de aprovação; o backend espelha essas perguntas aqui. Em
+`autopilot` não existem ações retidas para aprovar, por isso a lista nasce
+**vazia** (e `X-Source: stub`).
+
+Por omissão devolve só as **pendentes**; `?status=pending|approved|rejected|all`
+filtra (com `all` obtém-se o histórico auditável). Ordem por `ts` crescente.
+`X-Source: live` quando existe pelo menos uma aprovação.
+
+**200**
+
+```json
+[
+  {
+    "id": "q-3-1",
+    "question_id": "q-3-1",
+    "ts": "2026-09-27T20:04:59.000Z",
+    "action_id": "goto:river_bank",
+    "action_name_en": "Go to the river bank",
+    "question": "Posso executar «goto:river_bank»?",
+    "band": "auto",
+    "status": "pending"
+  }
+]
+```
+
+| Campo | Notas |
+|---|---|
+| `id` / `question_id` | O id da pergunta de aprovação que originou a entrada (são o mesmo; o id é a chave para aprovar/rejeitar) |
+| `ts` | ISO-8601 UTC |
+| `action_id` | A ação retida |
+| `action_name_en` | Nome da ação em EN (cai no `action_id` quando o payload do loop não traz o nome) |
+| `question` | A pergunta em PT que o humano leu (pode faltar) |
+| `band` | Banda da decisão retida |
+| `status` | `pending` \| `approved` \| `rejected` |
+| `note` | **Só depois de decidida** — a nota humana (omitida quando não há) |
+| `decided_at` | **Só depois de decidida** — ISO-8601 UTC |
+| `description_en` | Opcional (quando o loop a publica) |
+
+### `POST /api/campaigns/{id}/approvals/{approval_id}/approve`
+
+Liberta a decisão. O corpo é opcional: `{ "note": "vai com cuidado" }`.
+
+**200** → a aprovação com `status: "approved"`, `note` e `decided_at`.
+**404** → `{"detail": "approval not found"}`.
+**409** → `{"detail": "approval already approved"}` (ou `already rejected`).
+
+### `POST /api/campaigns/{id}/approvals/{approval_id}/reject`
+
+Descarta a ação e regista a recusa (mesmo corpo opcional). **200** → a aprovação
+com `status: "rejected"`; **404**/**409** como acima.
+
+**Semântica (honesta).** Aprovar/rejeitar é **responder à pergunta** de
+aprovação: a resposta (com `option_id` `yes`/`no` quando o loop oferece essas
+opções) segue o caminho de resposta já existente — fica gravada na memória da
+campanha em EN, com o registo de auditoria da aprovação. O loop lê essa resposta
+na sua próxima recuperação de memória e volta a decidir; o backend **não**
+re-despacha a ação retida (não existe no loop um seam de "libertar esta ação" —
+é uma alteração a `agent/loop.py`, reportada como pendente fora desta peça).
 
 ---
 
@@ -402,6 +534,12 @@ Controlo de autonomia e kill-switch.
 ```json
 { "mode": "autopilot", "kill_switch": false, "ts": "2026-09-27T20:05:00.000Z" }
 ```
+
+Esta é a chamada que **arranca/para o loop** de decisão (ver "Loop de decisão:
+quando corre e o que precisa", acima): `autopilot`/`checkpoint` → corre,
+`paused`/kill-switch → parado. O corpo da resposta é e continua a ser exatamente
+`{mode, kill_switch, ts}` — o estado do loop não entra aqui (é visível pelos
+dados `live`/`stub` e por `GET .../approvals`).
 
 ---
 
@@ -442,17 +580,19 @@ Canal de tempo real por campanha. Todas as mensagens são **JSON** com envelope 
 | `metrics_update` | Objeto completo de `GET /api/campaigns/{id}/metrics` (8 grupos) |
 | `screen_translation` | `{ "translated_pt": "..." }` |
 | `decision` | Uma entrada do log de `GET /api/campaigns/{id}/decisions` |
-| `question_new` | Uma entrada da fila de `GET /api/campaigns/{id}/questions` |
+| `question_new` | Uma entrada da fila de `GET /api/campaigns/{id}/questions` — **inclui** os campos aditivos de proveniência (`band`, `role`, `action_id`, `why_pt`, `source_data`) quando existem |
 | `memory_update` | Objeto de `GET /api/campaigns/{id}/memory` |
 | `spend_update` | Objeto de `GET /api/campaigns/{id}/spend` |
 | `game_state` | Estado crítico estruturado em EN enviado ao JEV (o mesmo que alimenta o prompt) |
 | `control_state` | `{ "mode": "autopilot", "kill_switch": false }` |
 | `question_answered` | **Aditivo** — *mesmo corpo* da resposta de `POST .../questions/{qid}/answer` (`{ "id", "status", "answer_text", "option_id" }`); emitido após uma resposta vinda por REST **ou** por WS |
+| `approval_new` | **Aditivo** — uma entrada de `GET .../approvals` (aprovação criada em modo `checkpoint`) |
+| `approval_updated` | **Aditivo** — a mesma entrada depois de decidida (`status` `approved`/`rejected`), venha a decisão de `.../approvals/{id}/approve|reject` ou da resposta da pergunta |
 | `error` | **Aditivo** — `{ "detail": "<mensagem>" }`; erro recuperável do canal (JSON inválido, `question_id` em falta, pergunta inexistente). O canal **não** fecha |
 
-Estes dois eventos são **aditivos** face ao contrato original: um cliente que ainda
-não os conheça continua a funcionar. Regra geral: **o cliente ignora tipos de evento
-que não conhece** (nunca são fatais).
+Estes eventos aditivos mantêm-se **aditivos** face ao contrato original: um
+cliente que ainda não os conheça continua a funcionar. Regra geral: **o cliente
+ignora tipos de evento que não conhece** (nunca são fatais).
 
 **Mensagens cliente → servidor**
 

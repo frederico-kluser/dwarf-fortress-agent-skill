@@ -3,10 +3,11 @@
 Server -> client: the contract envelope ``{"type", "ts", "payload"}`` for every
 event type in ``docs/api.md`` (``metrics_update``, ``screen_translation``,
 ``decision``, ``question_new``, ``memory_update``, ``spend_update``,
-``game_state``, ``control_state``).  Two additive types are also emitted and are
+``game_state``, ``control_state``).  Four additive types are also emitted and are
 safe by construction because the contract requires clients to ignore unknown
-types: ``question_answered`` (same body as the REST answer response) and
-``error`` (``{"detail": "..."}``).
+types: ``question_answered`` (same body as the REST answer response),
+``approval_new``/``approval_updated`` (the checkpoint approval queue of
+``GET .../approvals``) and ``error`` (``{"detail": "..."}``).
 
 Client -> server: ``answer_question`` and ``set_control`` (exact equivalents of
 the REST calls).  Anything else is ignored — never fatal.
@@ -99,6 +100,14 @@ async def _handle_message(
         except (CampaignError, ValueError) as exc:
             _queue_send(queue, "error", {"detail": str(exc)})
             return
+        # The mode also drives the decision loop (start on autopilot/checkpoint,
+        # stop on paused/kill-switch) — in a threadpool, since stopping waits for
+        # the loop's worker thread.
+        await run_in_threadpool(
+            services.sync_loop,
+            campaign,
+            {"mode": payload["mode"], "kill_switch": payload["kill_switch"]},
+        )
         await services.publish_event(
             campaign.id,
             "control_state",

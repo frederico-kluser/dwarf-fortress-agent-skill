@@ -1,20 +1,34 @@
 """Live per-campaign state consumed by the REST reads (and fed by the bus).
 
-The agent loop is a *separate* piece.  Until it exists, the endpoints that
+The agent loop is a *separate* piece.  Until it runs, the endpoints that
 depend on it must still answer with **contract-correct** payloads: empty/zeroed
 data plus a ``"source": "stub"`` marker (object payloads) and an ``X-Source:
 stub`` response header (list payloads, which cannot carry a marker without
 breaking the array shape).
 
-When the loop is wired, it calls :meth:`AppServices.publish_event` — the runtime
+When the loop runs, it calls :meth:`AppServices.publish_event` — the runtime
 store is updated first, then the event fans out on the WebSocket channel — and
 the very same endpoints start answering with live data (``"source": "live"``).
+
+Two live surfaces are owned here:
+
+* the **question queue** — every ``question_new`` payload is normalised so the
+  provenance the loop publishes (``band``, ``action_id``, ``why_pt``,
+  ``source_data``) survives the API response model, plus the ``role`` the loop
+  does not publish (imputed from the held action: ``JEV-A`` when there is one,
+  otherwise ``JEV-D``).  Fields the event does not carry are **omitted**, so a
+  client written against the old 6-field queue entry keeps working;
+* the **approvals queue** (``uxui-audit-ui.json`` finding #4) — in the
+  ``checkpoint`` mode the loop raises an *approval* question for every held
+  action; the app mirrors those questions here as ``pending`` approvals, each
+  with an approve/reject decision.  In autopilot nothing is mirrored, so
+  ``GET .../approvals`` is empty by construction.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Mapping
 
 from ..campaign.clock import utc_now_iso
 
@@ -23,6 +37,157 @@ SOURCE_STUB = "stub"
 
 #: How many decisions/inputs we keep in memory per campaign (ring buffer).
 HISTORY_LIMIT = 500
+
+#: Action bands of ``docs/api.md`` (a question outside them is dropped).
+BANDS: tuple[str, str, str] = ("auto", "hitl", "abstain")
+
+#: JEV roles of the decision log (``meta.role`` of the request).
+ROLES: tuple[str, ...] = ("JEV-R", "JEV-A", "JEV-M", "JEV-D")
+
+#: The loop's marker for a question that asks *permission for an action*.
+APPROVAL_ANSWER_MODE = "approval"
+APPROVAL_CHECKPOINT_REASON = "checkpoint_mode"
+
+APPROVAL_PENDING = "pending"
+APPROVAL_APPROVED = "approved"
+APPROVAL_REJECTED = "rejected"
+APPROVAL_STATUSES: tuple[str, str, str] = (APPROVAL_PENDING, APPROVAL_APPROVED, APPROVAL_REJECTED)
+
+#: Provenance fields of a queue entry (additive; all of them optional).
+PROVENANCE_FIELDS: tuple[str, ...] = ("band", "role", "action_id", "why_pt", "source_data")
+
+
+def _clean_str(value: Any) -> str | None:
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    return None
+
+
+def _source_action_id(item: Mapping[str, Any]) -> str | None:
+    direct = _clean_str(item.get("action_id"))
+    if direct:
+        return direct
+    source = item.get("source_data")
+    if isinstance(source, Mapping):
+        return _clean_str(source.get("action_id"))
+    return None
+
+
+def _is_approval_source(source: Mapping[str, Any] | None) -> bool:
+    if not isinstance(source, Mapping):
+        return False
+    return (
+        str(source.get("answer_mode") or "") == APPROVAL_ANSWER_MODE
+        or str(source.get("reason") or "") == APPROVAL_CHECKPOINT_REASON
+    )
+
+
+def is_approval_question(item: Mapping[str, Any]) -> bool:
+    """True when a queue entry asks permission to execute an action.
+
+    The loop's payload says so either explicitly (``source_data.answer_mode ==
+    "approval"``) or through the checkpoint routing reason
+    (``source_data.reason == "checkpoint_mode"``).  A question without an
+    ``action_id`` is never an approval — there is no action to approve.
+    """
+    if not isinstance(item, Mapping):
+        return False
+    source = item.get("source_data")
+    if not _is_approval_source(source if isinstance(source, Mapping) else None):
+        return False
+    return _source_action_id(item) is not None
+
+
+def _valid_band(value: Any) -> str | None:
+    """A band from an event, or ``None`` (unknown junk never reaches the API)."""
+    text = _clean_str(value)
+    if text is None:
+        return None
+    text = text.lower()
+    return text if text in BANDS else None
+
+
+def normalize_question(question: Mapping[str, Any]) -> dict[str, Any]:
+    """Normalise a ``question_new`` payload into the queue entry of the contract.
+
+    The first six fields are frozen by ``docs/api.md``; the provenance fields
+    (``band``, ``role``, ``action_id``, ``why_pt``, ``source_data``) are
+    **additive** and only present when they are actually known — an event that
+    carries none of them produces exactly the original six-field entry.
+    """
+    item = dict(question)
+
+    source = item.get("source_data")
+    source = dict(source) if isinstance(source, Mapping) else None
+
+    # A banda pode vir no campo próprio (o loop põe lá) ou só no ``source_data``
+    # (o formatador põe lá); a primeira válida ganha, lixo é descartado.
+    band = _valid_band(item.get("band")) or _valid_band((source or {}).get("band"))
+    if band:
+        item["band"] = band
+    else:
+        item.pop("band", None)
+
+    action_id = _source_action_id(item)
+    if action_id:
+        item["action_id"] = action_id
+    else:
+        item.pop("action_id", None)
+
+    why_pt = _clean_str(item.get("why_pt"))
+    if why_pt:
+        item["why_pt"] = why_pt
+    else:
+        item.pop("why_pt", None)
+
+    role = _clean_str(item.get("role"))
+    if role not in ROLES:
+        # The loop does not publish the role; the app imputes it from what the
+        # question is about: a held action (JEV-A) or the doubt escalation
+        # (JEV-D).  Only done when there is provenance at all, so an event
+        # without any stays byte-identical to the frozen six fields.
+        role = None
+        if band or action_id or why_pt or source is not None:
+            role = "JEV-A" if action_id else "JEV-D"
+    if role:
+        item["role"] = role
+    else:
+        item.pop("role", None)
+
+    if source is not None:
+        item["source_data"] = source
+    else:
+        item.pop("source_data", None)
+    return item
+
+
+def approval_from_question(question: Mapping[str, Any]) -> dict[str, Any]:
+    """An approval entry mirrored from an approval question (same id).
+
+    The question id *is* the approval id: approving/rejecting an approval is
+    answering that question, which is exactly how the loop's checkpoint flow
+    consumes the decision (through the question-answer path, into memory).
+    """
+    qid = str(question.get("id") or "")
+    source = question.get("source_data")
+    source = source if isinstance(source, Mapping) else {}
+    action_id = _source_action_id(question) or ""
+    entry: dict[str, Any] = {
+        "id": qid,
+        "question_id": qid,
+        "ts": question.get("ts") or utc_now_iso(),
+        "action_id": action_id,
+        "action_name_en": _clean_str(source.get("action_en")) or action_id,
+        "question": str(question.get("question") or ""),
+        "band": _clean_str(question.get("band")) or _clean_str(source.get("band")) or "hitl",
+        "status": APPROVAL_PENDING,
+        "note": None,
+        "decided_at": None,
+    }
+    description = _clean_str(source.get("description_en"))
+    if description:
+        entry["description_en"] = description
+    return entry
 
 
 def stub_metrics(ts: str | None = None) -> dict[str, Any]:
@@ -54,11 +219,12 @@ def stub_screen(ts: str | None = None) -> dict[str, Any]:
 
 @dataclass
 class CampaignRuntime:
-    """Live store of one campaign: decisions, questions, inputs, metrics, screen."""
+    """Live store of one campaign: decisions, questions, approvals, inputs, metrics."""
 
     campaign_id: str
     decisions: list[dict[str, Any]] = field(default_factory=list)
     questions: dict[str, dict[str, Any]] = field(default_factory=dict)
+    approvals: dict[str, dict[str, Any]] = field(default_factory=dict)
     inputs: list[dict[str, Any]] = field(default_factory=list)
     metrics: dict[str, Any] | None = None
     screen: dict[str, Any] | None = None
@@ -85,7 +251,13 @@ class CampaignRuntime:
         return f"q-{self._question_seq}"
 
     def add_question(self, question: dict[str, Any]) -> dict[str, Any]:
-        item = dict(question)
+        """Store a queue entry, keeping the provenance the loop published.
+
+        Frozen fields get the same defaults as before; the additive provenance
+        (``band``/``role``/``action_id``/``why_pt``/``source_data``) is kept when
+        present and omitted when not (see :func:`normalize_question`).
+        """
+        item = normalize_question(question)
         qid = str(item.get("id") or self.next_question_id())
         item["id"] = qid
         item.setdefault("ts", utc_now_iso())
@@ -133,6 +305,51 @@ class CampaignRuntime:
             "answer_text": question.get("answer_text"),
             "option_id": question.get("option_id"),
         }
+
+    # ----------------------------------------------------------------- approvals
+
+    def add_approval(self, question: dict[str, Any]) -> dict[str, Any] | None:
+        """Mirror an approval question as a ``pending`` approval (``None`` if not one)."""
+        if not is_approval_question(question):
+            return None
+        entry = approval_from_question(question)
+        if not entry["id"]:
+            return None
+        self.approvals[entry["id"]] = entry
+        return entry
+
+    def get_approval(self, approval_id: str) -> dict[str, Any] | None:
+        return self.approvals.get(approval_id)
+
+    def list_approvals(self, *, status: str | None = APPROVAL_PENDING) -> list[dict[str, Any]]:
+        """Approvals, oldest first.  ``status=None`` returns the whole history."""
+        items = list(self.approvals.values())
+        if status:
+            items = [item for item in items if item.get("status") == status]
+        items.sort(key=lambda item: str(item.get("ts") or ""))
+        return items
+
+    def decide_approval(
+        self,
+        approval_id: str,
+        *,
+        status: str,
+        note: str | None = None,
+    ) -> dict[str, Any] | None:
+        """Mark an approval ``approved``/``rejected``; ``None`` when unknown.
+
+        ``status`` outside :data:`APPROVAL_STATUSES` is rejected with
+        :class:`ValueError` (a programming error, not a client one).
+        """
+        if status not in APPROVAL_STATUSES:
+            raise ValueError(f"unknown approval status {status!r}")
+        entry = self.approvals.get(approval_id)
+        if entry is None:
+            return None
+        entry["status"] = status
+        entry["note"] = note
+        entry["decided_at"] = utc_now_iso()
+        return entry
 
     # --------------------------------------------------------------------- inputs
 
@@ -187,4 +404,6 @@ class CampaignRuntime:
             return SOURCE_LIVE if self.decisions else SOURCE_STUB
         if what == "questions":
             return SOURCE_LIVE if self.questions else SOURCE_STUB
+        if what == "approvals":
+            return SOURCE_LIVE if self.approvals else SOURCE_STUB
         return SOURCE_STUB

@@ -38,6 +38,8 @@ EVENT_TYPES: tuple[str, ...] = (
     "control_state",
     # additive, documented extensions (clients ignore unknown types per contract):
     "question_answered",
+    "approval_new",
+    "approval_updated",
     "error",
 )
 

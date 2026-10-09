@@ -4,9 +4,18 @@
   for uvicorn).
 * ``routes/`` — one module per area of ``docs/api.md``.
 * ``ws.py`` + ``bus.py`` — per-campaign realtime channel and its in-memory bus.
-* ``state.AppServices`` — the shared services object other pieces publish to.
-* ``runtime.py`` — live per-campaign store; ``stub`` payloads until the agent
-  loop is wired.
+* ``state.AppServices`` — the shared services object other pieces publish to;
+  it owns the per-campaign translator, the loop runners and the event mirroring.
+* ``runtime.py`` — live per-campaign store (questions *with provenance*,
+  approvals, decisions, inputs, metrics); ``stub`` payloads until the agent loop
+  runs.
+* ``loop_runner.py`` — one ``AgentLoop`` per campaign, started/stopped from the
+  control mode, with every real collaborator wired and an ``EventSink`` that
+  feeds the stores + the WS channel.  Without API keys the loop stays stopped.
+* ``translator.py`` — the real DeepSeek translator built from the campaign's
+  stored OpenRouter key, identity without one.
+* ``approval_flow.py`` — approve/reject of a checkpoint approval, reusing the
+  question-answer path (memory + events).
 """
 
 from __future__ import annotations
