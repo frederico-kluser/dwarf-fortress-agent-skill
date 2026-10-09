@@ -6,14 +6,14 @@ import json
 
 from fastapi.testclient import TestClient
 
-SECRET = "TEST-KEY-NOT-REAL-0001"
-DEEPSEEK_SECRET = "TEST-KEY-NOT-REAL-0002"
+FAKE_KEY = "TEST-KEY-NOT-REAL-0001"
+FAKE_KEY_DEEPSEEK = "TEST-KEY-NOT-REAL-0002"
 
 
 def test_post_key_returns_only_the_masked_form(client: TestClient, campaign):
     response = client.post(
         f"/api/campaigns/{campaign['id']}/keys",
-        json={"provider": "openrouter", "key": SECRET},
+        json={"provider": "openrouter", "key": FAKE_KEY},
     )
 
     assert response.status_code == 200
@@ -22,17 +22,17 @@ def test_post_key_returns_only_the_masked_form(client: TestClient, campaign):
         "masked_key": "TEST-KEY-••••••••0001",
         "set": True,
     }
-    assert SECRET not in response.text
+    assert FAKE_KEY not in response.text
 
 
 def test_get_keys_lists_all_three_providers_masked(client: TestClient, campaign):
     client.post(
         f"/api/campaigns/{campaign['id']}/keys",
-        json={"provider": "openrouter", "key": SECRET},
+        json={"provider": "openrouter", "key": FAKE_KEY},
     )
     client.post(
         f"/api/campaigns/{campaign['id']}/keys",
-        json={"provider": "deepseek", "key": DEEPSEEK_SECRET},
+        json={"provider": "deepseek", "key": FAKE_KEY_DEEPSEEK},
     )
 
     body = client.get(f"/api/campaigns/{campaign['id']}/keys").json()
@@ -47,7 +47,7 @@ def test_get_keys_lists_all_three_providers_masked(client: TestClient, campaign)
 
 def test_no_response_ever_contains_a_full_key(client: TestClient, campaign):
     cid = campaign["id"]
-    client.post(f"/api/campaigns/{cid}/keys", json={"provider": "openrouter", "key": SECRET})
+    client.post(f"/api/campaigns/{cid}/keys", json={"provider": "openrouter", "key": FAKE_KEY})
 
     for path in (
         "/api/health",
@@ -64,13 +64,13 @@ def test_no_response_ever_contains_a_full_key(client: TestClient, campaign):
     ):
         response = client.get(path)
         assert response.status_code == 200, path
-        assert SECRET not in response.text, path
-        assert SECRET[:15] not in response.text, path
+        assert FAKE_KEY not in response.text, path
+        assert FAKE_KEY[:15] not in response.text, path
 
 
 def test_openapi_documents_no_key_material(client: TestClient, campaign):
     schema = json.dumps(client.get("/openapi.json").json())
-    assert SECRET not in schema
+    assert FAKE_KEY not in schema
     # the request schema takes the key, the response schema returns the masked form
     assert "masked_key" in schema
 
@@ -104,7 +104,7 @@ def test_overwriting_a_key_keeps_one_mask(client: TestClient, campaign):
 def test_keys_are_per_campaign(client: TestClient, campaigns_root):
     first = client.post("/api/campaigns", json={"name": "Urist"}).json()
     second = client.post("/api/campaigns", json={"name": "Boatmurdered"}).json()
-    client.post(f"/api/campaigns/{first['id']}/keys", json={"provider": "openrouter", "key": SECRET})
+    client.post(f"/api/campaigns/{first['id']}/keys", json={"provider": "openrouter", "key": FAKE_KEY})
 
     other = client.get(f"/api/campaigns/{second['id']}/keys").json()
 

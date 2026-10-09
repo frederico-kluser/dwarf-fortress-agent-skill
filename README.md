@@ -31,22 +31,22 @@ O loop completo (10 passos), os cuidados obrigatórios de prompt, a memória e a
 
 ## Estado do projeto
 
-**MVP em curso.** As peças abaixo existem e as suítes já fechadas estão a verde; falta **ligar o loop de jogo ao backend** — é isso que transforma isto num agente a jogar (hoje os endpoints respondem com dados *stub*).
+**MVP em curso.** As peças abaixo existem, estão commitadas e as suítes estão a verde; o **loop de decisão já está ligado ao backend** (`app/loop_runner.py`), pelo que os endpoints servem dados `live` assim que o modo de controlo o põe a correr e a campanha tem chaves — sem chaves (ou em `paused`/kill-switch) continuam a responder com os *stub* documentados.
 
 | Peça | Onde | Estado verificado |
 |---|---|---|
 | Base de conhecimento DF | `conhecimento/` | **30 129 registos** (30 111 semânticos · 18 procedurais · 0 episódicos), 33 745 chunks, ~124 MB — só-leitura, importada do macmini ([docs/conhecimento.md](docs/conhecimento.md)) |
 | Cliente da frota JEV | `src/system_one_dwarf/jev/` | **231 testes** offline (validação de pedido/resposta, bandas, retries, custo) |
-| Backend (REST + WebSocket) | `src/system_one_dwarf/app/` + `campaign/` | **219 testes passados** (98 de API + 121 das camadas de campanha) + **1 teste de integração opt-in** (`SOD_RUN_INTEGRATION=1`) |
+| Backend (REST + WebSocket) | `src/system_one_dwarf/app/` + `campaign/` | **265 testes passados** (144 de API + 121 das camadas de campanha) + **1 teste de integração opt-in** (`SOD_RUN_INTEGRATION=1`) |
 | Tradutor PT↔EN | `src/system_one_dwarf/translate/` | **145 testes** (glossário, cache, seam de memória) |
 | Game state | `src/system_one_dwarf/game/` | **35 testes** pytest (`tests/game`) + **59 unittest** no DFHack (17 de contrato + 42 de snapshot) — snapshot normalizado, tolerante aos campos que o Lua não consegue ler |
 | Ponte DFHack | `dfhack/` | **59 unittest** (`test_bridge.py` 17 de contrato + `test_snapshot.py` 42 de snapshot) — baseline de não-regressão |
 | UI web | `web/` | **8 painéis** em MUI v9, em português, com cliente *mock* completo (corre sem backend) |
 | Evals de calibração | `evals/` | **66 casos** rotulados (217 respostas) para JEV-R/A/M/D + injeção de prompt ([docs/calibracao.md](docs/calibracao.md)) |
-| Narrador, perguntas e loop | `src/system_one_dwarf/agent/` | Narrador/formatter com **194 testes** a verde (`tests/agent/test_llm.py`, `test_narrator.py`, `test_questions.py`, `test_memory_integration.py`, `test_wiring.py`); `AgentLoop` (10 passos) implementado, suíte e ligação ao backend **em fecho** |
-| Loop ligado ao backend | — | **A integrar** — ver "Como correr", passo 5 |
+| Narrador, perguntas e loop | `src/system_one_dwarf/agent/` | **293 testes** a verde (`tests/agent/`: `test_llm.py`, `test_narrator.py`, `test_questions.py`, `test_memory_integration.py`, `test_wiring.py`, `test_candidates.py`, `test_executor.py`, `test_loop.py`); `AgentLoop` (10 passos) implementado |
+| Loop ligado ao backend | `src/system_one_dwarf/app/loop_runner.py` | **Integrado** — um `AgentLoop` por campanha, arrancado/parado pelo **modo de controlo** (`autopilot`/`checkpoint` correm, `paused`/kill-switch param) e **só com chaves** `typesafe` (JEV) + `openrouter` (LLM) |
 
-As contagens são as das suítes a correr agora neste venv (`.venv/bin/python -m pytest tests/<peça> -q`, tudo offline). As peças em `agent/` e `game/` estão a ser fechadas em paralelo e ainda não têm commit.
+As contagens são as das suítes a correr agora neste venv (`.venv/bin/python -m pytest tests/<peça> -q`, tudo offline). **Todas as peças estão commitadas** — `game/` em `8f654bb`, `agent/` em `8df44ee` (narrador/perguntas) e `bb16e07` (loop + executor), e a ligação ao backend em `67903de`. A suíte completa soma **975 testes** (1 *skip*: a integração opt-in).
 
 ## Como correr
 
@@ -91,11 +91,15 @@ Sem `VITE_API_BASE` a UI arranca com **dados simulados** (`src/api/mock.ts`) e �
 
    É preciso um mundo carregado e uma personagem de adventure mode criada. Depois, `python3 dfhack/df_bridge.py status --json` deve passar a `rpc.reachable: true`. Com o jogo fechado, `dfhack_installed: true` + `rpc.reachable: false` **é o esperado**, não é erro. Detalhes e troubleshooting: [docs/setup.md](docs/setup.md) §4–§7.
 
-### 5. Arrancar o loop — **a integrar**
+### 5. Arrancar o loop — **integrado**
 
-O loop existe como peça de biblioteca: `AgentLoop` em `src/system_one_dwarf/agent/loop.py` implementa os 10 passos de [docs/arquitetura.md](docs/arquitetura.md) (estado → JEV-R∥JEV-M → narrador → JEV-A∥JEV-D → despacho por banda → registo → avançar o tempo). **Ainda não tem ponto de entrada nem ligação ao backend**, por isso os painéis recebem hoje *stub* (`source: "stub"` / cabeçalho `X-Source`).
+O `AgentLoop` (`src/system_one_dwarf/agent/loop.py`) implementa os 10 passos de [docs/arquitetura.md](docs/arquitetura.md) (estado → JEV-R∥JEV-M → narrador → JEV-A∥JEV-D → despacho por banda → registo → avançar o tempo) e está **ligado ao backend** por `src/system_one_dwarf/app/loop_runner.py`: um loop por campanha, com os colaboradores reais (cliente de estado do jogo, frota JEV, narrador/perguntas DeepSeek, tradutor, memória CoALA e registo de gastos) e os eventos publicados nos *stores* e no WebSocket. Sem chaves, ou com o loop parado, os painéis recebem os *stub* documentados (`source: "stub"` / cabeçalho `X-Source`).
 
-O comando previsto é `python -m system_one_dwarf.agent.loop` — será publicado quando o entry point fechar. A configuração já é real: variáveis `SOD_*` (ex.: `SOD_MODE`, `SOD_AUTO_THRESHOLD`, `SOD_DRY_RUN`, `SOD_NARRATOR_MODEL`) sobrepostas pela meta da campanha, tudo documentado em `src/system_one_dwarf/agent/config.py`.
+1. **Chaves obrigatórias.** A campanha precisa das **duas**: `typesafe` (JEV) e `openrouter` (narrativa, perguntas e tradutor) — passo 4.2. Se faltar uma delas o loop **não arranca** e os endpoints mantêm os *stub*.
+2. **Arranca pelo modo de controlo**, não por um endpoint de arranque: painel **Controlo** ou `POST /api/campaigns/{id}/control`. `autopilot` e `checkpoint` correm o loop (em `checkpoint` todas as ações ficam retidas para aprovação); `paused` e o **kill-switch** param-no. Um arranque depois de uma paragem constrói um loop novo. Contrato completo, incluindo o marcador `stub`/`live`, em [docs/api.md](docs/api.md) §"Loop de decisão".
+3. **Jogo a correr com DFHack** (passo 4.3): sem RPC, a leitura de estado falha com erro explícito em vez de inventar dados.
+
+A configuração é real por variáveis `SOD_*` (ex.: `SOD_MODE`, `SOD_AUTO_THRESHOLD`, `SOD_DRY_RUN`, `SOD_NARRATOR_MODEL`) sobrepostas pela meta da campanha, tudo documentado em `src/system_one_dwarf/agent/config.py`.
 
 ## Memória e conhecimento
 

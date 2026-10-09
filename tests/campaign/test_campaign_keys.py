@@ -18,12 +18,12 @@ from system_one_dwarf.campaign.keys import (
 )
 from system_one_dwarf.campaign.paths import PRIVATE_DIR_MODE, PRIVATE_FILE_MODE
 
-SECRET = "TEST-KEY-NOT-REAL-0001"
+FAKE_KEY = "TEST-KEY-NOT-REAL-0001"
 
 
 class TestMasking:
     def test_contract_example_mask(self):
-        assert mask_key(SECRET) == "TEST-KEY-••••••••0001"
+        assert mask_key(FAKE_KEY) == "TEST-KEY-••••••••0001"
 
     def test_short_keys_keep_only_the_tail_hidden(self):
         assert mask_key("abc") == "••••••••"
@@ -34,9 +34,9 @@ class TestMasking:
         assert mask_key("") == "••••••••"
 
     def test_mask_never_contains_the_whole_key(self):
-        masked = mask_key(SECRET)
-        assert SECRET not in masked
-        assert SECRET[:15] not in masked
+        masked = mask_key(FAKE_KEY)
+        assert FAKE_KEY not in masked
+        assert FAKE_KEY[:15] not in masked
 
 
 class TestProviderValidation:
@@ -56,13 +56,13 @@ def store(tmp_path: Path) -> KeyStore:
 
 class TestKeyStore:
     def test_set_key_returns_only_the_masked_form(self, store):
-        result = store.set_key("openrouter", SECRET)
+        result = store.set_key("openrouter", FAKE_KEY)
         assert result == {"provider": "openrouter", "masked_key": "TEST-KEY-••••••••0001", "set": True}
-        assert SECRET not in str(result)
+        assert FAKE_KEY not in str(result)
 
     def test_get_key_is_the_only_full_accessor(self, store):
-        store.set_key("openrouter", SECRET)
-        assert store.get_key("openrouter") == SECRET
+        store.set_key("openrouter", FAKE_KEY)
+        assert store.get_key("openrouter") == FAKE_KEY
         assert store.masked_key("openrouter") == "TEST-KEY-••••••••0001"
         assert store.has_key("openrouter") is True
 
@@ -78,10 +78,10 @@ class TestKeyStore:
         assert listing[0] == {"provider": "openrouter", "masked_key": None, "set": False}
         assert listing[1]["set"] is True and listing[1]["masked_key"].endswith("1234")
         assert listing[2]["set"] is False
-        assert SECRET not in str(listing)
+        assert FAKE_KEY not in str(listing)
 
     def test_overwrite_keeps_a_single_row(self, store):
-        store.set_key("openrouter", SECRET)
+        store.set_key("openrouter", FAKE_KEY)
         store.set_key("openrouter", "TEST-KEY-NOT-REAL-0002")
         conn = sqlite3.connect(store.db_path)
         rows = conn.execute("SELECT provider, masked FROM keys").fetchall()
@@ -100,12 +100,12 @@ class TestKeyStore:
 
     def test_unknown_provider_is_rejected(self, store):
         with pytest.raises(UnknownProvider):
-            store.set_key("anthropic", SECRET)
+            store.set_key("anthropic", FAKE_KEY)
 
     def test_file_is_0600_and_directory_0700(self, tmp_path: Path):
         db_path = tmp_path / "nested" / "chaves.sqlite"
         store = KeyStore(db_path)
-        store.set_key("openrouter", SECRET)
+        store.set_key("openrouter", FAKE_KEY)
 
         assert stat.S_IMODE(db_path.stat().st_mode) == PRIVATE_FILE_MODE
         assert stat.S_IMODE(db_path.parent.stat().st_mode) == PRIVATE_DIR_MODE
@@ -113,7 +113,7 @@ class TestKeyStore:
     def test_loose_permissions_are_tightened_on_open(self, tmp_path: Path):
         db_path = tmp_path / "chaves.sqlite"
         store = KeyStore(db_path)
-        store.set_key("openrouter", SECRET)
+        store.set_key("openrouter", FAKE_KEY)
         os.chmod(db_path, 0o644)
 
         store.has_key("openrouter")
@@ -121,14 +121,14 @@ class TestKeyStore:
         assert stat.S_IMODE(db_path.stat().st_mode) == PRIVATE_FILE_MODE
 
     def test_repr_leaks_nothing(self, store):
-        store.set_key("openrouter", SECRET)
+        store.set_key("openrouter", FAKE_KEY)
         text = repr(store)
-        assert SECRET not in text and "0001" not in text
+        assert FAKE_KEY not in text and "0001" not in text
         assert "chaves.sqlite" in text
 
     def test_masked_column_never_holds_the_full_key(self, store):
-        store.set_key("openrouter", SECRET)
+        store.set_key("openrouter", FAKE_KEY)
         conn = sqlite3.connect(store.db_path)
         masked = conn.execute("SELECT masked FROM keys").fetchone()[0]
         conn.close()
-        assert masked != SECRET and SECRET not in masked
+        assert masked != FAKE_KEY and FAKE_KEY not in masked

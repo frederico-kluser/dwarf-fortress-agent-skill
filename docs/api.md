@@ -152,7 +152,7 @@ variáveis de ambiente foram rejeitadas).
 **200**
 
 ```json
-{ "provider": "openrouter", "masked_key": "sk-or-v1-••••••••3f9a", "set": true }
+{ "provider": "openrouter", "masked_key": "TEST-KEY-••••••••0001", "set": true }
 ```
 
 ### `GET /api/campaigns/{id}/keys`
@@ -163,7 +163,7 @@ Devolve **apenas as versões mascaradas** — nunca a chave em claro.
 
 ```json
 [
-  { "provider": "openrouter", "masked_key": "sk-or-v1-••••••••3f9a", "set": true },
+  { "provider": "openrouter", "masked_key": "TEST-KEY-••••••••0001", "set": true },
   { "provider": "typesafe",   "masked_key": null,                    "set": false },
   { "provider": "deepseek",   "masked_key": null,                    "set": false }
 ]
