@@ -17,6 +17,12 @@ node_modules/
 # Índice de busca FTS5 (artefato derivado; search.py reconstrói no 1º uso).
 .agents/skills/scripts/index.db
 
+# UI web (build de produção do Vite; gerado por `npm run build`).
+web/dist/
+
+# Memórias CoALA das campanhas de jogo (estado local, não versionado).
+campanhas/
+
 # Versionado:
 #   .agents/skills/**                      (produto: skills + artigos markdown)
 #   .agents/skills/scripts/*.py *.tsv      (busca + glossário)
