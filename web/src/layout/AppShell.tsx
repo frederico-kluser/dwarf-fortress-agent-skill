@@ -12,7 +12,7 @@ import useMediaQuery from '@mui/material/useMediaQuery';
 import { useTheme } from '@mui/material/styles';
 
 import { errorMessage } from '../api/events';
-import { useAnswerQuestion, useApiContext, useQuestions, useSetControl } from '../api/queries';
+import { useAnswerQuestion, useApiContext, useApprovals, useQuestions, useSetControl } from '../api/queries';
 import type { AnswerQuestionRequest } from '../api/types';
 import AutopilotConfirmDialog from '../components/AutopilotConfirmDialog';
 import { PanelLoading } from '../components/PanelState';
@@ -76,6 +76,13 @@ export default function AppShell() {
     [questionsQuery.data],
   );
 
+  // Ações retidas do modo `checkpoint` — badge próprio na barra superior.
+  const approvalsQuery = useApprovals();
+  const pendingApprovals = useMemo(
+    () => (approvalsQuery.data ?? []).filter((approval) => approval.status === 'pending').length,
+    [approvalsQuery.data],
+  );
+
   const answerMutation = useAnswerQuestion({
     onSuccess: () => setToast('Resposta enviada para a memória do agente.'),
     onError: (error) => setToast(`Não foi possível responder: ${errorMessage(error)}`),
@@ -133,6 +140,8 @@ export default function AppShell() {
       <TopBar
         pendingQuestions={pending.length}
         onOpenQuestions={() => setQueueOpen(true)}
+        pendingApprovals={pendingApprovals}
+        onOpenApprovals={() => selectPanel('controlo')}
         onKillSwitch={handleKillSwitch}
         controlBusy={controlMutation.isPending}
       />

@@ -3,8 +3,9 @@
  *
  * Dados realistas de adventure mode + simulação de eventos WebSocket a cada
  * poucos segundos (`metrics_update`, `screen_translation`, `decision`,
- * `spend_update`, `question_new`, `memory_update`, `control_state`) para que
- * todos os painéis pareçam vivos sem backend nenhum.
+ * `spend_update`, `question_new`, `question_answered`, `memory_update`,
+ * `control_state`, `approval_new`) para que todos os painéis pareçam vivos sem
+ * backend nenhum.
  */
 
 import { parseServerEvent } from './events';
@@ -12,6 +13,9 @@ import type { ApiClient, ConnectionStatus, SubscriptionHandlers } from './client
 import type {
   AnswerQuestionRequest,
   AnswerQuestionResponse,
+  Approval,
+  ApprovalDecisionRequest,
+  ApprovalStatusFilter,
   Campaign,
   CombatEntry,
   ControlRequest,
@@ -19,6 +23,7 @@ import type {
   CreateCampaignRequest,
   CreateInputRequest,
   Decision,
+  DecisionBand,
   HealthResponse,
   InputHistoryEntry,
   InputInjection,
@@ -139,6 +144,25 @@ const WORKING_MEMORY_EN =
   'Open threads: find drinking water before dusk; avoid the goblin patrol near the ' +
   'cave mouth; decide between swimming the river and searching for a bridge east.';
 
+const OBJECTIVE_NARRATIVE_EN =
+  'Reach the stone gate to the northeast alive, with water enough for two days.';
+
+const OBJECTIVE_NARRATIVE_PT =
+  'Chegar ao portão de pedra a nordeste, vivo e com água suficiente para dois dias.';
+
+/** Sub-objetivos: canónico EN + exibição PT (o contrato só omite o `*_pt` sem tradução). */
+const SUBGOAL_SEEDS: { id: string; text: string; text_pt: string; done: boolean }[] = [
+  { id: 'sg-1', text: 'Find drinking water', text_pt: 'Encontrar água potável', done: true },
+  { id: 'sg-2', text: 'Cross the river safely', text_pt: 'Atravessar o rio em segurança', done: false },
+  {
+    id: 'sg-3',
+    text: 'Avoid the goblin patrol near the cave',
+    text_pt: 'Evitar a patrulha goblin junto à caverna',
+    done: false,
+  },
+  { id: 'sg-4', text: 'Reach the stone gate', text_pt: 'Chegar ao portão de pedra', done: false },
+];
+
 interface EpisodeSeed {
   kind: string;
   content: string;
@@ -196,21 +220,42 @@ const INPUT_SEEDS: { text_pt: string; text: string; minutes: number }[] = [
   },
 ];
 
-const QUESTION_SEEDS: {
+interface QuestionSeed {
   question: string;
   options: { id: string; text: string }[];
   status: 'pending' | 'answered';
   minutes: number;
   answer_text_pt?: string;
-}[] = [
+  /* Proveniência (aditiva) — o último seed fica sem ela de propósito: é o
+     payload antigo (6 campos) que a UI tem de continuar a mostrar. */
+  band?: DecisionBand;
+  role?: JevAgent;
+  action_id?: string;
+  why_pt?: string;
+  source_data?: Record<string, unknown>;
+}
+
+const QUESTION_SEEDS: QuestionSeed[] = [
   {
     question: 'Atravessar o rio a nadar ou procurar uma ponte?',
     options: [
       { id: 'opt-1', text: 'Nadar' },
-      { id: 'opt-2', text: 'Procurar ponte' },
+      { id: 'opt-2', text: 'Procurar ponte a leste' },
     ],
     status: 'pending',
     minutes: 1,
+    band: 'hitl',
+    role: 'JEV-A',
+    action_id: 'goto:river_bank',
+    why_pt: 'a confiança ficou na banda hitl (0,50–0,89): confirmar antes de executar',
+    source_data: {
+      reason: 'band_hitl',
+      band: 'hitl',
+      action_id: 'goto:river_bank',
+      action_en: 'Go to the river bank',
+      confidence_available: true,
+      action_confidence: 0.62,
+    },
   },
   {
     question: 'Os goblins junto à caverna: contornar ou enfrentar?',
@@ -221,6 +266,11 @@ const QUESTION_SEEDS: {
     ],
     status: 'pending',
     minutes: 4,
+    band: 'abstain',
+    role: 'JEV-D',
+    why_pt:
+      'a confiança ficou na banda abstain (< 0,50): o agente prefere não decidir sozinho e escala a dúvida',
+    source_data: { reason: 'band_abstain', band: 'abstain', confidence_available: false },
   },
   {
     question: 'A mochila está quase cheia. Largar a corda de cânhamo?',
@@ -252,6 +302,155 @@ const QUESTION_SEEDS: {
     answer_text_pt: 'Levar a espada curta e a tocha.',
   },
 ];
+
+/* ------------------------------------------------------------ aprovações --- */
+
+/**
+ * Ações retidas pelo modo `checkpoint` (`docs/api.md` §approvals).
+ * A pergunta de aprovação tem o mesmo id da aprovação: aprovar/rejeitar é
+ * responder a essa pergunta, pelo que o mock mantém as duas em sincronia.
+ */
+interface ApprovalSeed {
+  qid: string;
+  action_id: string;
+  action_name_en: string;
+  description_en: string;
+  band: DecisionBand;
+  minutes: number;
+}
+
+const APPROVAL_SEEDS: ApprovalSeed[] = [
+  {
+    qid: 'q-3-1',
+    action_id: 'goto:river_bank',
+    action_name_en: 'Go to the river bank',
+    description_en: 'Travel to the river bank and look for a crossing',
+    band: 'auto',
+    minutes: 2,
+  },
+  {
+    qid: 'q-3-2',
+    action_id: 'goto:stone_gate',
+    action_name_en: 'Go to the stone gate',
+    description_en: 'Follow the old road northeast towards the stone gate',
+    band: 'hitl',
+    minutes: 6,
+  },
+  {
+    qid: 'q-3-3',
+    action_id: 'wait:60',
+    action_name_en: 'Wait one minute',
+    description_en: 'Hold position and let the goblin patrol move away',
+    band: 'auto',
+    minutes: 11,
+  },
+];
+
+/** `why_pt` determinístico — a mesma frase que o loop publica. */
+function approvalWhyPt(seed: ApprovalSeed): string {
+  return `o modo checkpoint exige aprovação humana para todas as ações (banda ${seed.band})`;
+}
+
+function optionYes(): { id: string; text: string } {
+  return { id: 'yes', text: 'Sim, executar' };
+}
+
+function optionNo(): { id: string; text: string } {
+  return { id: 'no', text: 'Não, escolher outra ação' };
+}
+
+function optionOther(): { id: string; text: string } {
+  return { id: 'other', text: 'Outra resposta (escrever abaixo)' };
+}
+
+function makeApproval(seed: ApprovalSeed): Approval {
+  return {
+    id: seed.qid,
+    question_id: seed.qid,
+    ts: minutesAgo(seed.minutes),
+    action_id: seed.action_id,
+    action_name_en: seed.action_name_en,
+    question: `Posso executar «${seed.action_id}»?`,
+    band: seed.band,
+    status: 'pending',
+    note: null,
+    decided_at: null,
+    description_en: seed.description_en,
+  };
+}
+
+/** A pergunta de aprovação que o backend espelha na fila de perguntas. */
+function approvalQuestion(seed: ApprovalSeed): Question {
+  return {
+    id: seed.qid,
+    ts: minutesAgo(seed.minutes),
+    question: `Posso executar «${seed.action_id}»?`,
+    options: [optionYes(), optionNo(), optionOther()],
+    free_text_allowed: true,
+    status: 'pending',
+    answer_text: null,
+    option_id: null,
+    band: seed.band,
+    role: 'JEV-A',
+    action_id: seed.action_id,
+    why_pt: approvalWhyPt(seed),
+    source_data: {
+      action_id: seed.action_id,
+      action_en: seed.action_name_en,
+      description_en: seed.description_en,
+      band: seed.band,
+      reason: 'checkpoint_mode',
+      answer_mode: 'approval',
+    },
+  };
+}
+
+/**
+ * Em `autopilot` não há ações retidas (lista vazia, `X-Source: stub`); em
+ * `checkpoint` ficam todas; em `pausa` fica o que estava retido antes de parar.
+ */
+function retainedApprovalSeeds(mode: ControlState['mode']): ApprovalSeed[] {
+  if (mode === 'autopilot') return [];
+  if (mode === 'checkpoint') return APPROVAL_SEEDS;
+  return APPROVAL_SEEDS.slice(0, 1);
+}
+
+/** Resposta que *recusa* explicitamente (o resto aprova) — `docs/api.md`. */
+function isRefusal(answerText: string, optionId?: string | null): boolean {
+  if (optionId === 'no') return true;
+  return /^\s*(no|não|nao|reject|rejeitar|recusar)\b/i.test(answerText);
+}
+
+/** Perguntas novas da simulação — opções reais (nunca «Opção A»/«Opção B»). */
+const QUESTION_BURSTS: { question: string; options: string[] }[] = [
+  {
+    question: 'O caminho a norte está bloqueado por rochas. Contornar ou voltar atrás?',
+    options: ['Contornar por leste', 'Voltar ao acampamento'],
+  },
+  {
+    question: 'Há um mercador no trilho. Trocar a corda de cânhamo por rações?',
+    options: ['Trocar a corda por rações', 'Não trocar'],
+  },
+  {
+    question: 'A tempestade está a piorar. Acampar ou continuar para o portão?',
+    options: ['Acampar sob a rocha', 'Continuar para o portão'],
+  },
+  {
+    question: 'Encontrámos um artefacto estranho. Recolher ou deixar?',
+    options: ['Recolher', 'Deixar onde está'],
+  },
+];
+
+/** Frase PT que explica a origem — a mesma forma que o loop publica em `why_pt`. */
+function whyPtFor(band: DecisionBand): string {
+  if (band === 'abstain') {
+    return 'a confiança ficou na banda abstain (< 0,50): o agente prefere não decidir sozinho';
+  }
+  if (band === 'hitl') {
+    return 'a confiança ficou na banda hitl (0,50–0,89): confirmar antes de executar';
+  }
+  return 'a ação é reversível e a confiança ficou na banda auto: confirmar antes de executar';
+}
 
 /* ------------------------------------------------------------ campanhas --- */
 
@@ -396,7 +595,19 @@ export class MockApiClient implements ApiClient {
 
   async putObjective(id: string, body: Objective) {
     const state = this.state(id);
-    state.objective = clone(body);
+    // O servidor real traduz PT→EN antes de guardar (o objetivo é material de
+    // prompt) e devolve o canónico EN + os `*_pt` de exibição — o mock marca a
+    // "tradução" em vez de a inventar.
+    state.objective = {
+      narrative: `[EN] ${body.narrative}`,
+      narrative_pt: body.narrative,
+      subgoals: body.subgoals.map((goal) => ({
+        id: goal.id,
+        text: `[EN] ${goal.text_pt ?? goal.text}`,
+        text_pt: goal.text_pt ?? goal.text,
+        done: goal.done,
+      })),
+    };
     state.metrics.objective_progress.percent = progressOf(state);
     return this.delay(clone(state.objective));
   }
@@ -432,6 +643,21 @@ export class MockApiClient implements ApiClient {
     return this.delay(clone(this.state(id).questions));
   }
 
+  listApprovals(id: string, status?: ApprovalStatusFilter) {
+    const wanted = status ?? 'pending';
+    const all = this.state(id).approvals;
+    const list = wanted === 'all' ? all : all.filter((approval) => approval.status === wanted);
+    return this.delay(clone(list));
+  }
+
+  async approve(id: string, approvalId: string, body?: ApprovalDecisionRequest) {
+    return this.decideApproval(id, approvalId, true, body?.note);
+  }
+
+  async reject(id: string, approvalId: string, body?: ApprovalDecisionRequest) {
+    return this.decideApproval(id, approvalId, false, body?.note);
+  }
+
   async answerQuestion(id: string, qid: string, body: AnswerQuestionRequest) {
     const state = this.state(id);
     const question = state.questions.find((q) => q.id === qid);
@@ -440,6 +666,12 @@ export class MockApiClient implements ApiClient {
       question.status = 'answered';
       question.answer_text = answerEn;
       question.option_id = body.option_id ?? null;
+    }
+    // Se a pergunta for uma aprovação de checkpoint, a resposta decide-a
+    // (`docs/api.md`): recusa explícita rejeita, qualquer outra resposta aprova.
+    const approval = state.approvals.find((item) => item.id === qid && item.status === 'pending');
+    if (approval) {
+      this.markApproval(id, state, approval, !isRefusal(body.answer_text, body.option_id));
     }
     const response: AnswerQuestionResponse = {
       id: qid,
@@ -455,7 +687,56 @@ export class MockApiClient implements ApiClient {
       content_pt: `O humano respondeu «${body.answer_text}».`,
     };
     state.memory.episodes = [episode, ...state.memory.episodes];
+    // Aditivo (`docs/api.md`): emitido depois de uma resposta vinda por REST.
+    this.emit(id, { type: 'question_answered', ts: episode.ts, payload: response });
     return this.delay(response);
+  }
+
+  /* --------------------------------------------------------- aprovações --- */
+
+  /** Decide uma aprovação pendente, como o `POST .../approve|reject` do backend. */
+  private decideApproval(
+    id: string,
+    approvalId: string,
+    approveIt: boolean,
+    note?: string,
+  ): Promise<Approval> {
+    const state = this.state(id);
+    const approval = state.approvals.find((item) => item.id === approvalId);
+    if (!approval) return Promise.reject(new Error('aprovação não encontrada no mock'));
+    if (approval.status !== 'pending') {
+      return Promise.reject(new Error(`aprovação já ${approval.status === 'approved' ? 'aprovada' : 'rejeitada'}`));
+    }
+    const decided = this.markApproval(id, state, approval, approveIt, note);
+    return this.delay(clone(decided));
+  }
+
+  /**
+   * Marca a aprovação (e a pergunta que a originou) e difunde `approval_updated`.
+   * Devolve a aprovação já decidida.
+   */
+  private markApproval(
+    id: string,
+    state: MockState,
+    approval: Approval,
+    approveIt: boolean,
+    note?: string,
+  ): Approval {
+    const ts = iso(new Date());
+    approval.status = approveIt ? 'approved' : 'rejected';
+    approval.decided_at = ts;
+    if (note) approval.note = note;
+    state.approvals = state.approvals.map((item) => (item.id === approval.id ? approval : item));
+
+    // Aprovar/rejeitar é responder à pergunta de aprovação: a fila reflete-o.
+    const question = state.questions.find((item) => item.id === approval.id);
+    if (question) {
+      question.status = 'answered';
+      question.answer_text = approveIt ? 'yes' : 'no';
+      question.option_id = approveIt ? 'yes' : 'no';
+    }
+    this.emit(id, { type: 'approval_updated', ts, payload: clone(approval) });
+    return approval;
   }
 
   async setControl(id: string, body: ControlRequest) {
@@ -525,6 +806,16 @@ export class MockApiClient implements ApiClient {
       if (tick % 7 === 0) send(burst(state, 'question_new'));
       if (tick % 11 === 0) send(burst(state, 'memory_update'));
       if (tick % 13 === 0) send(burst(state, 'control_state'));
+      // Ações retidas: só o modo `checkpoint` as produz (em autopilot a lista
+      // de aprovações fica vazia). A pergunta espelhada segue na fila.
+      if (tick % 6 === 0 && state.campaign.control.mode === 'checkpoint') {
+        const approvalEvent = burst(state, 'approval_new');
+        if (approvalEvent) send(approvalEvent);
+        const mirrored = state.questions[0];
+        if (mirrored) {
+          send({ type: 'question_new', ts: mirrored.ts, payload: clone(mirrored) });
+        }
+      }
     }, TICK_MS);
 
     return () => {
@@ -554,6 +845,7 @@ interface MockState {
   spend: Spend;
   decisions: Decision[];
   questions: Question[];
+  approvals: Approval[];
   screen: ScreenTranslation;
   inputs: InputHistoryEntry[];
   keys: KeyInfo[];
@@ -594,14 +886,9 @@ function buildState(seed: CampaignSeed, index = 0): MockState {
   };
 
   const objective: Objective = {
-    narrative:
-      'Chegar ao portão de pedra a nordeste, vivo e com água suficiente para dois dias.',
-    subgoals: [
-      { id: 'sg-1', text: 'Encontrar água potável', done: true },
-      { id: 'sg-2', text: 'Atravessar o rio em segurança', done: false },
-      { id: 'sg-3', text: 'Evitar a patrulha goblin junto à caverna', done: false },
-      { id: 'sg-4', text: 'Chegar ao portão de pedra', done: false },
-    ],
+    narrative: OBJECTIVE_NARRATIVE_EN,
+    narrative_pt: OBJECTIVE_NARRATIVE_PT,
+    subgoals: SUBGOAL_SEEDS.map((goal) => ({ ...goal })),
   };
 
   const state: MockState = {
@@ -611,7 +898,8 @@ function buildState(seed: CampaignSeed, index = 0): MockState {
     metrics: buildMetrics(seed.mode),
     spend: buildSpend(),
     decisions: buildDecisions(),
-    questions: buildQuestions(),
+    questions: buildQuestions(seed.mode),
+    approvals: retainedApprovalSeeds(seed.mode).map(makeApproval),
     screen: { translated_pt: pick(SCREEN_TEXTS_PT, index), ts: secondsAgo(1) },
     inputs: INPUT_SEEDS.map((entry, i) => ({
       id: `in-${i + 1}`,
@@ -774,17 +1062,30 @@ function makeDecision(
   };
 }
 
-function buildQuestions(): Question[] {
-  return QUESTION_SEEDS.map((seed, i) => ({
-    id: `q-${i + 1}`,
-    ts: minutesAgo(seed.minutes),
-    question: seed.question,
-    options: seed.options,
-    free_text_allowed: true,
-    status: seed.status,
-    answer_text: seed.answer_text_pt ? `[EN] ${seed.answer_text_pt}` : null,
-    option_id: seed.status === 'answered' ? (seed.options[0]?.id ?? null) : null,
-  }));
+function buildQuestions(mode: ControlState['mode']): Question[] {
+  return [
+    // As perguntas de aprovação do modo `checkpoint` estão também na fila.
+    ...retainedApprovalSeeds(mode).map(approvalQuestion),
+    ...QUESTION_SEEDS.map((seed, i) => ({
+      id: `q-${i + 1}`,
+      ts: minutesAgo(seed.minutes),
+      question: seed.question,
+      options: seed.options,
+      free_text_allowed: true,
+      status: seed.status,
+      answer_text: seed.answer_text_pt ? `[EN] ${seed.answer_text_pt}` : null,
+      option_id: seed.status === 'answered' ? (seed.options[0]?.id ?? null) : null,
+      /*
+       * Proveniência ADITIVA: um seed sem estes campos produz exatamente o
+       * payload antigo de 6 campos (é o caso do 3.º pendente, de propósito).
+       */
+      ...(seed.band ? { band: seed.band } : {}),
+      ...(seed.role ? { role: seed.role } : {}),
+      ...(seed.action_id ? { action_id: seed.action_id } : {}),
+      ...(seed.why_pt ? { why_pt: seed.why_pt } : {}),
+      ...(seed.source_data ? { source_data: seed.source_data } : {}),
+    })),
+  ];
 }
 
 /* --------------------------------------------------------- simulação --- */
@@ -817,29 +1118,42 @@ function burst(state: MockState, type: string): unknown {
     }
     case 'question_new': {
       const index = state.questions.length;
+      const seed = pick(QUESTION_BURSTS, index);
+      // Proveniência realista: banda, ação retida (JEV-A) ou escalada de dúvida
+      // sem ação (JEV-D) — a mesma imputação que o backend faz.
+      const band = pick<DecisionBand>(['hitl', 'abstain', 'hitl', 'auto'], index);
+      const actionId = band === 'abstain' ? undefined : pick(ACTION_CANDIDATES, index + 1);
       const question: Question = {
         id: `q-${index + 1}`,
         ts,
-        question: pick(
-          [
-            'O caminho a norte está bloqueado por rochas. Contornar ou voltar atrás?',
-            'Há um mercador no trilho. Trocar a corda por rações?',
-            'A tempestade está a piorar. Acampar ou continuar?',
-            'Encontrámos um artefacto estranho. Recolher ou deixar?',
-          ],
-          index,
-        ),
-        options: [
-          { id: `opt-${index * 2 + 20}`, text: 'Opção A' },
-          { id: `opt-${index * 2 + 21}`, text: 'Opção B' },
-        ],
+        question: seed.question,
+        options: seed.options.map((text, option) => ({ id: `opt-${index * 2 + 20 + option}`, text })),
         free_text_allowed: true,
         status: 'pending',
         answer_text: null,
         option_id: null,
+        band,
+        role: actionId ? 'JEV-A' : 'JEV-D',
+        ...(actionId ? { action_id: actionId } : {}),
+        why_pt: whyPtFor(band),
+        source_data: {
+          reason: `band_${band}`,
+          band,
+          action_id: actionId ?? null,
+          confidence_available: band !== 'abstain',
+        },
       };
       state.questions = [question, ...state.questions];
       return { type: 'question_new', ts, payload: clone(question) };
+    }
+    case 'approval_new': {
+      const seed = pick(APPROVAL_SEEDS, state.tick + state.approvals.length);
+      const approval = makeApproval({ ...seed, qid: `q-live-${state.approvals.length + 1}`, minutes: 0 });
+      approval.ts = ts;
+      state.approvals = [...state.approvals, approval];
+      // O backend espelha a pergunta de aprovação na fila de perguntas.
+      state.questions = [approvalQuestion({ ...seed, qid: approval.id, minutes: 0 }), ...state.questions];
+      return { type: 'approval_new', ts, payload: clone(approval) };
     }
     case 'memory_update': {
       state.memory.updated_at = ts;

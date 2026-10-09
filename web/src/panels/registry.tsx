@@ -104,7 +104,7 @@ export const PANELS: PanelDefinition[] = [
     id: 'controlo',
     label: 'Controlo',
     title: 'Controlo de autonomia',
-    description: 'Autopiloto ⇄ checkpoints, pausa, kill-switch, chaves e gastos da campanha.',
+    description: 'Autopiloto ⇄ checkpoints, aprovações retidas, pausa, kill-switch, chaves e gastos da campanha.',
     icon: <Tune fontSize="small" />,
     Component: ControlPanel,
   },

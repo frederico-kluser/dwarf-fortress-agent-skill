@@ -13,6 +13,9 @@ import {
   type AnswerQuestionRequest,
   type AnswerQuestionResponse,
   type ApiErrorBody,
+  type Approval,
+  type ApprovalDecisionRequest,
+  type ApprovalStatusFilter,
   type Campaign,
   type ControlRequest,
   type ControlState,
@@ -78,6 +81,13 @@ export interface ApiClient {
     qid: string,
     body: AnswerQuestionRequest,
   ): Promise<AnswerQuestionResponse>;
+
+  /** `GET .../approvals` — por omissão só as pendentes (filtro opcional). */
+  listApprovals(id: string, status?: ApprovalStatusFilter): Promise<Approval[]>;
+  /** `POST .../approvals/{id}/approve` — liberta a decisão retida. */
+  approve(id: string, approvalId: string, body?: ApprovalDecisionRequest): Promise<Approval>;
+  /** `POST .../approvals/{id}/reject` — descarta a ação e regista a recusa. */
+  reject(id: string, approvalId: string, body?: ApprovalDecisionRequest): Promise<Approval>;
 
   setControl(id: string, body: ControlRequest): Promise<ControlState>;
   getScreen(id: string): Promise<ScreenTranslation>;
@@ -234,6 +244,24 @@ export class HttpApiClient implements ApiClient {
     return this.request<AnswerQuestionResponse>(API_PATHS.answer(id, qid), {
       method: 'POST',
       body: JSON.stringify(body),
+    });
+  }
+
+  listApprovals(id: string, status?: ApprovalStatusFilter) {
+    return this.request<Approval[]>(API_PATHS.approvals(id, status));
+  }
+
+  approve(id: string, approvalId: string, body?: ApprovalDecisionRequest) {
+    return this.request<Approval>(API_PATHS.approve(id, approvalId), {
+      method: 'POST',
+      body: JSON.stringify(body ?? {}),
+    });
+  }
+
+  reject(id: string, approvalId: string, body?: ApprovalDecisionRequest) {
+    return this.request<Approval>(API_PATHS.reject(id, approvalId), {
+      method: 'POST',
+      body: JSON.stringify(body ?? {}),
     });
   }
 

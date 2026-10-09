@@ -43,6 +43,7 @@ import {
   useSpend,
 } from '../api/queries';
 import type { ControlMode, Provider } from '../api/types';
+import ApprovalsSection from '../components/ApprovalsSection';
 import AutopilotConfirmDialog, { type AutopilotReason } from '../components/AutopilotConfirmDialog';
 import FreshnessIndicator from '../components/FreshnessIndicator';
 import KillSwitchButton from '../components/KillSwitchButton';
@@ -346,7 +347,7 @@ export default function ControlPanel() {
   return (
     <PanelShell
       title="Controlo de autonomia"
-      description="Autopiloto ⇄ checkpoints, pausa, kill-switch, chaves e gastos da campanha."
+      description="Autopiloto ⇄ checkpoints, aprovações retidas, pausa, kill-switch, chaves e gastos da campanha."
       actions={
         <>
           <Chip
@@ -401,8 +402,9 @@ export default function ControlPanel() {
             </ToggleButtonGroup>
 
             <Alert severity="info" variant="outlined" role="note">
-              <strong>Checkpoints</strong>: o agente para e pergunta na fila de perguntas — não há
-              ecrã de aprovação próprio. <strong>Em pausa</strong> retoma sempre para{' '}
+              <strong>Checkpoints</strong>: o agente retém cada ação para tua aprovação — as
+              aprovações pendentes estão na secção <strong>Aprovações retidas</strong> abaixo e no
+              badge da barra superior. <strong>Em pausa</strong> retoma sempre para{' '}
               <strong>{modeLabel(restorableMode)}</strong>
               {persisted ? '' : ' (valor por omissão; escolhe um modo para o fixar)'}.
             </Alert>
@@ -431,6 +433,8 @@ export default function ControlPanel() {
             </Stack>
           </Stack>
         </SectionCard>
+
+        <ApprovalsSection mode={mode} />
 
         <SectionCard
           title="Ritmo de decisão"

@@ -15,6 +15,7 @@ import KeyboardArrowDown from '@mui/icons-material/KeyboardArrowDown';
 import { useTheme } from '@mui/material/styles';
 
 import ConnectionBadge from '../components/ConnectionBadge';
+import { ApprovalsBadgeButton } from '../components/ApprovalsSection';
 import FreshnessIndicator from '../components/FreshnessIndicator';
 import KillSwitchButton from '../components/KillSwitchButton';
 import { ControlModeChip } from '../components/Chips';
@@ -27,6 +28,9 @@ import { useNow } from '../hooks/useSparkSeries';
 export interface TopBarProps {
   pendingQuestions: number;
   onOpenQuestions: () => void;
+  /** Ações retidas à espera de aprovação (modo `checkpoint`). */
+  pendingApprovals: number;
+  onOpenApprovals: () => void;
   onKillSwitch: (next: boolean) => void;
   controlBusy: boolean;
 }
@@ -35,6 +39,8 @@ export interface TopBarProps {
 export default function TopBar({
   pendingQuestions,
   onOpenQuestions,
+  pendingApprovals,
+  onOpenApprovals,
   onKillSwitch,
   controlBusy,
 }: TopBarProps) {
@@ -154,6 +160,8 @@ export default function TopBar({
         <ConnectionBadge connection={connection} isMock={isMock} />
 
         <QuestionsBadgeButton pendingCount={pendingQuestions} onClick={onOpenQuestions} />
+
+        <ApprovalsBadgeButton pendingCount={pendingApprovals} onClick={onOpenApprovals} />
 
         <KillSwitchButton
           active={campaign?.control.kill_switch ?? false}

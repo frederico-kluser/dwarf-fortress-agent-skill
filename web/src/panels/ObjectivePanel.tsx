@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import Alert from '@mui/material/Alert';
 import Button from '@mui/material/Button';
 import Checkbox from '@mui/material/Checkbox';
@@ -24,17 +24,41 @@ import PanelShell from '../components/PanelShell';
 import { PanelError, PanelLoading, PanelNotice } from '../components/PanelState';
 import SectionCard from '../components/SectionCard';
 
+/**
+ * Forma editável do objetivo: o texto que o humano lê e escreve.
+ *
+ * O contrato devolve o canónico em EN + os campos aditivos `narrative_pt` /
+ * `text_pt` **só quando há tradução de exibição diferente** — por isso a queda
+ * para o canónico é obrigatória (sem chave, o payload é o original). Editar
+ * grava sempre o texto PT (o `PUT` traduz PT→EN antes de guardar), pelo que os
+ * `*_pt` saem da cópia de trabalho e o "por guardar" compara texto com texto.
+ */
+function toEditable(objective: Objective): Objective {
+  return {
+    narrative: objective.narrative_pt ?? objective.narrative,
+    subgoals: objective.subgoals.map((goal) => ({
+      id: goal.id,
+      text: goal.text_pt ?? goal.text,
+      done: goal.done,
+    })),
+  };
+}
+
 /** Editor do objetivo: narrativa + sub-objetivos marcáveis (PUT completo). */
 export default function ObjectivePanel() {
   const objectiveQuery = useObjective();
   const metricsQuery = useMetrics();
   const objective = objectiveQuery.data;
+  const editableObjective = useMemo(
+    () => (objective ? toEditable(objective) : null),
+    [objective],
+  );
 
   // Edição derivada (sem efeitos): `base` é o objetivo do servidor quando a edição começou.
   const [edit, setEdit] = useState<{ base: Objective; value: Objective } | null>(null);
   const [feedback, setFeedback] = useState<{ tone: 'success' | 'error'; text: string } | null>(null);
 
-  const draft: Objective | null = edit ? edit.value : (objective ?? null);
+  const draft: Objective | null = edit ? edit.value : editableObjective;
   const dirty = edit !== null && JSON.stringify(edit.value) !== JSON.stringify(edit.base);
 
   const saveMutation = usePutObjective({
@@ -55,7 +79,7 @@ export default function ObjectivePanel() {
   const percent = metricsQuery.data?.objective_progress.percent;
 
   const update = (next: Objective) => {
-    setEdit({ base: edit?.base ?? objective ?? next, value: next });
+    setEdit({ base: edit?.base ?? editableObjective ?? next, value: next });
     setFeedback(null);
   };
 
@@ -116,7 +140,7 @@ export default function ObjectivePanel() {
 
           <SectionCard
             title="Narrativa do objetivo"
-            subtitle="Substituída por inteiro no PUT /objective"
+            subtitle="Substituída por inteiro no PUT /objective (o servidor traduz PT→EN)"
             action={dirty ? <Chip size="small" color="warning" label="alterações por guardar" /> : null}
           >
             <TextField
@@ -131,7 +155,9 @@ export default function ObjectivePanel() {
               helperText={
                 narrativeEmpty
                   ? 'O objetivo não pode ficar vazio.'
-                  : 'Ex.: «Chegar ao portão de pedra a nordeste, vivo e com água para dois dias.»'
+                  : objective?.narrative_pt
+                    ? `Exibição PT (narrative_pt) · canónico guardado em EN: ${objective.narrative}`
+                    : 'Ex.: «Chegar ao portão de pedra a nordeste, vivo e com água para dois dias.»'
               }
             />
           </SectionCard>
@@ -225,6 +251,14 @@ export default function ObjectivePanel() {
                         })
                       }
                       fullWidth
+                      helperText={
+                        // Canónico EN do servidor, só quando existe tradução de exibição.
+                        objective?.subgoals.find((item) => item.id === goal.id)?.text_pt
+                          ? `canónico (EN): ${
+                              objective.subgoals.find((item) => item.id === goal.id)?.text ?? '—'
+                            }`
+                          : undefined
+                      }
                       sx={{ mr: 6 }}
                     />
                     {activeSubgoalId === goal.id ? (
@@ -237,9 +271,10 @@ export default function ObjectivePanel() {
           </SectionCard>
 
           <PanelNotice severity="info">
-            O contrato não devolve uma versão traduzida do objetivo (não existe{' '}
-            <code>narrative_pt</code> em <code>/objective</code>): o texto mostrado é o que será
-            traduzido e guardado pelo servidor.
+            O contrato devolve <code>narrative_pt</code> e <code>subgoals[].text_pt</code> quando
+            existe tradução de exibição: é isso que vês e editas aqui. Sem tradução o campo{' '}
+            <code>*_pt</code> não vem e o texto mostrado é o canónico — escrever em português
+            continua a ser o caminho normal, porque o servidor traduz PT→EN antes de guardar.
           </PanelNotice>
         </Stack>
       ) : null}

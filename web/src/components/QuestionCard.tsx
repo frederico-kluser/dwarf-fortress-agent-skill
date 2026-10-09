@@ -8,9 +8,15 @@ import Typography from '@mui/material/Typography';
 import Send from '@mui/icons-material/Send';
 
 import { formatRelative } from '../api/format';
-import type { AnswerQuestionRequest, Question } from '../api/types';
+import {
+  isDecisionBand,
+  isJevAgent,
+  type AnswerQuestionRequest,
+  type DecisionBand,
+  type Question,
+} from '../api/types';
 import AnswerConfirmDialog from './AnswerConfirmDialog';
-import { QuestionStatusChip } from './Chips';
+import { BandChip, QuestionStatusChip } from './Chips';
 import { MONO_FONT } from '../theme';
 
 export interface QuestionCardProps {
@@ -25,6 +31,67 @@ export interface QuestionCardProps {
 interface PendingAnswer {
   text: string;
   optionId: string | null;
+}
+
+/**
+ * Explicação derivada quando o produtor não mandou `why_pt` (payload antigo com
+ * banda): é a mesma frase que o loop publica (`_why_pt`), nunca conteúdo novo.
+ */
+const BAND_WHY_PT: Record<DecisionBand, string> = {
+  auto: 'a decisão ficou na banda auto: confirmar antes de executar',
+  hitl: 'a confiança ficou na banda hitl (0.50–0.89): confirmar antes de executar',
+  abstain: 'a confiança ficou abaixo de 0.50: o agente não age sozinho',
+};
+
+/**
+ * Proveniência da pergunta (achado #2 de `docs/uxui-audit-ui.json`): a fila tem
+ * de dizer **porque** o agente pergunta, em que banda e com que ação retida.
+ *
+ * Os campos são aditivos: sem nenhum deles (produtor antigo) não se desenha nada;
+ * com alguns, mostra-se só o que existe — a banda nunca depende só da cor (WCAG).
+ */
+function QuestionProvenance({ question, dense }: { question: Question; dense: boolean }) {
+  const band = isDecisionBand(question.band) ? question.band : null;
+  const role = isJevAgent(question.role) ? question.role : null;
+  const actionId = question.action_id?.trim() ? question.action_id.trim() : null;
+  const why = question.why_pt?.trim() ? question.why_pt.trim() : band ? BAND_WHY_PT[band] : null;
+
+  if (!band && !role && !actionId && !why) return null;
+
+  return (
+    <Box
+      sx={{
+        p: dense ? 1 : 1.25,
+        borderRadius: 1,
+        borderLeft: '3px solid var(--mui-palette-info-main)',
+        backgroundColor: 'var(--mui-palette-action-hover)',
+      }}
+    >
+      <Stack spacing={0.5}>
+        <Stack
+          direction="row"
+          spacing={0.75}
+          useFlexGap
+          sx={{ alignItems: 'center', flexWrap: 'wrap' }}
+        >
+          <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+            Porque pergunta
+          </Typography>
+          {band ? <BandChip band={band} /> : null}
+        </Stack>
+
+        {why ? <Typography variant="body2">{why}</Typography> : null}
+
+        {role || actionId ? (
+          <Typography variant="caption" sx={{ color: 'text.secondary', fontFamily: MONO_FONT }}>
+            {role ? `papel ${role}` : ''}
+            {role && actionId ? ' · ' : ''}
+            {actionId ? `ação ${actionId}` : ''}
+          </Typography>
+        ) : null}
+      </Stack>
+    </Box>
+  );
 }
 
 /**
@@ -88,6 +155,8 @@ export default function QuestionCard({ question, onAnswer, busy = false, dense =
         <Typography variant="caption" sx={{ color: 'text.secondary' }}>
           {question.id} · {formatRelative(question.ts)}
         </Typography>
+
+        <QuestionProvenance question={question} dense={dense} />
 
         {answered ? (
           <Box>

@@ -29,11 +29,36 @@ export type Provider = 'openrouter' | 'typesafe' | 'deepseek';
 /** `agent` do log de decisões JEV. */
 export type JevAgent = 'JEV-R' | 'JEV-A' | 'JEV-M' | 'JEV-D';
 
+/** Papéis JEV do contrato — guard para payloads que podem trazer lixo. */
+export const JEV_AGENT_ROLES: readonly JevAgent[] = ['JEV-R', 'JEV-A', 'JEV-M', 'JEV-D'];
+
 /** Banda de ação: auto ≥ 0.90 · hitl 0.50–0.89 · abstain < 0.50. */
 export type DecisionBand = 'auto' | 'hitl' | 'abstain';
 
+/** Bandas do contrato — guard para campos aditivos de proveniência. */
+export const DECISION_BANDS: readonly DecisionBand[] = ['auto', 'hitl', 'abstain'];
+
 /** Estado da pergunta na fila. */
 export type QuestionStatus = 'pending' | 'answered';
+
+/** `true` se o valor for um papel JEV conhecido (`meta.role` do pedido). */
+export function isJevAgent(value: unknown): value is JevAgent {
+  return typeof value === 'string' && (JEV_AGENT_ROLES as readonly string[]).includes(value);
+}
+
+/** `true` se o valor for uma banda de ação do contrato. */
+export function isDecisionBand(value: unknown): value is DecisionBand {
+  return typeof value === 'string' && (DECISION_BANDS as readonly string[]).includes(value);
+}
+
+/**
+ * Estado de uma aprovação do modo `checkpoint`.
+ * `docs/api.md` §`GET .../approvals`.
+ */
+export type ApprovalStatus = 'pending' | 'approved' | 'rejected';
+
+/** Filtro de `GET .../approvals?status=…` (por omissão só as pendentes). */
+export type ApprovalStatusFilter = ApprovalStatus | 'all';
 
 /** Caminhos canónicos — um só sítio para todos os endpoints do contrato. */
 export const API_PATHS = {
@@ -52,6 +77,13 @@ export const API_PATHS = {
     `/api/campaigns/${encodeURIComponent(id)}/questions/${encodeURIComponent(qid)}/answer`,
   control: (id: string) => `/api/campaigns/${encodeURIComponent(id)}/control`,
   screen: (id: string) => `/api/campaigns/${encodeURIComponent(id)}/screen`,
+  /** `status` omitido ⇒ o servidor devolve só as pendentes. */
+  approvals: (id: string, status?: ApprovalStatusFilter) =>
+    `/api/campaigns/${encodeURIComponent(id)}/approvals${status ? `?status=${encodeURIComponent(status)}` : ''}`,
+  approve: (id: string, approvalId: string) =>
+    `/api/campaigns/${encodeURIComponent(id)}/approvals/${encodeURIComponent(approvalId)}/approve`,
+  reject: (id: string, approvalId: string) =>
+    `/api/campaigns/${encodeURIComponent(id)}/approvals/${encodeURIComponent(approvalId)}/reject`,
   ws: (id: string) => `/ws/campaigns/${encodeURIComponent(id)}`,
 } as const;
 
@@ -143,13 +175,19 @@ export interface PatchMemoryRequest {
 
 export interface Subgoal {
   id: string;
+  /** Texto canónico (EN). */
   text: string;
+  /** Exibição traduzida (PT) — aditivo, só vem quando difere do canónico. */
+  text_pt?: string;
   done: boolean;
 }
 
 /** `GET|PUT /api/campaigns/{id}/objective` */
 export interface Objective {
+  /** Objetivo canónico (EN). */
   narrative: string;
+  /** Exibição traduzida (PT) — aditivo, só vem quando difere do canónico. */
+  narrative_pt?: string;
   subgoals: Subgoal[];
 }
 
@@ -321,6 +359,13 @@ export interface QuestionOption {
   text: string;
 }
 
+/**
+ * Diagnóstico opcional que acompanha uma pergunta com proveniência.
+ * `docs/api.md`: `reason`, `band`, `action_mode`/`answer_mode`, `action_en`,
+ * `description_en`, confiança, candidatos… — a forma não é fixa, pode vir `{}`.
+ */
+export type QuestionSourceData = Record<string, unknown>;
+
 /** `GET /api/campaigns/{id}/questions` → item da fila (hitl/abstain). */
 export interface Question {
   id: string;
@@ -336,6 +381,22 @@ export interface Question {
    */
   answer_text?: string | null;
   option_id?: string | null;
+
+  /*
+   * Proveniência (achado #2 de `docs/uxui-audit-ui.json`) — campos ADITIVOS: só
+   * vêm quando são conhecidos, pelo que a UI degrada em silêncio quando faltam
+   * (um produtor antigo devolve exatamente os 6 campos originais).
+   */
+  /** Banda que originou a pergunta. */
+  band?: DecisionBand;
+  /** Papel JEV que a originou (`JEV-A` quando há ação retida, `JEV-D` na dúvida). */
+  role?: JevAgent;
+  /** A ação retida à espera de resposta (ex.: `goto:river_bank`). */
+  action_id?: string;
+  /** **PT** (camada human-facing, como `question`): porque o agente pergunta. */
+  why_pt?: string;
+  /** Diagnóstico opcional do pedido que a gerou. */
+  source_data?: QuestionSourceData;
 }
 
 /** `POST /api/campaigns/{id}/questions/{qid}/answer` body. */
@@ -351,6 +412,43 @@ export interface AnswerQuestionResponse {
   /** Já traduzida para EN pelo servidor. */
   answer_text: string;
   option_id?: string | null;
+}
+
+/* -------------------------------------------------------------- aprovações --- */
+
+/**
+ * `GET /api/campaigns/{id}/approvals` → item (modo `checkpoint`).
+ *
+ * Superfície de aprovação do achado #4 de `docs/uxui-audit-ui.json`: o loop retém
+ * **todas** as ações e levanta uma pergunta de aprovação; o backend espelha-a
+ * aqui. Em `autopilot` a lista nasce vazia (não há ações retidas).
+ */
+export interface Approval {
+  /** Id da pergunta de aprovação que a originou — chave de `approve`/`reject`. */
+  id: string;
+  /** O mesmo id (o contrato mantém os dois nomes). */
+  question_id?: string | null;
+  ts: Iso8601;
+  /** A ação retida (id de macro-ação). */
+  action_id: string;
+  /** Nome da ação em EN (cai no `action_id` quando o loop não traz o nome). */
+  action_name_en: string;
+  /** A pergunta em PT que o humano leu (pode faltar). */
+  question?: string | null;
+  /** Banda da decisão retida. */
+  band: DecisionBand;
+  status: ApprovalStatus;
+  /** Só depois de decidida — a nota humana (omitida quando não há). */
+  note?: string | null;
+  /** Só depois de decidida. */
+  decided_at?: Iso8601 | null;
+  /** Opcional (quando o loop a publica). */
+  description_en?: string | null;
+}
+
+/** Corpo opcional de `POST .../approvals/{id}/approve|reject`. */
+export interface ApprovalDecisionRequest {
+  note?: string;
 }
 
 /* --------------------------------------------------------------- controlo --- */
@@ -394,6 +492,14 @@ export interface ServerEventPayloads {
   spend_update: Spend;
   game_state: GameState;
   control_state: ControlState;
+  /** Aditivo — mesmo corpo do `POST .../questions/{qid}/answer`. */
+  question_answered: AnswerQuestionResponse;
+  /** Aditivo — aprovação criada em modo `checkpoint`. */
+  approval_new: Approval;
+  /** Aditivo — a mesma aprovação depois de decidida. */
+  approval_updated: Approval;
+  /** Aditivo — erro recuperável do canal (`{"detail": …}`); o canal não fecha. */
+  error: ApiErrorBody;
 }
 
 export type ServerEventType = keyof ServerEventPayloads;
@@ -416,6 +522,10 @@ export const SERVER_EVENT_TYPES: readonly ServerEventType[] = [
   'spend_update',
   'game_state',
   'control_state',
+  'question_answered',
+  'approval_new',
+  'approval_updated',
+  'error',
 ];
 
 /** Mensagens cliente → servidor. */

@@ -19,6 +19,9 @@ import type { ApiClient, ConnectionStatus } from './client';
 import type {
   AnswerQuestionRequest,
   AnswerQuestionResponse,
+  Approval,
+  ApprovalDecisionRequest,
+  ApprovalStatusFilter,
   Campaign,
   ControlRequest,
   ControlState,
@@ -47,9 +50,25 @@ export const queryKeys = {
   spend: (id: string) => ['spend', id] as const,
   decisions: (id: string) => ['decisions', id] as const,
   questions: (id: string) => ['questions', id] as const,
+  /** Prefixo das aprovações; a chave exata acrescenta o filtro de estado. */
+  approvals: (id: string) => ['approvals', id] as const,
   screen: (id: string) => ['screen', id] as const,
   keys: (id: string) => ['keys', id] as const,
 };
+
+/** Filtro por omissão de `GET .../approvals` — só as pendentes. */
+export const PENDING_APPROVALS: ApprovalStatusFilter = 'pending';
+
+/** Chave da lista de aprovações pendentes (a que o WS mantém viva). */
+export function pendingApprovalsKey(campaignId: string) {
+  return [...queryKeys.approvals(campaignId), PENDING_APPROVALS] as const;
+}
+
+/** Insere/atualiza uma aprovação mantendo a ordem do contrato (ts crescente). */
+function insertApproval(prev: Approval[] | undefined, approval: Approval): Approval[] {
+  const rest = (prev ?? []).filter((item) => item.id !== approval.id);
+  return [...rest, approval].sort((a, b) => (a.ts < b.ts ? -1 : a.ts > b.ts ? 1 : 0));
+}
 
 /* --------------------------------------------------------------- acesso --- */
 
@@ -147,6 +166,21 @@ export function useQuestions(): UseQueryResult<Question[], Error> {
   });
 }
 
+/**
+ * `GET .../approvals` — superfície do modo `checkpoint` (achado #4).
+ * Por omissão só as pendentes; `status` permite o histórico auditável.
+ */
+export function useApprovals(
+  status: ApprovalStatusFilter = PENDING_APPROVALS,
+): UseQueryResult<Approval[], Error> {
+  const campaignId = useCampaignId() ?? '';
+  return useCampaignQuery(
+    [...queryKeys.approvals(campaignId), status],
+    (c, id) => c.listApprovals(id, status),
+    { refetchInterval: 15000 },
+  );
+}
+
 export function useScreen(): UseQueryResult<ScreenTranslation, Error> {
   const campaignId = useCampaignId() ?? '';
   return useCampaignQuery(queryKeys.screen(campaignId), (c, id) => c.getScreen(id), {
@@ -190,6 +224,34 @@ export function applyServerEvent(
         [event.payload, ...(prev ?? []).filter((q) => q.id !== event.payload.id)],
       );
       break;
+    case 'question_answered':
+      // Aditivo: a mesma resposta, venha ela do REST ou do WS.
+      queryClient.setQueryData<Question[]>(queryKeys.questions(campaignId), (prev) =>
+        (prev ?? []).map((question) =>
+          question.id === event.payload.id
+            ? {
+                ...question,
+                status: event.payload.status,
+                answer_text: event.payload.answer_text,
+                option_id: event.payload.option_id ?? null,
+              }
+            : question,
+        ),
+      );
+      break;
+    case 'approval_new':
+      queryClient.setQueryData<Approval[]>(pendingApprovalsKey(campaignId), (prev) =>
+        insertApproval(prev, event.payload),
+      );
+      break;
+    case 'approval_updated':
+      // Decidida deixa de ser pendente: sai da lista (fica no histórico do GET).
+      queryClient.setQueryData<Approval[]>(pendingApprovalsKey(campaignId), (prev) =>
+        event.payload.status === 'pending'
+          ? insertApproval(prev, event.payload)
+          : (prev ?? []).filter((item) => item.id !== event.payload.id),
+      );
+      break;
     case 'memory_update':
       queryClient.setQueryData(queryKeys.memory(campaignId), event.payload);
       break;
@@ -211,6 +273,10 @@ export function applyServerEvent(
       break;
     case 'game_state':
       // Estado crítico em EN enviado ao JEV — não é apresentado na UI (só PT).
+      break;
+    case 'error':
+      // Erro recuperável do canal (JSON inválido, pergunta inexistente…): não é
+      // fatal e o canal não fecha — a leitura seguinte volta a sincronizar.
       break;
     default:
       break;
@@ -298,7 +364,50 @@ export function useAnswerQuestion(options?: {
         ),
       );
       void queryClient.invalidateQueries({ queryKey: queryKeys.memory(campaignId) });
+      // Responder a uma pergunta de aprovação decide também a aprovação.
+      void queryClient.invalidateQueries({ queryKey: queryKeys.approvals(campaignId) });
       options?.onSuccess?.(response);
+    },
+    onError: (error) => options?.onError?.(error),
+  });
+}
+
+/**
+ * `POST .../approvals/{id}/approve|reject` — decide uma ação retida do modo
+ * `checkpoint`. Aprovar/rejeitar é responder à pergunta de aprovação: a resposta
+ * entra na memória (EN) e a pergunta sai da fila.
+ */
+export function useDecideApproval(options?: {
+  onSuccess?: (approval: Approval) => void;
+  onError?: (error: unknown) => void;
+}): UseMutationResult<
+  Approval,
+  Error,
+  { approvalId: string; approve: boolean } & ApprovalDecisionRequest
+> {
+  const client = useApi();
+  const campaignId = useCampaignId() ?? '';
+  const queryClient = useQueryClient();
+  return useMutation<
+    Approval,
+    Error,
+    { approvalId: string; approve: boolean } & ApprovalDecisionRequest
+  >({
+    mutationFn: ({ approvalId, approve, note }) => {
+      const body: ApprovalDecisionRequest | undefined = note ? { note } : undefined;
+      return approve
+        ? client.approve(campaignId, approvalId, body)
+        : client.reject(campaignId, approvalId, body);
+    },
+    onSuccess: (approval) => {
+      // Sai já da lista de pendentes (o WS `approval_updated` confirma-o).
+      queryClient.setQueryData<Approval[]>(pendingApprovalsKey(campaignId), (prev) =>
+        (prev ?? []).filter((item) => item.id !== approval.id),
+      );
+      void queryClient.invalidateQueries({ queryKey: queryKeys.approvals(campaignId) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.questions(campaignId) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.memory(campaignId) });
+      options?.onSuccess?.(approval);
     },
     onError: (error) => options?.onError?.(error),
   });
