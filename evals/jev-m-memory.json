@@ -1,0 +1,492 @@
+[
+  {
+    "name": "m-01-after-fight-episode",
+    "role": "JEV-M",
+    "state": "NARRATIVE TAIL (rolling narrative, most recent last):\nThe adventurer left the village of Cragmouth at dawn and walked north on the old trade road, looking for the fortress of Boatmurdered.\n\nRECENT EVENTS (oldest first, newest last):\n1. Walked north on the trade road for most of the day.\n2. A goblin ambusher jumped out of the brush and attacked.\n3. Fought it off with the steel short sword and killed it.\n4. Took a cut on the left arm and wrapped it with a bandage.",
+    "questions": {
+      "update_memory": {
+        "type": "noul",
+        "instructions": "Should the narrative memory be updated now?",
+        "criteria": {
+          "true": "The recent events change what the narrative should say: a milestone, a reversal or a decision worth remembering.",
+          "false": "Nothing new is worth recording yet: the narrative already covers the recent events."
+        }
+      },
+      "narrator_effort": {
+        "type": "choice",
+        "instructions": "How much narrator effort should this memory update use?",
+        "criteria": {
+          "max": "Turning point: rewrite the rolling narrative with maximum care.",
+          "xhigh": "Major event: extend and refine the rolling narrative.",
+          "high": "Notable event: write a solid paragraph for the narrative.",
+          "medium": "Ordinary progress: write one short accurate sentence.",
+          "low": "Minor detail: append a brief clause to the narrative.",
+          "minimal": "Trivial detail: make the smallest possible edit.",
+          "none": "Do not call the narrator; skip the update."
+        }
+      },
+      "record_type": {
+        "type": "choice",
+        "instructions": "What kind of memory record should be stored?",
+        "criteria": {
+          "episode": "A dated event that happened in this campaign.",
+          "fact": "A stable fact about the world, the character or the objective.",
+          "procedure": "A method worth reusing in a later situation.",
+          "skip": "Nothing here is worth storing."
+        }
+      }
+    },
+    "expected": {
+      "update_memory": true,
+      "narrator_effort": "high",
+      "record_type": "episode"
+    },
+    "bands": {
+      "update_memory": "auto",
+      "narrator_effort": "auto",
+      "record_type": "auto"
+    },
+    "notes": "A fight is a dated event -> episode; a solid paragraph is warranted, but it is not a turning point -> high (not xhigh/max)."
+  },
+  {
+    "name": "m-02-near-death-turning-point",
+    "role": "JEV-M",
+    "state": "NARRATIVE TAIL (rolling narrative, most recent last):\nThe adventurer has been travelling north for three days, healthy and confident, with the fortress as the only goal.\n\nRECENT EVENTS (oldest first, newest last):\n1. Walked into a cave mouth looking for shelter from the rain.\n2. A giant cave spider dropped from the ceiling and bit the adventurer.\n3. Fell unconscious from the venom and the mule dragged the body out of the cave.\n4. Woke at dusk outside, with the sword lost somewhere in the cave.",
+    "questions": {
+      "update_memory": {
+        "type": "noul",
+        "instructions": "Should the narrative memory be updated now?",
+        "criteria": {
+          "true": "The recent events change what the narrative should say: a milestone, a reversal or a decision worth remembering.",
+          "false": "Nothing new is worth recording yet: the narrative already covers the recent events."
+        }
+      },
+      "narrator_effort": {
+        "type": "choice",
+        "instructions": "How much narrator effort should this memory update use?",
+        "criteria": {
+          "max": "Turning point: rewrite the rolling narrative with maximum care.",
+          "xhigh": "Major event: extend and refine the rolling narrative.",
+          "high": "Notable event: write a solid paragraph for the narrative.",
+          "medium": "Ordinary progress: write one short accurate sentence.",
+          "low": "Minor detail: append a brief clause to the narrative.",
+          "minimal": "Trivial detail: make the smallest possible edit.",
+          "none": "Do not call the narrator; skip the update."
+        }
+      },
+      "record_type": {
+        "type": "choice",
+        "instructions": "What kind of memory record should be stored?",
+        "criteria": {
+          "episode": "A dated event that happened in this campaign.",
+          "fact": "A stable fact about the world, the character or the objective.",
+          "procedure": "A method worth reusing in a later situation.",
+          "skip": "Nothing here is worth storing."
+        }
+      }
+    },
+    "expected": {
+      "update_memory": true,
+      "narrator_effort": "max",
+      "record_type": "episode"
+    },
+    "bands": {
+      "update_memory": "auto",
+      "narrator_effort": "auto",
+      "record_type": "auto"
+    },
+    "notes": "Turning point: a near-death reversal plus lost gear rewrites the plan and the tone of the rolling narrative -> max effort; the record is still a dated episode."
+  },
+  {
+    "name": "m-03-learn-game-fact",
+    "role": "JEV-M",
+    "state": "NARRATIVE TAIL (rolling narrative, most recent last):\nFirst evening in the fortress of Boatmurdered; the adventurer has just arrived at the gate.\n\nRECENT EVENTS (oldest first, newest last):\n1. The gate guard explained that the fortress gate is closed between midnight and dawn.\n2. The guard also said the night password is 'stone bread'.",
+    "questions": {
+      "update_memory": {
+        "type": "noul",
+        "instructions": "Should the narrative memory be updated now?",
+        "criteria": {
+          "true": "The recent events change what the narrative should say: a milestone, a reversal or a decision worth remembering.",
+          "false": "Nothing new is worth recording yet: the narrative already covers the recent events."
+        }
+      },
+      "narrator_effort": {
+        "type": "choice",
+        "instructions": "How much narrator effort should this memory update use?",
+        "criteria": {
+          "max": "Turning point: rewrite the rolling narrative with maximum care.",
+          "xhigh": "Major event: extend and refine the rolling narrative.",
+          "high": "Notable event: write a solid paragraph for the narrative.",
+          "medium": "Ordinary progress: write one short accurate sentence.",
+          "low": "Minor detail: append a brief clause to the narrative.",
+          "minimal": "Trivial detail: make the smallest possible edit.",
+          "none": "Do not call the narrator; skip the update."
+        }
+      },
+      "record_type": {
+        "type": "choice",
+        "instructions": "What kind of memory record should be stored?",
+        "criteria": {
+          "episode": "A dated event that happened in this campaign.",
+          "fact": "A stable fact about the world, the character or the objective.",
+          "procedure": "A method worth reusing in a later situation.",
+          "skip": "Nothing here is worth storing."
+        }
+      }
+    },
+    "expected": {
+      "update_memory": true,
+      "narrator_effort": "medium",
+      "record_type": "fact"
+    },
+    "bands": {
+      "update_memory": "auto",
+      "narrator_effort": "auto",
+      "record_type": "auto"
+    },
+    "notes": "Stable facts about the world (gate hours, password) -> fact; one short accurate sentence -> medium."
+  },
+  {
+    "name": "m-04-learn-procedure",
+    "role": "JEV-M",
+    "state": "NARRATIVE TAIL (rolling narrative, most recent last):\nThe adventurer is camped outside the fortress with three fresh hare carcasses and no food.\n\nRECENT EVENTS (oldest first, newest last):\n1. Tried to cook a hare carcass at the campfire and failed.\n2. The hunter showed the order that works: butcher first with the knife, then cook the meat at the fire.\n3. Cooked two hare carcasses successfully with that order.",
+    "questions": {
+      "update_memory": {
+        "type": "noul",
+        "instructions": "Should the narrative memory be updated now?",
+        "criteria": {
+          "true": "The recent events change what the narrative should say: a milestone, a reversal or a decision worth remembering.",
+          "false": "Nothing new is worth recording yet: the narrative already covers the recent events."
+        }
+      },
+      "narrator_effort": {
+        "type": "choice",
+        "instructions": "How much narrator effort should this memory update use?",
+        "criteria": {
+          "max": "Turning point: rewrite the rolling narrative with maximum care.",
+          "xhigh": "Major event: extend and refine the rolling narrative.",
+          "high": "Notable event: write a solid paragraph for the narrative.",
+          "medium": "Ordinary progress: write one short accurate sentence.",
+          "low": "Minor detail: append a brief clause to the narrative.",
+          "minimal": "Trivial detail: make the smallest possible edit.",
+          "none": "Do not call the narrator; skip the update."
+        }
+      },
+      "record_type": {
+        "type": "choice",
+        "instructions": "What kind of memory record should be stored?",
+        "criteria": {
+          "episode": "A dated event that happened in this campaign.",
+          "fact": "A stable fact about the world, the character or the objective.",
+          "procedure": "A method worth reusing in a later situation.",
+          "skip": "Nothing here is worth storing."
+        }
+      }
+    },
+    "expected": {
+      "update_memory": true,
+      "narrator_effort": "medium",
+      "record_type": "procedure"
+    },
+    "bands": {
+      "update_memory": "auto",
+      "narrator_effort": "auto",
+      "record_type": "auto"
+    },
+    "notes": "A repeatable method (butcher then cook) is a procedure, not an episode: the point is to reuse it later. Medium effort covers it."
+  },
+  {
+    "name": "m-05-trivial-tick-skip",
+    "role": "JEV-M",
+    "state": "NARRATIVE TAIL (rolling narrative, most recent last):\nThe adventurer is on the trade road north, one day from the fortress, with food and water.\n\nRECENT EVENTS (oldest first, newest last):\n1. Walked three more tiles north on the empty trade road.\n2. Nothing else happened.",
+    "questions": {
+      "update_memory": {
+        "type": "noul",
+        "instructions": "Should the narrative memory be updated now?",
+        "criteria": {
+          "true": "The recent events change what the narrative should say: a milestone, a reversal or a decision worth remembering.",
+          "false": "Nothing new is worth recording yet: the narrative already covers the recent events."
+        }
+      },
+      "narrator_effort": {
+        "type": "choice",
+        "instructions": "How much narrator effort should this memory update use?",
+        "criteria": {
+          "max": "Turning point: rewrite the rolling narrative with maximum care.",
+          "xhigh": "Major event: extend and refine the rolling narrative.",
+          "high": "Notable event: write a solid paragraph for the narrative.",
+          "medium": "Ordinary progress: write one short accurate sentence.",
+          "low": "Minor detail: append a brief clause to the narrative.",
+          "minimal": "Trivial detail: make the smallest possible edit.",
+          "none": "Do not call the narrator; skip the update."
+        }
+      },
+      "record_type": {
+        "type": "choice",
+        "instructions": "What kind of memory record should be stored?",
+        "criteria": {
+          "episode": "A dated event that happened in this campaign.",
+          "fact": "A stable fact about the world, the character or the objective.",
+          "procedure": "A method worth reusing in a later situation.",
+          "skip": "Nothing here is worth storing."
+        }
+      }
+    },
+    "expected": {
+      "update_memory": false,
+      "narrator_effort": "none",
+      "record_type": "skip"
+    },
+    "bands": {
+      "update_memory": "auto",
+      "narrator_effort": "auto",
+      "record_type": "auto"
+    },
+    "notes": "Trivial tick: the narrative already covers the walk, so nothing is worth recording. update=false, effort=none, record=skip - the three answers must agree."
+  },
+  {
+    "name": "m-06-ordinary-progress-low",
+    "role": "JEV-M",
+    "state": "NARRATIVE TAIL (rolling narrative, most recent last):\nThe adventurer is following the river north towards the fortress, looking for a crossing.\n\nRECENT EVENTS (oldest first, newest last):\n1. Found a shallow ford and crossed the river without incident.\n2. Continued north on the far bank for an hour.",
+    "questions": {
+      "update_memory": {
+        "type": "noul",
+        "instructions": "Should the narrative memory be updated now?",
+        "criteria": {
+          "true": "The recent events change what the narrative should say: a milestone, a reversal or a decision worth remembering.",
+          "false": "Nothing new is worth recording yet: the narrative already covers the recent events."
+        }
+      },
+      "narrator_effort": {
+        "type": "choice",
+        "instructions": "How much narrator effort should this memory update use?",
+        "criteria": {
+          "max": "Turning point: rewrite the rolling narrative with maximum care.",
+          "xhigh": "Major event: extend and refine the rolling narrative.",
+          "high": "Notable event: write a solid paragraph for the narrative.",
+          "medium": "Ordinary progress: write one short accurate sentence.",
+          "low": "Minor detail: append a brief clause to the narrative.",
+          "minimal": "Trivial detail: make the smallest possible edit.",
+          "none": "Do not call the narrator; skip the update."
+        }
+      },
+      "record_type": {
+        "type": "choice",
+        "instructions": "What kind of memory record should be stored?",
+        "criteria": {
+          "episode": "A dated event that happened in this campaign.",
+          "fact": "A stable fact about the world, the character or the objective.",
+          "procedure": "A method worth reusing in a later situation.",
+          "skip": "Nothing here is worth storing."
+        }
+      }
+    },
+    "expected": {
+      "update_memory": true,
+      "narrator_effort": "low",
+      "record_type": "episode"
+    },
+    "bands": {
+      "update_memory": "auto",
+      "narrator_effort": "auto",
+      "record_type": "auto"
+    },
+    "notes": "Ordinary progress: a brief clause is enough -> low. It is still dated progress, so the update does happen and the record is an episode."
+  },
+  {
+    "name": "m-07-milestone-xhigh",
+    "role": "JEV-M",
+    "state": "NARRATIVE TAIL (rolling narrative, most recent last):\nThree days of travel towards the fortress of Boatmurdered, with the last day spent climbing through the pass.\n\nRECENT EVENTS (oldest first, newest last):\n1. Reached the top of the pass and saw the fortress in the valley below.\n2. Completed the subgoal 'cross the mountains'.\n3. Started the descent towards the gate.",
+    "questions": {
+      "update_memory": {
+        "type": "noul",
+        "instructions": "Should the narrative memory be updated now?",
+        "criteria": {
+          "true": "The recent events change what the narrative should say: a milestone, a reversal or a decision worth remembering.",
+          "false": "Nothing new is worth recording yet: the narrative already covers the recent events."
+        }
+      },
+      "narrator_effort": {
+        "type": "choice",
+        "instructions": "How much narrator effort should this memory update use?",
+        "criteria": {
+          "max": "Turning point: rewrite the rolling narrative with maximum care.",
+          "xhigh": "Major event: extend and refine the rolling narrative.",
+          "high": "Notable event: write a solid paragraph for the narrative.",
+          "medium": "Ordinary progress: write one short accurate sentence.",
+          "low": "Minor detail: append a brief clause to the narrative.",
+          "minimal": "Trivial detail: make the smallest possible edit.",
+          "none": "Do not call the narrator; skip the update."
+        }
+      },
+      "record_type": {
+        "type": "choice",
+        "instructions": "What kind of memory record should be stored?",
+        "criteria": {
+          "episode": "A dated event that happened in this campaign.",
+          "fact": "A stable fact about the world, the character or the objective.",
+          "procedure": "A method worth reusing in a later situation.",
+          "skip": "Nothing here is worth storing."
+        }
+      }
+    },
+    "expected": {
+      "update_memory": true,
+      "narrator_effort": "xhigh",
+      "record_type": "episode"
+    },
+    "bands": {
+      "update_memory": "auto",
+      "narrator_effort": "auto",
+      "record_type": "auto"
+    },
+    "notes": "Objective milestone: the narrative must expand to hold the new phase -> xhigh; dated event -> episode."
+  },
+  {
+    "name": "m-08-already-recorded-skip",
+    "role": "JEV-M",
+    "state": "NARRATIVE TAIL (rolling narrative, most recent last):\nThe adventurer reached the fortress of Boatmurded at dusk, was let in by the gate guard, ate at the inn and slept in a rented bed. The morning bell has just rung.\n\nRECENT EVENTS (oldest first, newest last):\n1. Woke in the rented bed at the inn.\n2. Heard the morning bell ring.",
+    "questions": {
+      "update_memory": {
+        "type": "noul",
+        "instructions": "Should the narrative memory be updated now?",
+        "criteria": {
+          "true": "The recent events change what the narrative should say: a milestone, a reversal or a decision worth remembering.",
+          "false": "Nothing new is worth recording yet: the narrative already covers the recent events."
+        }
+      },
+      "narrator_effort": {
+        "type": "choice",
+        "instructions": "How much narrator effort should this memory update use?",
+        "criteria": {
+          "max": "Turning point: rewrite the rolling narrative with maximum care.",
+          "xhigh": "Major event: extend and refine the rolling narrative.",
+          "high": "Notable event: write a solid paragraph for the narrative.",
+          "medium": "Ordinary progress: write one short accurate sentence.",
+          "low": "Minor detail: append a brief clause to the narrative.",
+          "minimal": "Trivial detail: make the smallest possible edit.",
+          "none": "Do not call the narrator; skip the update."
+        }
+      },
+      "record_type": {
+        "type": "choice",
+        "instructions": "What kind of memory record should be stored?",
+        "criteria": {
+          "episode": "A dated event that happened in this campaign.",
+          "fact": "A stable fact about the world, the character or the objective.",
+          "procedure": "A method worth reusing in a later situation.",
+          "skip": "Nothing here is worth storing."
+        }
+      }
+    },
+    "expected": {
+      "update_memory": false,
+      "narrator_effort": "none",
+      "record_type": "skip"
+    },
+    "bands": {
+      "update_memory": "auto",
+      "narrator_effort": "auto",
+      "record_type": "auto"
+    },
+    "notes": "Second negative case: the events are already covered by the narrative tail, so updating would only add noise. skip + none + update=false."
+  },
+  {
+    "name": "m-09-new-region-fact",
+    "role": "JEV-M",
+    "state": "NARRATIVE TAIL (rolling narrative, most recent last):\nThe adventurer is mapping the area north of the village, one day from the fortress.\n\nRECENT EVENTS (oldest first, newest last):\n1. Entered a new region: the Black Moor.\n2. Noted two landmarks: a leaning stone tower in the east and a dry well by the road.",
+    "questions": {
+      "update_memory": {
+        "type": "noul",
+        "instructions": "Should the narrative memory be updated now?",
+        "criteria": {
+          "true": "The recent events change what the narrative should say: a milestone, a reversal or a decision worth remembering.",
+          "false": "Nothing new is worth recording yet: the narrative already covers the recent events."
+        }
+      },
+      "narrator_effort": {
+        "type": "choice",
+        "instructions": "How much narrator effort should this memory update use?",
+        "criteria": {
+          "max": "Turning point: rewrite the rolling narrative with maximum care.",
+          "xhigh": "Major event: extend and refine the rolling narrative.",
+          "high": "Notable event: write a solid paragraph for the narrative.",
+          "medium": "Ordinary progress: write one short accurate sentence.",
+          "low": "Minor detail: append a brief clause to the narrative.",
+          "minimal": "Trivial detail: make the smallest possible edit.",
+          "none": "Do not call the narrator; skip the update."
+        }
+      },
+      "record_type": {
+        "type": "choice",
+        "instructions": "What kind of memory record should be stored?",
+        "criteria": {
+          "episode": "A dated event that happened in this campaign.",
+          "fact": "A stable fact about the world, the character or the objective.",
+          "procedure": "A method worth reusing in a later situation.",
+          "skip": "Nothing here is worth storing."
+        }
+      }
+    },
+    "expected": {
+      "update_memory": true,
+      "narrator_effort": "medium",
+      "record_type": "fact"
+    },
+    "bands": {
+      "update_memory": "auto",
+      "narrator_effort": "auto",
+      "record_type": "auto"
+    },
+    "notes": "Stable geography (region + landmarks) is a fact the later navigation decisions reuse."
+  },
+  {
+    "name": "m-10-trade-price-fact",
+    "role": "JEV-M",
+    "state": "NARRATIVE TAIL (rolling narrative, most recent last):\nThe adventurer is at the dwarven caravan outside the village with 300 coins.\n\nRECENT EVENTS (oldest first, newest last):\n1. A merchant quoted 40 coins for a waterskin and 25 coins for a rope.\n2. The adventurer bought a rope for 25 coins.",
+    "questions": {
+      "update_memory": {
+        "type": "noul",
+        "instructions": "Should the narrative memory be updated now?",
+        "criteria": {
+          "true": "The recent events change what the narrative should say: a milestone, a reversal or a decision worth remembering.",
+          "false": "Nothing new is worth recording yet: the narrative already covers the recent events."
+        }
+      },
+      "narrator_effort": {
+        "type": "choice",
+        "instructions": "How much narrator effort should this memory update use?",
+        "criteria": {
+          "max": "Turning point: rewrite the rolling narrative with maximum care.",
+          "xhigh": "Major event: extend and refine the rolling narrative.",
+          "high": "Notable event: write a solid paragraph for the narrative.",
+          "medium": "Ordinary progress: write one short accurate sentence.",
+          "low": "Minor detail: append a brief clause to the narrative.",
+          "minimal": "Trivial detail: make the smallest possible edit.",
+          "none": "Do not call the narrator; skip the update."
+        }
+      },
+      "record_type": {
+        "type": "choice",
+        "instructions": "What kind of memory record should be stored?",
+        "criteria": {
+          "episode": "A dated event that happened in this campaign.",
+          "fact": "A stable fact about the world, the character or the objective.",
+          "procedure": "A method worth reusing in a later situation.",
+          "skip": "Nothing here is worth storing."
+        }
+      }
+    },
+    "expected": {
+      "update_memory": true,
+      "narrator_effort": "low",
+      "record_type": "fact"
+    },
+    "bands": {
+      "update_memory": "auto",
+      "narrator_effort": "auto",
+      "record_type": "auto"
+    },
+    "notes": "Small but stable fact (prices); a brief clause is enough -> low. Not an episode: the spend itself matters less than the price knowledge."
+  }
+]

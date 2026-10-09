@@ -1,0 +1,392 @@
+[
+  {
+    "name": "d-01-clear-fight-no-ask",
+    "role": "JEV-D",
+    "state": "CONTEXT:\nJEV-A chose attack:goblin_skulker: one weak, poorly armed goblin closing on a healthy adventurer with a steel sword. Nothing is unknown - the enemy, the terrain and the escape route are all visible.\n\nACTION CONFIDENCE (computed by code; do not re-estimate): 0.96",
+    "questions": {
+      "ask_human": {
+        "type": "noul",
+        "instructions": "Should the agent ask the human for help?",
+        "criteria": {
+          "true": "The agent is missing information or faces a risk it cannot resolve alone.",
+          "false": "The agent can decide and act on its own."
+        }
+      },
+      "question_format": {
+        "type": "choice",
+        "instructions": "If the human is asked, what question format fits best?",
+        "criteria": {
+          "multiple": "A short list of concrete options to choose from.",
+          "open": "A free-text question, when no option list can cover the answer.",
+          "binary": "A yes/no question with two options."
+        }
+      }
+    },
+    "expected": {
+      "ask_human": false
+    },
+    "bands": {
+      "ask_human": "auto"
+    },
+    "ordering": {
+      "question_format": [
+        "multiple",
+        "open",
+        "binary"
+      ]
+    },
+    "notes": "Clear, well-observed situation with high action confidence: asking the human would only add latency. question_format is conditional on ask_human=true, so it is not graded here."
+  },
+  {
+    "name": "d-02-clear-loot-no-ask",
+    "role": "JEV-D",
+    "state": "CONTEXT:\nJEV-A chose pickup:dagger_and_coins: the pack is light, the loot is 2 tiles away in daylight and no hostiles are in sight.\n\nACTION CONFIDENCE (computed by code; do not re-estimate): 0.95",
+    "questions": {
+      "ask_human": {
+        "type": "noul",
+        "instructions": "Should the agent ask the human for help?",
+        "criteria": {
+          "true": "The agent is missing information or faces a risk it cannot resolve alone.",
+          "false": "The agent can decide and act on its own."
+        }
+      },
+      "question_format": {
+        "type": "choice",
+        "instructions": "If the human is asked, what question format fits best?",
+        "criteria": {
+          "open": "A free-text question, when no option list can cover the answer.",
+          "binary": "A yes/no question with two options.",
+          "multiple": "A short list of concrete options to choose from."
+        }
+      }
+    },
+    "expected": {
+      "ask_human": false
+    },
+    "bands": {
+      "ask_human": "auto"
+    },
+    "ordering": {
+      "question_format": [
+        "open",
+        "binary",
+        "multiple"
+      ]
+    },
+    "notes": "Reversible, fully observed decision -> no question. (format not graded: conditional)."
+  },
+  {
+    "name": "d-03-clear-flee-no-ask",
+    "role": "JEV-D",
+    "state": "CONTEXT:\nJEV-A chose flee:back_to_village: a bronze colossus is 10 tiles away, the adventurer is unarmored and the road back to the village is clear.\n\nACTION CONFIDENCE (computed by code; do not re-estimate): 0.93",
+    "questions": {
+      "ask_human": {
+        "type": "noul",
+        "instructions": "Should the agent ask the human for help?",
+        "criteria": {
+          "true": "The agent is missing information or faces a risk it cannot resolve alone.",
+          "false": "The agent can decide and act on its own."
+        }
+      },
+      "question_format": {
+        "type": "choice",
+        "instructions": "If the human is asked, what question format fits best?",
+        "criteria": {
+          "binary": "A yes/no question with two options.",
+          "multiple": "A short list of concrete options to choose from.",
+          "open": "A free-text question, when no option list can cover the answer."
+        }
+      }
+    },
+    "expected": {
+      "ask_human": false
+    },
+    "bands": {
+      "ask_human": "auto"
+    },
+    "ordering": {
+      "question_format": [
+        "binary",
+        "multiple",
+        "open"
+      ]
+    },
+    "notes": "The situation is dangerous but not ambiguous: the only decision is obvious and reversible. Risk alone is not a reason to ask."
+  },
+  {
+    "name": "d-04-clear-rest-no-ask",
+    "role": "JEV-D",
+    "state": "CONTEXT:\nJEV-A chose rest:at_rock_overhang: the adventurer is exhausted and the overhang with a narrow entrance is 20 tiles north with no hostiles visible.\n\nACTION CONFIDENCE (computed by code; do not re-estimate): 0.91",
+    "questions": {
+      "ask_human": {
+        "type": "noul",
+        "instructions": "Should the agent ask the human for help?",
+        "criteria": {
+          "true": "The agent is missing information or faces a risk it cannot resolve alone.",
+          "false": "The agent can decide and act on its own."
+        }
+      },
+      "question_format": {
+        "type": "choice",
+        "instructions": "If the human is asked, what question format fits best?",
+        "criteria": {
+          "open": "A free-text question, when no option list can cover the answer.",
+          "binary": "A yes/no question with two options.",
+          "multiple": "A short list of concrete options to choose from."
+        }
+      }
+    },
+    "expected": {
+      "ask_human": false
+    },
+    "bands": {
+      "ask_human": "auto"
+    },
+    "ordering": {
+      "question_format": [
+        "open",
+        "binary",
+        "multiple"
+      ]
+    },
+    "notes": "Clear plan with a defensible shelter; confidence sits just above the auto threshold, which is exactly where this case should be watched over time."
+  },
+  {
+    "name": "d-05-trivial-tick-no-ask",
+    "role": "JEV-D",
+    "state": "CONTEXT:\nJEV-A chose sleep:until_morning in the safe village inn; nothing is unknown and nothing can be done before sunrise.\n\nACTION CONFIDENCE (computed by code; do not re-estimate): 0.97",
+    "questions": {
+      "ask_human": {
+        "type": "noul",
+        "instructions": "Should the agent ask the human for help?",
+        "criteria": {
+          "true": "The agent is missing information or faces a risk it cannot resolve alone.",
+          "false": "The agent can decide and act on its own."
+        }
+      },
+      "question_format": {
+        "type": "choice",
+        "instructions": "If the human is asked, what question format fits best?",
+        "criteria": {
+          "multiple": "A short list of concrete options to choose from.",
+          "binary": "A yes/no question with two options.",
+          "open": "A free-text question, when no option list can cover the answer."
+        }
+      }
+    },
+    "expected": {
+      "ask_human": false
+    },
+    "bands": {
+      "ask_human": "auto"
+    },
+    "ordering": {
+      "question_format": [
+        "multiple",
+        "binary",
+        "open"
+      ]
+    },
+    "notes": "Trivial, stable, fully known: the cheapest clear case (contrast with the ambiguity cases below)."
+  },
+  {
+    "name": "d-06-three-routes-ask",
+    "role": "JEV-D",
+    "state": "CONTEXT:\nJEV-A could not separate three routes to the objective: the flooded ford, the mountain pass with ambush signs, and the long road east that costs two extra days of food. All three are irreversible once committed and the adventurer cannot scout ahead.\n\nACTION CONFIDENCE (computed by code; do not re-estimate): 0.48",
+    "questions": {
+      "ask_human": {
+        "type": "noul",
+        "instructions": "Should the agent ask the human for help?",
+        "criteria": {
+          "true": "The agent is missing information or faces a risk it cannot resolve alone.",
+          "false": "The agent can decide and act on its own."
+        }
+      },
+      "question_format": {
+        "type": "choice",
+        "instructions": "If the human is asked, what question format fits best?",
+        "criteria": {
+          "open": "A free-text question, when no option list can cover the answer.",
+          "multiple": "A short list of concrete options to choose from.",
+          "binary": "A yes/no question with two options."
+        }
+      }
+    },
+    "expected": {
+      "ask_human": true,
+      "question_format": "multiple"
+    },
+    "bands": {
+      "ask_human": "auto",
+      "question_format": "auto"
+    },
+    "ordering": {
+      "question_format": [
+        "open",
+        "multiple",
+        "binary"
+      ]
+    },
+    "notes": "Genuine ambiguity with three concrete alternatives -> ask, and the format is a short list of options (multiple). The 0.48 confidence is the abstain band: the agent must not choose alone."
+  },
+  {
+    "name": "d-07-irreversible-confirm-ask",
+    "role": "JEV-D",
+    "state": "CONTEXT:\nJEV-A chose climb:down_the_dark_shaft: it is the only lead to the objective, but the shaft may be a dead end and climbing back up may be impossible with a full pack. The choice cannot be undone.\n\nACTION CONFIDENCE (computed by code; do not re-estimate): 0.62",
+    "questions": {
+      "ask_human": {
+        "type": "noul",
+        "instructions": "Should the agent ask the human for help?",
+        "criteria": {
+          "true": "The agent is missing information or faces a risk it cannot resolve alone.",
+          "false": "The agent can decide and act on its own."
+        }
+      },
+      "question_format": {
+        "type": "choice",
+        "instructions": "If the human is asked, what question format fits best?",
+        "criteria": {
+          "binary": "A yes/no question with two options.",
+          "open": "A free-text question, when no option list can cover the answer.",
+          "multiple": "A short list of concrete options to choose from."
+        }
+      }
+    },
+    "expected": {
+      "ask_human": true,
+      "question_format": "binary"
+    },
+    "bands": {
+      "ask_human": "auto",
+      "question_format": "auto"
+    },
+    "ordering": {
+      "question_format": [
+        "binary",
+        "open",
+        "multiple"
+      ]
+    },
+    "notes": "Irreversible action with only two outcomes (go or do not go) -> ask for a yes/no confirmation (binary). Confidence 0.62 is the hitl band."
+  },
+  {
+    "name": "d-08-unreadable-screen-ask",
+    "role": "JEV-D",
+    "state": "CONTEXT:\nThe game shows an unfamiliar modal dialog with four unlabeled buttons; the screen text render failed, so no option can be read; no macro-action maps to this dialog and the agent has never seen this screen.\n\nACTION CONFIDENCE (computed by code; do not re-estimate): unavailable (the model reported no confidence)",
+    "questions": {
+      "ask_human": {
+        "type": "noul",
+        "instructions": "Should the agent ask the human for help?",
+        "criteria": {
+          "true": "The agent is missing information or faces a risk it cannot resolve alone.",
+          "false": "The agent can decide and act on its own."
+        }
+      },
+      "question_format": {
+        "type": "choice",
+        "instructions": "If the human is asked, what question format fits best?",
+        "criteria": {
+          "binary": "A yes/no question with two options.",
+          "open": "A free-text question, when no option list can cover the answer.",
+          "multiple": "A short list of concrete options to choose from."
+        }
+      }
+    },
+    "expected": {
+      "ask_human": true,
+      "question_format": "open"
+    },
+    "bands": {
+      "ask_human": "auto",
+      "question_format": "auto"
+    },
+    "ordering": {
+      "question_format": [
+        "binary",
+        "open",
+        "multiple"
+      ]
+    },
+    "notes": "The missing information cannot be enumerated as options at all -> the human must describe the screen (open). Confidence is unavailable (no confidence reported) and unavailable is capped at hitl, never read as 'certain'."
+  },
+  {
+    "name": "d-09-missing-fact-ask",
+    "role": "JEV-D",
+    "state": "CONTEXT:\nThe objective says the guide 'Mistem' waits at the east gate, but the adventurer searched the east gate and found nobody. Nothing in memory or on screen says where Mistem went, and only the human knows the intent behind the objective.\n\nACTION CONFIDENCE (computed by code; do not re-estimate): unavailable (reported as 0.0, which the API uses for 'no confidence')",
+    "questions": {
+      "ask_human": {
+        "type": "noul",
+        "instructions": "Should the agent ask the human for help?",
+        "criteria": {
+          "true": "The agent is missing information or faces a risk it cannot resolve alone.",
+          "false": "The agent can decide and act on its own."
+        }
+      },
+      "question_format": {
+        "type": "choice",
+        "instructions": "If the human is asked, what question format fits best?",
+        "criteria": {
+          "open": "A free-text question, when no option list can cover the answer.",
+          "multiple": "A short list of concrete options to choose from.",
+          "binary": "A yes/no question with two options."
+        }
+      }
+    },
+    "expected": {
+      "ask_human": true,
+      "question_format": "open"
+    },
+    "bands": {
+      "ask_human": "auto",
+      "question_format": "auto"
+    },
+    "ordering": {
+      "question_format": [
+        "open",
+        "multiple",
+        "binary"
+      ]
+    },
+    "notes": "Second open-format case, and the 0.0 path: the API uses 0 for 'no confidence reported', so it must be treated as unavailable (hitl ceiling), never as a confident answer."
+  },
+  {
+    "name": "d-10-dangerous-unknown-ask",
+    "role": "JEV-D",
+    "state": "CONTEXT:\nJEV-A must choose between drinking from a well a villager warned may be poisoned and walking two hours to the river while thirst is high. Both options have a real cost and the agent cannot test the water.\n\nACTION CONFIDENCE (computed by code; do not re-estimate): 0.55",
+    "questions": {
+      "ask_human": {
+        "type": "noul",
+        "instructions": "Should the agent ask the human for help?",
+        "criteria": {
+          "true": "The agent is missing information or faces a risk it cannot resolve alone.",
+          "false": "The agent can decide and act on its own."
+        }
+      },
+      "question_format": {
+        "type": "choice",
+        "instructions": "If the human is asked, what question format fits best?",
+        "criteria": {
+          "open": "A free-text question, when no option list can cover the answer.",
+          "binary": "A yes/no question with two options.",
+          "multiple": "A short list of concrete options to choose from."
+        }
+      }
+    },
+    "expected": {
+      "ask_human": true,
+      "question_format": "binary"
+    },
+    "bands": {
+      "ask_human": "auto",
+      "question_format": "auto"
+    },
+    "ordering": {
+      "question_format": [
+        "open",
+        "binary",
+        "multiple"
+      ]
+    },
+    "notes": "Two concrete alternatives with real cost on both sides -> binary (drink now or walk?). Confidence 0.55 sits in the hitl band, so the question goes to the human queue."
+  }
+]
