@@ -1,8 +1,72 @@
 # System One Dwarf
 
-**Agente de autoplay para Dwarf Fortress (adventure mode):** uma frota de decisões **JEV** (System One, tipada) escolhe cada ação, o **DeepSeek** escreve a narrativa, a tradução e as perguntas ao humano, a memória **CoALA** cresce campanha a campanha, e uma **UI web em português** dá ao humano objetivo, supervisão e kill-switch. O princípio estruturante é rígido: **o modelo nunca gera texto para agir** — o código gera as macro-ações a partir do estado do jogo, o JEV escolhe entre elas com probabilidades calibradas, e o texto (narrativa, tradução, perguntas) nunca toca no jogo.
+## O que é
 
-Este README é a porta de entrada: o que é, o que já está verificado e como se corre. O contrato canónico de cada peça está em [`docs/`](docs/).
+**Agente de autoplay para Dwarf Fortress (adventure mode):** uma frota de decisões **JEV** (System One, tipada) escolhe cada ação, o **DeepSeek** escreve a narrativa, a tradução e as perguntas ao humano, a memória **CoALA** cresce campanha a campanha, e uma **UI web em português** dá ao humano objetivo, supervisão e kill-switch.
+**Regra estruturante: o modelo nunca gera texto para agir** — o código gera as macro-ações do estado do jogo, o JEV escolhe entre elas com probabilidades calibradas, e o texto (narrativa, tradução, perguntas) nunca toca no jogo. O contrato canónico de cada peça está em [`docs/`](docs/).
+
+---
+
+## Requisitos e sistemas suportados
+
+| SO | Estado | Notas |
+|---|---|---|
+| **Linux x86_64** | ✅ **SUPORTADO/VERIFICADO** | DF 53.16 *classic* (bay12) + DFHack 53.16-r2 Linux-64bit; testado em CachyOS/Arch |
+| **macOS** | ❌ **NÃO SUPORTADO** | Verificado: o DF Classic e o DFHack para macOS terminam em 0.47.05 — não existe par 53.x para macOS; o par 0.47.05 falha no servidor RPC e o stack usa df-structures 53.16 |
+| **Windows** | ⚠️ **NÃO TESTADO** | O par DF 53.16 + DFHack 53.16-r2 existe para Windows, mas nada foi testado; o instalador recusa com mensagem clara (exit 3) |
+| **WSL2** | ⚠️ **EXPERIMENTAL** | Pode funcionar como Linux sem áudio; nada foi testado em WSL2 |
+
+**Ferramentas necessárias (Linux):** `python3` ≥ 3.10 · `node` ≥ 20 · `npm` · `curl` · `sha256sum` (e `tar`, `bzip2` para os tarballs). O instalador valida tudo isto — `bash install.sh --check` mostra o estado sem instalar nada.
+
+> ⚠️ **Som desligado por omissão no Linux (regra do utilizador):** `sod up` arranca o jogo com `SDL_AUDIODRIVER=dummy` e o instalador põe `[SOUND:NO]` + volumes 0 em `data/init/init_default.txt` (backup `.bak-nosound`). `sod up --sound` é a única exceção.
+
+---
+
+## Instalação
+
+```bash
+git clone https://github.com/frederico-kluser/dwarf-fortress-agent-skill.git
+cd dwarf-fortress-agent-skill
+bash install.sh
+```
+
+O `install.sh` é **idempotente** (seguro de repetir) e, por ordem: verifica ferramentas → cria o `.venv` + `requirements.txt` → `npm install` em `web/` → descarrega e verifica por **SHA-256** o Dwarf Fortress 53.16 (não-Steam) e o DFHack 53.16-r2 para `~/Games/dwarf-fortress-53.16` → aplica o init sem som → verifica a ponte DFHack → instala o comando global `sod` em `~/.local/bin` → imprime os próximos passos.
+
+**Flags:**
+
+| Flag | O que faz |
+|---|---|
+| `--dry-run` | mostra cada passo que executaria, sem tocar em nada |
+| `--check` | **só verificações** (ferramentas + guarda de SO); não instala |
+| `--with-key` | pede a chave OpenRouter em modo oculto e guarda `SOD_OPENROUTER_KEY` em `~/.secrets` (600) — o valor nunca é impresso |
+| `--df-path <dir>` | diretório do Dwarf Fortress (predefinição: `~/Games/dwarf-fortress-53.16`) |
+
+**Guarda de SO:** o instalador deteta o sistema (`uname -s`) e recusa **macOS** e **Windows** com mensagem clara (exit 3); em **WSL2** segue com aviso ⚠️ experimental. A matriz completa está em `bash install.sh --help`.
+
+---
+
+## Como rodar — UM comando
+
+```bash
+sod up          # ou: ./scripts/sod.sh up
+```
+
+`sod up` arranca **jogo + interface juntos** — o Dwarf Fortress (sem som), o backend FastAPI e a UI web — espera que tudo responda e imprime os URLs. Fica em primeiro plano a supervisionar.
+
+- **Ctrl-C (ou `sod stop`) fecha ambos:** o comando pára o jogo, o backend e a UI que **ele próprio** arrancou (Ctrl-C/SIGTERM → para os três); processos que já corriam antes nunca são mortos.
+- Outros comandos: `sod stop` · `sod status` · `sod logs --follow` · `sod up --no-game` (só backend + UI) · `sod up --sound` (exceção de áudio).
+- **Portas:** `8000` (backend) · `5173` (UI) · `5000` (RPC do DFHack).
+- **Som desligado por omissão** no Linux (regra do utilizador) — ver aviso acima.
+- Sem instalar o link global: `./scripts/sod.sh up`; para o criar: `./scripts/sod.sh install-link`.
+
+---
+
+## Primeira sessão
+
+1. Com `sod up` a correr, abre a UI em **http://localhost:5173** — o painel de entrada é **Aventura**.
+2. **Cria a aventura pelo site** (painel **Aventura**): o wizard cria o mundo e o personagem por ti (mundo novo / personagem novo ou a partir de saves existentes) e leva-te à sessão.
+3. Coloca a **chave OpenRouter** no painel **Controlo** → *Definir chave* (alternativas: `~/.secrets` com `SOD_OPENROUTER_KEY=...` ou `bash install.sh --with-key`; a chave nunca é impressa).
+4. No **Controlo**, escolhe o modo de controlo (`autopilot` ou `checkpoint`) para pôr o loop de decisão a correr; `paused` e o kill-switch param-no.
 
 ---
 
@@ -46,31 +110,20 @@ O loop completo (10 passos), os cuidados obrigatórios de prompt, a memória e a
 | Narrador, perguntas e loop | `src/system_one_dwarf/agent/` | **293 testes** a verde (`tests/agent/`: `test_llm.py`, `test_narrator.py`, `test_questions.py`, `test_memory_integration.py`, `test_wiring.py`, `test_candidates.py`, `test_executor.py`, `test_loop.py`); `AgentLoop` (10 passos) implementado |
 | Loop ligado ao backend | `src/system_one_dwarf/app/loop_runner.py` | **Integrado** — um `AgentLoop` por campanha, arrancado/parado pelo **modo de controlo** (`autopilot`/`checkpoint` correm, `paused`/kill-switch param) e **só com chaves** `typesafe` (JEV) + `openrouter` (LLM) |
 
-As contagens são as das suítes a correr agora neste venv (`.venv/bin/python -m pytest tests/<peça> -q`, tudo offline). **Todas as peças estão commitadas** — `game/` em `8f654bb`, `agent/` em `8df44ee` (narrador/perguntas) e `bb16e07` (loop + executor), e a ligação ao backend em `67903de`. A suíte completa soma **975 testes** (1 *skip*: a integração opt-in).
+As contagens são as das suítes a correr neste venv (`.venv/bin/python -m pytest tests/<peça> -q`, tudo offline); a suíte completa de `tests/` soma **1111 testes passados + 1 skip** (a integração opt-in `SOD_RUN_INTEGRATION=1`). **Todas as peças estão commitadas** — `game/` em `8f654bb`, `agent/` em `8df44ee` (narrador/perguntas) e `bb16e07` (loop + executor), e a ligação ao backend em `67903de`.
 
-## Como correr
+## Procedimento manual (avançado)
 
-### 0. Arranque rápido (instalação + um comando)
+O `sod up` + `install.sh` cobrem tudo o que segue; estas secções documentam o processo peça a peça, para debug ou execução manual.
 
-```bash
-./install.sh          # idempotente: .venv, npm, DF 53.16 + DFHack, init sem som, link `sod`
-sod up                # sobe JOGO + BACKEND + UI e fica em primeiro plano
-```
+### 1. Pré-requisitos de detalhe
 
-`sod up` arranca o Dwarf Fortress (sem som), o backend em `127.0.0.1:8000` e a UI em `http://localhost:5173`, espera por `/api/health` e pela porta da UI, e imprime os URLs. **Ctrl-C (ou `sod stop`) para TUDO o que ele iniciou** — processos que já corriam antes nunca são mortos. Outros comandos: `sod status`, `sod logs --follow`, `sod up --no-game`, `sod up --sound`, `./scripts/sod.sh install-link` (o comando global `sod`; sem instalar, usa-se `./scripts/sod.sh`).
-
-> ⚠️ **Som desativado por predefinição no Linux** (regra do utilizador): `sod up` lança o jogo com `SDL_AUDIODRIVER=dummy` e o instalador põe `[SOUND:NO]` + volumes 0 em `data/init/init_default.txt` (backup `.bak-nosound`). `sod up --sound` é a única exceção. A chave OpenRouter vem da UI, de env (`SOD_OPENROUTER_KEY`/`OPENROUTER_API_KEY`) ou de `~/.secrets` — nunca é impressa.
-
-As secções 1–5 abaixo mantêm o procedimento manual detalhado.
-
-### 1. Pré-requisitos
-
-- **Dwarf Fortress 53.16 + DFHack 53.16-r2** instalados e a casar de versão, no diretório do jogo. O registo completo da instalação (URL, SHA-256, o que foi criado, RPC, troubleshooting) está em **[docs/setup.md](docs/setup.md)**.
-- **Python 3.14 com o `.venv` da raiz** (o `pyproject.toml` pede `>=3.10`; o venv do repositório é 3.14.7). Dependências em `requirements.txt`: `fastapi`, `uvicorn[standard]`, `httpx`, `pytest`.
+- **Dwarf Fortress 53.16 + DFHack 53.16-r2** instalados e a casar de versão, no diretório do jogo (o `install.sh` trata disso). O registo completo da instalação (URL, SHA-256, o que foi criado, RPC, troubleshooting) está em **[docs/setup.md](docs/setup.md)**.
+- **Python ≥ 3.10 com o `.venv` da raiz** (o venv do repositório é 3.14.7). Dependências em `requirements.txt`: `fastapi`, `uvicorn[standard]`, `httpx`, `pytest`.
 - **Node 20+** para a UI (verificado com Node 24).
 - Uma **chave OpenRouter** — é inserida na UI e guardada na memória da campanha (não em variáveis de ambiente).
 
-### 2. Backend (FastAPI)
+### 2. Backend (FastAPI), à mão
 
 ```bash
 cd /home/ondokai/Agent-Skills/dwarf-fortress-agent-skill
@@ -79,9 +132,9 @@ cd /home/ondokai/Agent-Skills/dwarf-fortress-agent-skill
 
 Conferir: `curl -s http://127.0.0.1:8000/api/health` → `{"status":"ok","version":"0.1.0"}`.
 
-O pacote é *src-layout* e não está instalado como wheel; neste venv existe um `.pth` que aponta para `src/`. Num venv novo, acrescenta `PYTHONPATH=src` ao comando.
+O pacote é *src-layout* e não está instalado como wheel; neste venv existe um `.pth` que aponta para `src/`. Num venv novo, acrescenta `PYTHONPATH=src` ao comando (o `sod up` faz-no por ti).
 
-### 3. Frontend (React + Vite + MUI)
+### 3. Frontend (React + Vite + MUI), à mão
 
 ```bash
 cd web
@@ -95,14 +148,14 @@ Sem `VITE_API_BASE` a UI arranca com **dados simulados** (`src/api/mock.ts`) e �
 
 1. Na UI, painel **Controlo**, criar ou abrir uma campanha (nome + *jogo novo* ou *gameplay existente*). Cada campanha tem memória CoALA própria.
 2. Ainda no **Controlo**, *Definir chave* → **OpenRouter**. A chave fica na SQLite da campanha (ficheiro `0600`) e é sempre devolvida mascarada.
-3. Lançar o jogo **com DFHack** — é procedimento humano, o agente não lança o jogo:
+3. O jogo **com DFHack** é lançado pelo `sod up`; para o lançar à mão (fora do `sod up`):
 
    ```bash
-   cd "/home/ondokai/.steam/steam/steamapps/common/Dwarf Fortress"
+   cd "/home/ondokai/.steam/steam/steamapps/common/Dwarf Fortress"   # ou o teu DF 53.16
    ./dfhack
    ```
 
-   É preciso um mundo carregado e uma personagem de adventure mode criada. Depois, `python3 dfhack/df_bridge.py status --json` deve passar a `rpc.reachable: true`. Com o jogo fechado, `dfhack_installed: true` + `rpc.reachable: false` **é o esperado**, não é erro. Detalhes e troubleshooting: [docs/setup.md](docs/setup.md) §4–§7.
+   É preciso um mundo carregado e uma personagem de adventure mode criada (o painel **Aventura** faz isto pelo site). Depois, `python3 dfhack/df_bridge.py status --json` deve passar a `rpc.reachable: true`. Com o jogo fechado, `dfhack_installed: true` + `rpc.reachable: false` **é o esperado**, não é erro. Detalhes e troubleshooting: [docs/setup.md](docs/setup.md) §4–§7.
 
 ### 5. Arrancar o loop — **integrado**
 
@@ -141,6 +194,5 @@ A configuração é real por variáveis `SOD_*` (ex.: `SOD_MODE`, `SOD_AUTO_THRE
 
 ## Estado git
 
-- Branch `main`, **commits locais por publicar** (contagem atual: `git rev-list --count origin/main..main`) — o remoto está parado na migração CoALA, `fb7d59e`.
-- **Nada publicado:** nenhuma destas peças (backend, UI, JEV, tradutor, evals) existe no remoto. O histórico é local, com um commit por peça verificada.
-- Estado local, fora do git por decisão: `campanhas/` (memórias de jogo), `.venv/`, `web/node_modules/` e o `coala.sqlite` de 124 MB da base de conhecimento. De `conhecimento/` versiona-se só o motor CoALA (skill, `coala.py`, esquema) — não a base.
+- Branch `main` sincronizada com `origin/main` (GitHub: [`frederico-kluser/dwarf-fortress-agent-skill`](https://github.com/frederico-kluser/dwarf-fortress-agent-skill)); histórico em Commits Convencionais, um commit por peça verificada.
+- Estado local, fora do git por decisão: `campanhas/` (memórias de jogo), `.venv/`, `web/node_modules/`, `scripts/e2e/logs/` e o `coala.sqlite` de 124 MB da base de conhecimento. De `conhecimento/` versiona-se só o motor CoALA (skill, `coala.py`, esquema) — não a base.

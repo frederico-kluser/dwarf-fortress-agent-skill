@@ -4,8 +4,13 @@
 #
 #   bash install.sh              instala/configura tudo (seguro de repetir)
 #   bash install.sh --dry-run    mostra o que faria, sem tocar em nada
+#   bash install.sh --check      SÓ verifica ferramentas/estado (não instala)
 #   bash install.sh --with-key   (opcional) guarda SOD_OPENROUTER_KEY em
 #                                ~/.secrets (entrada oculta; nunca ecoa o valor)
+#
+# Guarda de SO (uname -s): Linux x86_64 instala; WSL2 segue com aviso
+# EXPERIMENTAL; macOS e Windows são RECUSADOS (exit 3) — vê --help para a
+# matriz completa de suporte.
 #
 # O que faz, por ordem:
 #   1. ferramentas: python3 ≥ 3.10, node ≥ 20, npm, curl, sha256sum, tar, bzip2
@@ -29,6 +34,7 @@ REPO_ROOT="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)"
 DF_PATH="${SOD_DF_PATH:-$HOME/Games/dwarf-fortress-53.16}"
 CACHE_DIR="${SOD_CACHE_DIR:-$HOME/Games/.sod-cache}"
 DRY_RUN=0
+CHECK_ONLY=0
 WITH_KEY=0
 
 DF_URL="https://www.bay12games.com/dwarves/df_53_16_linux.tar.bz2"
@@ -50,29 +56,95 @@ err()  { printf '❌ %s\n' "$*" >&2; FAILURES=$((FAILURES + 1)); }
 step() { printf '\n— %s\n' "$*"; }
 would() { printf '   [dry-run] faria: %s\n' "$*"; }
 
+# ------------------------------------------- matriz de suporte (verificada)
+support_matrix() {
+  cat <<'EOF'
+SISTEMAS SUPORTADOS (matriz verificada nesta sessão):
+  SO            Estado                   Notas
+  Linux x86_64  ✅ SUPORTADO/VERIFICADO  DF 53.16 classic (bay12) + DFHack
+                                         53.16-r2 Linux-64bit; testado em
+                                         CachyOS/Arch
+  macOS         ❌ NÃO SUPORTADO         DF Classic e DFHack para macOS terminam
+                                         em 0.47.05 — não existe par 53.x; o par
+                                         0.47.05 falha no servidor RPC e o stack
+                                         usa df-structures 53.16
+  Windows       ⚠️ NÃO TESTADO           o par DF 53.16 + DFHack 53.16-r2 existe
+                                         para Windows, mas nada foi testado; este
+                                         instalador recusa (exit 3)
+  WSL2          ⚠️ EXPERIMENTAL          pode funcionar como Linux sem áudio;
+                                         nada foi testado em WSL2
+
+FERRAMENTAS NECESSÁRIAS (Linux): python3 ≥ 3.10, node ≥ 20, npm, curl,
+sha256sum (e tar, bzip2 para os tarballs).
+EOF
+}
+
+# ------------------------------------------------------------- guarda de SO
+detect_os() {
+  OS_KERNEL="$(uname -s 2>/dev/null || echo unknown)"
+  OS_WSL=0
+  case "$OS_KERNEL" in
+    Linux) grep -qi microsoft /proc/version 2>/dev/null && OS_WSL=1 ;;
+  esac
+}
+
+os_guard() { # Linux segue; WSL2 segue com aviso; macOS/Windows recusam (exit 3)
+  detect_os
+  case "$OS_KERNEL" in
+    Linux)
+      if [ "$OS_WSL" = 1 ]; then
+        warn "WSL2 detetado — suporte EXPERIMENTAL: pode funcionar como Linux"
+        warn "sem áudio (SDL_AUDIODRIVER=dummy), mas nada foi testado em WSL2."
+      fi
+      return 0
+      ;;
+    Darwin)
+      err "macOS NÃO SUPORTADO (exit 3): não existe par Dwarf Fortress 53.16 + DFHack 53.16-r2 para macOS."
+      say "   Verificado nesta sessão: o DF Classic e o DFHack para macOS terminam em 0.47.05;"
+      say "   o par 0.47.05 falha no servidor RPC e o stack usa df-structures 53.16."
+      say "   Usa Linux x86_64 (nativo). Matriz completa: bash install.sh --help"
+      exit 3
+      ;;
+    MINGW*|MSYS*|CYGWIN*|Windows_NT)
+      warn "Windows NÃO TESTADO — este instalador recusa (exit 3)."
+      say "   O par DF 53.16 + DFHack 53.16-r2 existe para Windows, mas nada foi"
+      say "   testado; o suporte oficial é Linux x86_64. Usa WSL2 (experimental)"
+      say "   ou Linux nativo. Matriz completa: bash install.sh --help"
+      exit 3
+      ;;
+    *)
+      err "SO não reconhecido: $OS_KERNEL — suportado apenas Linux x86_64 (exit 3)"
+      exit 3
+      ;;
+  esac
+}
+
 usage() {
   cat <<EOF
 install.sh — instala/configura o System One Dwarf (idempotente)
 
 USO:
-  bash install.sh [--dry-run] [--with-key] [--df-path <dir>]
+  bash install.sh [--dry-run] [--check] [--with-key] [--df-path <dir>]
 
 OPÇÕES:
   --dry-run        não altera nada; mostra cada passo que executaria
+  --check          só verificações (ferramentas + guarda de SO); não instala
   --with-key       pede a chave OpenRouter em modo oculto (só com terminal
                    interativo) e guarda SOD_OPENROUTER_KEY em ~/.secrets (600)
   --df-path <dir>  diretório do Dwarf Fortress
                    (predefinição: ${DF_PATH})
-  -h, --help       esta ajuda
+  -h, --help       esta ajuda (com a matriz de sistemas suportados)
 
-⚠️  SOM DESATIVADO POR PREDEFINIÇÃO NO LINUX (regra do utilizador): o passo 5
+$(support_matrix)
+
+⚠️  SOM DESATIVADO POR PREDEFINIÇÃO NO LINUX (regra do utilizador): o passo 6
     põe [SOUND:NO] + volumes 0 em data/init/init_default.txt (backup
     .bak-nosound). O comando 'sod up' também arranca o jogo sem som
     (SDL_AUDIODRIVER=dummy); '--sound' é a única exceção.
 
-A chave OpenRouter NUNCA é impressa. Alternativa ao --with-key: escreve em
-~/.secrets a linha  SOD_OPENROUTER_KEY=sk-or-...  (chmod 600 ~/.secrets)
-ou define-a na UI (painel Controlo).
+A chave OpenRouter NUNCA é impressa. Coloca-a: na UI (painel Controlo →
+Definir chave), em ~/.secrets a linha  SOD_OPENROUTER_KEY=sk-or-...  (chmod 600)
+ou com: bash install.sh --with-key.
 EOF
 }
 
@@ -368,14 +440,15 @@ step_next() {
   say "==================================================================="
   detect_key
   say ""
-  say "  1. Arranca tudo (jogo + backend + UI) com UM comando:"
+  say "  1. UM comando para tudo (jogo + interface):"
   say "       sod up                 # ou: ./scripts/sod.sh up"
-  say "     Ctrl-C (ou 'sod stop') para TUDO o que ele iniciou."
+  say "     Arranca o Dwarf Fortress + backend (8000) + UI (5173) juntos;"
+  say "     Ctrl-C (ou 'sod stop') fecha AMBOS — só o que ele iniciou."
   say "     ⚠️  SOM DESATIVADO por predefinição no Linux (regra do utilizador);"
   say "         'sod up --sound' é a única exceção (e o init tem backup .bak-nosound)."
   say ""
   say "  2. Chave OpenRouter (uma destas formas, nunca impressa):"
-  say "       • na UI: painel Controlo → Definir chave"
+  say "       • na UI: painel Controlo → Definir chave   (recomendado)"
   say "       • em ~/.secrets:  SOD_OPENROUTER_KEY=sk-or-...   (chmod 600 ~/.secrets)"
   say "       • reinstala com:  bash install.sh --with-key"
   say ""
@@ -391,6 +464,7 @@ step_next() {
 while [ $# -gt 0 ]; do
   case "$1" in
     --dry-run)  DRY_RUN=1 ;;
+    --check)    CHECK_ONLY=1 ;;
     --with-key) WITH_KEY=1 ;;
     --df-path)  DF_PATH="${2:-}"; [ $# -ge 2 ] && shift ;;
     -h|--help)  usage; exit 0 ;;
@@ -399,11 +473,24 @@ while [ $# -gt 0 ]; do
   shift
 done
 
+os_guard   # Linux/WSL2 seguem; macOS/Windows saem aqui com exit 3
+
 say "=== System One Dwarf · install.sh ==="
 say "repo:  $REPO_ROOT"
 say "df:    $DF_PATH"
 say "cache: $CACHE_DIR"
 [ "$DRY_RUN" = 1 ] && warn "MODO DRY-RUN: nada será alterado"
+
+if [ "$CHECK_ONLY" = 1 ]; then
+  say ""
+  say "— modo --check: só verificações (nada é instalado) —"
+  step_tools
+  rc=$?
+  say ""
+  if [ "$rc" = 0 ]; then ok "check: todas as ferramentas presentes (usa 'bash install.sh' para instalar)"
+  else err "check: há ferramentas em falta (vê as linhas ❌ acima)"; fi
+  exit "$rc"
+fi
 
 step_tools    || { err "ferramentas em falta — instala-as e volta a correr"; exit 1; }
 step_venv

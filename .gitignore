@@ -26,6 +26,9 @@ campanhas/
 # Runtime do comando global `sod` (PID files e logs de game/backend/frontend).
 .runtime/
 
+# Resíduo dos testes E2E (logs gerados; nunca versionados).
+scripts/e2e/logs/
+
 # Versionado:
 #   .agents/skills/**                      (produto: skills + artigos markdown)
 #   .agents/skills/scripts/*.py *.tsv      (busca + glossário)

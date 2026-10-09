@@ -3,8 +3,8 @@
 # sod — comando global do System One Dwarf
 #
 #   ./scripts/sod.sh [up]        arranca JOGO + BACKEND + UI e fica em primeiro
-#                                plano; Ctrl-C (ou `sod stop`) para TUDO o que
-#                                foi iniciado por este comando
+#                                plano; Ctrl-C / SIGTERM (ou `sod stop`) pára
+#                                jogo+backend+UI que ESTE comando arrancou
 #   ./scripts/sod.sh stop        pára tudo o que `sod up` iniciou
 #   ./scripts/sod.sh status      estado por componente (jogo/backend/frontend)
 #   ./scripts/sod.sh logs [-f]   segue os logs do runtime
@@ -68,9 +68,18 @@ OPÇÕES:
   --sound                LIGA o som (omite SDL_AUDIODRIVER=dummy)
   -h, --help             esta ajuda
 
-⚠️  SOM DESATIVADO POR PREDEFINIÇÃO NO LINUX (regra do utilizador): o jogo
-    arranca sempre sem som (--sound é a única exceção) e o instalador põe
-    [SOUND:NO] + volumes 0 em data/init/init_default.txt.
+SISTEMAS SUPORTADOS (matriz verificada):
+  Linux x86_64  ✅ SUPORTADO/VERIFICADO (DF 53.16 classic + DFHack 53.16-r2)
+  macOS         ❌ NÃO SUPORTADO (não há par DF/DFHack 53.x para macOS)
+  Windows       ⚠️ NÃO TESTADO (o par existe; o instalador recusa)
+  WSL2          ⚠️ EXPERIMENTAL (pode funcionar como Linux sem áudio)
+
+⚠️  SOM DESLIGADO POR OMISSÃO NO LINUX (REGRA DO UTILIZADOR): o jogo arranca
+    sempre sem som (SDL_AUDIODRIVER=dummy; --sound é a única exceção) e o
+    instalador põe [SOUND:NO] + volumes 0 em data/init/init_default.txt.
+
+PARAGEM: Ctrl-C / SIGTERM (ou 'sod stop') → pára jogo+backend+UI que ESTE
+    comando arrancou — processos que já corriam antes nunca são mortos.
 
 A chave OpenRouter é lida sem nunca ser mostrada (env SOD_OPENROUTER_KEY /
 OPENROUTER_API_KEY ou ~/.dsh/.credentials.yaml / ~/.secrets) e só é passada
