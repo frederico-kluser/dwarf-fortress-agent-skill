@@ -112,6 +112,54 @@ export const PANELS: PanelDefinition[] = [
 
 export const DEFAULT_PANEL_ID: PanelId = 'metricas';
 
+/**
+ * Grupo de navegação (auditoria F.2.2.03): 8 itens planos davam o mesmo peso à
+ * fila de perguntas — o trabalho do humano — e a métricas ambientais. Três grupos
+ * ordenados pelo trabalho real, com «Perguntas» em primeiro lugar.
+ */
+export interface NavGroup {
+  id: 'supervisao' | 'agente' | 'memoria';
+  label: string;
+  hint: string;
+  panels: PanelId[];
+}
+
+export const NAV_GROUPS: NavGroup[] = [
+  {
+    id: 'supervisao',
+    label: 'Supervisão',
+    hint: 'O trabalho do humano: responder, decidir e parar',
+    panels: ['perguntas', 'controlo', 'ecra'],
+  },
+  {
+    id: 'agente',
+    label: 'Agente',
+    hint: 'O que o agente fez e como está a correr',
+    panels: ['decisoes', 'metricas'],
+  },
+  {
+    id: 'memoria',
+    label: 'Memória',
+    hint: 'Contexto que alimenta as decisões',
+    panels: ['memoria', 'objetivo', 'inputs'],
+  },
+];
+
+/** Painéis na ordem de navegação (grupos), com «Perguntas» à frente. */
+export const NAV_ORDER: PanelId[] = NAV_GROUPS.flatMap((group) => group.panels);
+
+const BY_ID = new Map<PanelId, PanelDefinition>(PANELS.map((panel) => [panel.id, panel]));
+
+/** Painel por id — evita repetir `PANELS.find` na navegação e nos separadores. */
+export function panelById(id: PanelId): PanelDefinition {
+  return BY_ID.get(id) ?? PANELS[0];
+}
+
+/** Todos os painéis, mas pela ordem dos grupos de navegação. */
+export function panelsInNavOrder(): PanelDefinition[] {
+  return NAV_ORDER.map(panelById);
+}
+
 export function panelTabId(id: PanelId) {
   return `painel-tab-${id}`;
 }

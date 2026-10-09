@@ -25,6 +25,7 @@ import TableRow from '@mui/material/TableRow';
 import TextField from '@mui/material/TextField';
 import ToggleButton from '@mui/material/ToggleButton';
 import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
+import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
 import Pause from '@mui/icons-material/Pause';
 import PlayArrow from '@mui/icons-material/PlayArrow';
@@ -32,13 +33,7 @@ import VpnKey from '@mui/icons-material/VpnKey';
 import Add from '@mui/icons-material/Add';
 
 import { errorMessage } from '../api/events';
-import {
-  CONTROL_MODE_LABEL,
-  formatDateTime,
-  formatNumber,
-  formatRelative,
-  formatUsd,
-} from '../api/format';
+import { CONTROL_MODE_LABEL, formatDateTime, formatNumber, formatUsd } from '../api/format';
 import {
   useApiContext,
   useKeys,
@@ -48,12 +43,15 @@ import {
   useSpend,
 } from '../api/queries';
 import type { ControlMode, Provider } from '../api/types';
+import AutopilotConfirmDialog, { type AutopilotReason } from '../components/AutopilotConfirmDialog';
+import FreshnessIndicator from '../components/FreshnessIndicator';
 import KillSwitchButton from '../components/KillSwitchButton';
 import MetricCard from '../components/MetricCard';
 import PanelShell from '../components/PanelShell';
 import { PanelEmpty, PanelError, PanelLoading, PanelNotice } from '../components/PanelState';
 import SectionCard from '../components/SectionCard';
-import { useSparkSeries } from '../hooks/useSparkSeries';
+import { useAutonomyPersistence, modeLabel } from '../hooks/useAutonomyControl';
+import { useNow, useSparkSeries } from '../hooks/useSparkSeries';
 import { MONO_FONT } from '../theme';
 
 const PROVIDERS: Provider[] = ['openrouter', 'typesafe', 'deepseek'];
@@ -268,10 +266,12 @@ function NewCampaignSection() {
 
 /** Controlo de autonomia: modo, pausa, ritmo, kill-switch, gastos e chaves. */
 export default function ControlPanel() {
-  const { campaign } = useApiContext();
+  const { campaign, campaignId } = useApiContext();
   const metricsQuery = useMetrics();
   const spendQuery = useSpend();
+  const now = useNow(1000);
   const [feedback, setFeedback] = useState<{ tone: 'success' | 'error'; text: string } | null>(null);
+  const [pendingAutopilot, setPendingAutopilot] = useState<AutopilotReason | null>(null);
 
   const controlMutation = useSetControl({
     onSuccess: (control) =>
@@ -284,6 +284,7 @@ export default function ControlPanel() {
 
   const mode: ControlMode = campaign?.control.mode ?? 'paused';
   const killSwitch = campaign?.control.kill_switch ?? false;
+  const { restorableMode, rememberMode, persisted } = useAutonomyPersistence(campaignId, mode);
   const metrics = metricsQuery.data;
   const decisionsPerMin = metrics?.agent.decisions_per_min ?? 0;
   const decisionsSeries = useSparkSeries(metrics?.ts, metrics?.agent.decisions_per_min);
@@ -294,6 +295,53 @@ export default function ControlPanel() {
       kill_switch: next.kill_switch ?? killSwitch,
     });
   };
+
+  /**
+   * Toda a transição PARA autopilot passa por confirmação (auditoria C.1.4.01) e
+   * grava a escolha como modo a restaurar.
+   */
+  const requestMode = (next: ControlMode) => {
+    if (next === mode) return;
+    if (next === 'autopilot') {
+      setPendingAutopilot(mode === 'paused' ? 'resume' : 'switch');
+      return;
+    }
+    applyControl({ mode: next });
+    if (next === 'checkpoint') rememberMode(next);
+  };
+
+  const confirmAutopilot = () => {
+    rememberMode('autopilot');
+    applyControl({ mode: 'autopilot', kill_switch: false });
+    setPendingAutopilot(null);
+  };
+
+  /** Saída de «Em pausa»: restaura o último modo guardado, nunca força autopilot. */
+  const requestResume = () => {
+    if (restorableMode === 'autopilot') {
+      setPendingAutopilot('resume');
+      return;
+    }
+    applyControl({ mode: restorableMode });
+  };
+
+  const requestKillSwitch = (next: boolean) => {
+    if (next) {
+      applyControl({ mode: 'paused', kill_switch: true });
+      return;
+    }
+    // Desarmar devolve o modo guardado (ou o modo atual se nunca esteve em pausa).
+    const target = mode === 'paused' ? restorableMode : mode;
+    if (target === 'autopilot') {
+      setPendingAutopilot('disarm');
+      return;
+    }
+    applyControl({ mode: target, kill_switch: false });
+  };
+
+  const killSwitchScope = killSwitch
+    ? `Ao desligar, o agente fica em «${modeLabel(restorableMode)}» — o último modo não-pausado guardado nesta campanha — e não em autopiloto.`
+    : 'Ao acionar, o agente fica em «Em pausa» até desligares o kill-switch ou escolheres outro modo.';
 
   return (
     <PanelShell
@@ -337,14 +385,27 @@ export default function ControlPanel() {
               exclusive
               value={mode}
               onChange={(_event, next: ControlMode | null) => {
-                if (next !== null) applyControl({ mode: next });
+                if (next !== null) requestMode(next);
               }}
               aria-label="Modo de autonomia"
             >
-              <ToggleButton value="autopilot">Autopiloto</ToggleButton>
-              <ToggleButton value="checkpoint">Checkpoints</ToggleButton>
-              <ToggleButton value="paused">Em pausa</ToggleButton>
+              <Tooltip title="O agente decide e age sozinho — pede confirmação antes de ativar">
+                <ToggleButton value="autopilot">Autopiloto</ToggleButton>
+              </Tooltip>
+              <Tooltip title="O agente para nos casos de banda hitl/abstain e pergunta na fila de perguntas">
+                <ToggleButton value="checkpoint">Checkpoints</ToggleButton>
+              </Tooltip>
+              <Tooltip title="O agente não age sobre o jogo até retomares">
+                <ToggleButton value="paused">Em pausa</ToggleButton>
+              </Tooltip>
             </ToggleButtonGroup>
+
+            <Alert severity="info" variant="outlined" role="note">
+              <strong>Checkpoints</strong>: o agente para e pergunta na fila de perguntas — não há
+              ecrã de aprovação próprio. <strong>Em pausa</strong> retoma sempre para{' '}
+              <strong>{modeLabel(restorableMode)}</strong>
+              {persisted ? '' : ' (valor por omissão; escolhe um modo para o fixar)'}.
+            </Alert>
 
             <Stack
               direction="row"
@@ -358,12 +419,14 @@ export default function ControlPanel() {
                 startIcon={mode === 'paused' ? <PlayArrow /> : <Pause />}
                 loading={controlMutation.isPending}
                 loadingPosition="start"
-                onClick={() => applyControl({ mode: mode === 'paused' ? 'autopilot' : 'paused' })}
+                onClick={() => (mode === 'paused' ? requestResume() : applyControl({ mode: 'paused' }))}
               >
-                {mode === 'paused' ? 'Retomar autopiloto' : 'Pausar'}
+                {mode === 'paused' ? `Retomar ${modeLabel(restorableMode)}` : 'Pausar'}
               </Button>
               <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                O JEV controla o tempo: não há tick fixo do lado do código.
+                {mode === 'paused'
+                  ? 'Retomar devolve o último modo escolhido nesta campanha — não passa por autopiloto.'
+                  : 'O JEV controla o tempo: não há tick fixo do lado do código.'}
               </Typography>
             </Stack>
           </Stack>
@@ -411,12 +474,9 @@ export default function ControlPanel() {
               variant="button"
               active={killSwitch}
               busy={controlMutation.isPending}
-              onConfirm={(next) =>
-                applyControl({
-                  kill_switch: next,
-                  mode: next ? 'paused' : mode === 'paused' ? 'autopilot' : mode,
-                })
-              }
+              scope={killSwitchScope}
+              disarmLabel={`Desligar e voltar a ${modeLabel(mode === 'paused' ? restorableMode : mode)}`}
+              onConfirm={requestKillSwitch}
             />
             <Typography variant="caption" sx={{ color: 'text.secondary' }}>
               Sessões longas correm em janela visível; o kill-switch é a paragem de emergência.
@@ -429,9 +489,14 @@ export default function ControlPanel() {
           subtitle="Sem teto de orçamento — apenas visibilidade total, em tempo real"
           flush
           action={
-            <Typography variant="caption" sx={{ color: 'text.secondary', fontFamily: MONO_FONT }}>
-              {spendQuery.data ? `atualizado ${formatRelative(spendQuery.data.ts)}` : '—'}
-            </Typography>
+            <FreshnessIndicator
+              ts={spendQuery.data?.ts}
+              now={now}
+              refreshing={spendQuery.isFetching}
+              refreshDisabled={spendQuery.isFetching}
+              onRefresh={() => void spendQuery.refetch()}
+              refreshLabel="Atualizar gastos agora"
+            />
           }
         >
           {spendQuery.isLoading ? <PanelLoading label="A carregar gastos…" /> : null}
@@ -510,6 +575,15 @@ export default function ControlPanel() {
         <KeysSection />
         <NewCampaignSection />
       </Stack>
+
+      <AutopilotConfirmDialog
+        open={pendingAutopilot !== null}
+        from={mode}
+        reason={pendingAutopilot ?? 'switch'}
+        busy={controlMutation.isPending}
+        onCancel={() => setPendingAutopilot(null)}
+        onConfirm={confirmAutopilot}
+      />
     </PanelShell>
   );
 }

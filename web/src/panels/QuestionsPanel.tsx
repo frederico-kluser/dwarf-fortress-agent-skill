@@ -14,14 +14,17 @@ import ExpandMore from '@mui/icons-material/ExpandMore';
 import { errorMessage } from '../api/events';
 import { formatDateTime } from '../api/format';
 import { useAnswerQuestion, useQuestions } from '../api/queries';
+import FreshnessIndicator from '../components/FreshnessIndicator';
 import PanelShell from '../components/PanelShell';
 import { PanelEmpty, PanelError, PanelLoading } from '../components/PanelState';
 import QuestionCard from '../components/QuestionCard';
 import SectionCard from '../components/SectionCard';
+import { useNow } from '../hooks/useSparkSeries';
 
 /** Fila de dúvidas: responder depressa, com as respondidas a colapsar no histórico. */
 export default function QuestionsPanel() {
   const questionsQuery = useQuestions();
+  const now = useNow(1000);
   const [feedback, setFeedback] = useState<{ tone: 'success' | 'error'; text: string } | null>(null);
 
   const answerMutation = useAnswerQuestion({
@@ -41,9 +44,17 @@ export default function QuestionsPanel() {
       title="Fila de perguntas"
       description="Dúvidas geradas nas bandas hitl e abstain. A resposta entra na memória do agente (traduzida PT→EN)."
       actions={
-        <Stack direction="row" spacing={1}>
+        <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
           <Chip size="small" color="warning" variant="outlined" label={`${pending.length} pendentes`} />
           <Chip size="small" color="success" variant="outlined" label={`${answered.length} respondidas`} />
+          <FreshnessIndicator
+            ts={questionsQuery.dataUpdatedAt ? new Date(questionsQuery.dataUpdatedAt).toISOString() : null}
+            now={now}
+            refreshing={questionsQuery.isFetching}
+            refreshDisabled={questionsQuery.isFetching}
+            onRefresh={() => void questionsQuery.refetch()}
+            refreshLabel="Atualizar perguntas agora"
+          />
         </Stack>
       }
     >

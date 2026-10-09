@@ -2,8 +2,16 @@ import { useMemo, useState } from 'react';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
+import Dialog from '@mui/material/Dialog';
+import DialogActions from '@mui/material/DialogActions';
+import DialogContent from '@mui/material/DialogContent';
+import DialogTitle from '@mui/material/DialogTitle';
+import FormControlLabel from '@mui/material/FormControlLabel';
+import IconButton from '@mui/material/IconButton';
+import LinearProgress from '@mui/material/LinearProgress';
 import MenuItem from '@mui/material/MenuItem';
 import Stack from '@mui/material/Stack';
+import Switch from '@mui/material/Switch';
 import Table from '@mui/material/Table';
 import TableBody from '@mui/material/TableBody';
 import TableCell from '@mui/material/TableCell';
@@ -13,15 +21,18 @@ import TableRow from '@mui/material/TableRow';
 import TextField from '@mui/material/TextField';
 import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
+import ExpandMore from '@mui/icons-material/ExpandMore';
 
 import { errorMessage } from '../api/events';
-import { asText, formatConfidence, formatTime, formatUsd } from '../api/format';
+import { asText, formatConfidence, formatDateTime, formatTime, formatUsd } from '../api/format';
 import { useDecisions } from '../api/queries';
 import type { Decision, DecisionBand, JevAgent } from '../api/types';
 import { AgentChip, BandChip } from '../components/Chips';
+import FreshnessIndicator from '../components/FreshnessIndicator';
 import PanelShell from '../components/PanelShell';
 import { PanelEmpty, PanelError, PanelLoading } from '../components/PanelState';
 import SectionCard from '../components/SectionCard';
+import { useNow } from '../hooks/useSparkSeries';
 import { MONO_FONT } from '../theme';
 
 const ALL = 'todos';
@@ -36,12 +47,27 @@ function probabilityList(decision: Decision): [string, number][] {
   return Object.entries(decision.probabilities ?? {}).sort((a, b) => b[1] - a[1]);
 }
 
-/** Log das decisões JEV: papel, respostas, probabilidades, banda, latência e custo. */
+/** Confiança baixa para o filtro rápido: ausente/0 conta como indisponível. */
+function isLowConfidence(decision: Decision): boolean {
+  return (decision.confidence ?? 0) <= 0.5;
+}
+
+/**
+ * Log das decisões JEV.
+ *
+ * Divulgação progressiva (auditoria D.1.1.01): a tabela mostra só as colunas de
+ * decisão rápida (hora, papel, banda, confiança, custo) e cada linha abre um
+ * detalhe com o pedido completo, TODAS as probabilidades, respostas tipadas,
+ * latência e custo — sem scroll horizontal.
+ */
 export default function DecisionsPanel() {
   const decisionsQuery = useDecisions();
+  const now = useNow(1000);
   const [agent, setAgent] = useState<string>(ALL);
   const [band, setBand] = useState<string>(ALL);
   const [search, setSearch] = useState('');
+  const [lowConfidenceOnly, setLowConfidenceOnly] = useState(false);
+  const [detailId, setDetailId] = useState<string | null>(null);
 
   const decisions = useMemo(() => decisionsQuery.data ?? [], [decisionsQuery.data]);
 
@@ -50,6 +76,7 @@ export default function DecisionsPanel() {
     return decisions.filter((decision) => {
       if (agent !== ALL && decision.agent !== agent) return false;
       if (band !== ALL && decision.band !== band) return false;
+      if (lowConfidenceOnly && !isLowConfidence(decision)) return false;
       if (!term) return true;
       return (
         decision.request_summary.toLowerCase().includes(term) ||
@@ -57,20 +84,32 @@ export default function DecisionsPanel() {
         decision.id.toLowerCase().includes(term)
       );
     });
-  }, [decisions, agent, band, search]);
+  }, [decisions, agent, band, search, lowConfidenceOnly]);
 
-  const filtersActive = agent !== ALL || band !== ALL || search.trim().length > 0;
+  const filtersActive =
+    agent !== ALL || band !== ALL || lowConfidenceOnly || search.trim().length > 0;
+  const detail = decisions.find((decision) => decision.id === detailId) ?? null;
 
   return (
     <PanelShell
       title="Log de decisões JEV"
       description="Uma linha por chamada ao JEV. Confidence ausente ou 0 significa indisponível — nunca «certo»."
       actions={
-        <Chip
-          size="small"
-          variant="outlined"
-          label={`${filtered.length} de ${decisions.length} decisões`}
-        />
+        <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
+          <Chip
+            size="small"
+            variant="outlined"
+            label={`${filtered.length} de ${decisions.length} decisões`}
+          />
+          <FreshnessIndicator
+            ts={decisionsQuery.dataUpdatedAt ? new Date(decisionsQuery.dataUpdatedAt).toISOString() : null}
+            now={now}
+            refreshing={decisionsQuery.isFetching}
+            refreshDisabled={decisionsQuery.isFetching}
+            onRefresh={() => void decisionsQuery.refetch()}
+            refreshLabel="Atualizar decisões agora"
+          />
+        </Stack>
       }
     >
       {decisionsQuery.isLoading ? <PanelLoading label="A carregar decisões…" /> : null}
@@ -85,7 +124,7 @@ export default function DecisionsPanel() {
       <Stack spacing={2}>
         <SectionCard
           title="Filtros"
-          subtitle="Reduz o log por papel, banda ou texto"
+          subtitle="Reduz o log por papel, banda, confiança baixa ou texto"
           action={
             filtersActive ? (
               <Button
@@ -94,6 +133,7 @@ export default function DecisionsPanel() {
                   setAgent(ALL);
                   setBand(ALL);
                   setSearch('');
+                  setLowConfidenceOnly(false);
                 }}
               >
                 Limpar filtros
@@ -104,7 +144,7 @@ export default function DecisionsPanel() {
           <Stack
             direction={{ xs: 'column', sm: 'row' }}
             spacing={1.5}
-            sx={{ alignItems: { xs: 'stretch', sm: 'center' } }}
+            sx={{ alignItems: { xs: 'stretch', sm: 'center' }, flexWrap: 'wrap' }}
           >
             <TextField
               select
@@ -141,12 +181,27 @@ export default function DecisionsPanel() {
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder="ex.: river_bank"
-              fullWidth
+              sx={{ minWidth: 220, flexGrow: 1 }}
+            />
+
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={lowConfidenceOnly}
+                  onChange={(event) => setLowConfidenceOnly(event.target.checked)}
+                  slotProps={{ input: { 'aria-label': 'Mostrar apenas confiança baixa (≤ 50 %)' } }}
+                />
+              }
+              label="Só confiança baixa"
             />
           </Stack>
         </SectionCard>
 
-        <SectionCard title="Decisões" subtitle="Do mais recente para o mais antigo" flush>
+        <SectionCard
+          title="Decisões"
+          subtitle="Do mais recente para o mais antigo — clica numa linha para ver o detalhe completo"
+          flush
+        >
           {filtered.length === 0 ? (
             <PanelEmpty
               message="Sem decisões para mostrar."
@@ -158,7 +213,7 @@ export default function DecisionsPanel() {
             />
           ) : (
             <TableContainer sx={{ maxHeight: 620 }}>
-              <Table stickyHeader size="small" sx={{ minWidth: 1080 }} aria-label="Log de decisões JEV">
+              <Table stickyHeader size="small" aria-label="Log de decisões JEV">
                 <caption style={{ captionSide: 'bottom', padding: 8 }}>
                   {filtered.length} decisões apresentadas de {decisions.length} recebidas
                 </caption>
@@ -166,16 +221,14 @@ export default function DecisionsPanel() {
                   <TableRow>
                     <TableCell scope="col">Hora</TableCell>
                     <TableCell scope="col">Papel</TableCell>
-                    <TableCell scope="col">Pedido</TableCell>
-                    <TableCell scope="col">Resposta</TableCell>
-                    <TableCell scope="col">Probabilidades</TableCell>
-                    <TableCell scope="col">Confiança</TableCell>
                     <TableCell scope="col">Banda</TableCell>
-                    <TableCell scope="col" align="right">
-                      Latência
-                    </TableCell>
+                    <TableCell scope="col">Confiança</TableCell>
+                    <TableCell scope="col">Resumo do pedido</TableCell>
                     <TableCell scope="col" align="right">
                       Custo
+                    </TableCell>
+                    <TableCell scope="col" align="right">
+                      Detalhe
                     </TableCell>
                   </TableRow>
                 </TableHead>
@@ -183,62 +236,22 @@ export default function DecisionsPanel() {
                   {filtered.map((decision) => {
                     const confidence = formatConfidence(decision.confidence);
                     const probabilities = probabilityList(decision);
+                    const top = probabilities[0];
                     return (
-                      <TableRow key={decision.id} hover>
+                      <TableRow
+                        key={decision.id}
+                        hover
+                        sx={{ cursor: 'pointer' }}
+                        onClick={() => setDetailId(decision.id)}
+                      >
                         <TableCell sx={{ fontFamily: MONO_FONT, whiteSpace: 'nowrap' }}>
                           {formatTime(decision.ts)}
                         </TableCell>
                         <TableCell>
                           <AgentChip agent={decision.agent} />
                         </TableCell>
-                        <TableCell sx={{ maxWidth: 260 }}>
-                          <Tooltip title={decision.request_summary}>
-                            <Typography variant="body2" noWrap>
-                              {decision.request_summary}
-                            </Typography>
-                          </Tooltip>
-                        </TableCell>
-                        <TableCell sx={{ maxWidth: 240 }}>
-                          <Tooltip title={answerSummary(decision)}>
-                            <Typography variant="body2" noWrap sx={{ fontFamily: MONO_FONT }}>
-                              {answerSummary(decision)}
-                            </Typography>
-                          </Tooltip>
-                        </TableCell>
                         <TableCell>
-                          {probabilities.length === 0 ? (
-                            <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                              —
-                            </Typography>
-                          ) : (
-                            <Stack spacing={0.25}>
-                              {probabilities.slice(0, 2).map(([option, value]) => (
-                                <Stack
-                                  key={option}
-                                  direction="row"
-                                  spacing={0.5}
-                                  sx={{ alignItems: 'center' }}
-                                >
-                                  <Box
-                                    aria-hidden="true"
-                                    sx={{
-                                      width: 34,
-                                      height: 6,
-                                      borderRadius: 3,
-                                      bgcolor: 'primary.main',
-                                      opacity: 0.35 + Math.min(0.65, value),
-                                    }}
-                                  />
-                                  <Typography
-                                    variant="caption"
-                                    sx={{ fontFamily: MONO_FONT, whiteSpace: 'nowrap' }}
-                                  >
-                                    {option} {(value * 100).toFixed(0)} %
-                                  </Typography>
-                                </Stack>
-                              ))}
-                            </Stack>
-                          )}
+                          <BandChip band={decision.band} />
                         </TableCell>
                         <TableCell>
                           {confidence ? (
@@ -251,14 +264,40 @@ export default function DecisionsPanel() {
                             </Tooltip>
                           )}
                         </TableCell>
-                        <TableCell>
-                          <BandChip band={decision.band} />
-                        </TableCell>
-                        <TableCell align="right" sx={{ fontFamily: MONO_FONT }}>
-                          {decision.latency_ms} ms
+                        <TableCell sx={{ maxWidth: 340 }}>
+                          <Stack spacing={0.25}>
+                            <Typography variant="body2" noWrap>
+                              {decision.request_summary}
+                            </Typography>
+                            {top ? (
+                              <Typography
+                                variant="caption"
+                                sx={{ color: 'text.secondary', fontFamily: MONO_FONT }}
+                              >
+                                melhor: {top[0]} {(top[1] * 100).toFixed(0)} %
+                                {probabilities.length > 1
+                                  ? ` · +${probabilities.length - 1} opção(ões) no detalhe`
+                                  : ''}
+                              </Typography>
+                            ) : null}
+                          </Stack>
                         </TableCell>
                         <TableCell align="right" sx={{ fontFamily: MONO_FONT }}>
                           {formatUsd(decision.cost_usd, { compact: true })}
+                        </TableCell>
+                        <TableCell align="right">
+                          <Tooltip title="Ver detalhe completo">
+                            <IconButton
+                              size="small"
+                              aria-label={`Ver detalhe da decisão ${decision.id}`}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                setDetailId(decision.id);
+                              }}
+                            >
+                              <ExpandMore />
+                            </IconButton>
+                          </Tooltip>
                         </TableCell>
                       </TableRow>
                     );
@@ -269,6 +308,113 @@ export default function DecisionsPanel() {
           )}
         </SectionCard>
       </Stack>
+
+      <Dialog
+        open={detail !== null}
+        onClose={() => setDetailId(null)}
+        maxWidth="md"
+        fullWidth
+        aria-labelledby="detalhe-decisao-titulo"
+      >
+        <DialogTitle id="detalhe-decisao-titulo">
+          Decisão {detail?.id ?? '—'}
+        </DialogTitle>
+        <DialogContent>
+          {detail ? (
+            <Stack spacing={2} sx={{ mt: 0.5 }}>
+              <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
+                <AgentChip agent={detail.agent} />
+                <BandChip band={detail.band} />
+                <Chip
+                  size="small"
+                  variant="outlined"
+                  label={`confiança ${formatConfidence(detail.confidence) ?? 'indisponível'}`}
+                />
+                <Chip size="small" variant="outlined" label={`${detail.latency_ms} ms`} />
+                <Chip
+                  size="small"
+                  variant="outlined"
+                  label={`custo ${formatUsd(detail.cost_usd, { compact: true })}`}
+                />
+                <Typography variant="caption" sx={{ color: 'text.secondary', fontFamily: MONO_FONT }}>
+                  {formatDateTime(detail.ts)}
+                </Typography>
+              </Stack>
+
+              <Box>
+                <Typography variant="overline" sx={{ color: 'text.secondary' }}>
+                  Pedido
+                </Typography>
+                <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
+                  {detail.request_summary}
+                </Typography>
+              </Box>
+
+              <Box>
+                <Typography variant="overline" sx={{ color: 'text.secondary' }}>
+                  Respostas tipadas
+                </Typography>
+                {Object.keys(detail.answers ?? {}).length === 0 ? (
+                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                    Sem respostas registadas.
+                  </Typography>
+                ) : (
+                  <Stack spacing={0.5}>
+                    {Object.entries(detail.answers ?? {}).map(([key, value]) => (
+                      <Stack key={key} direction="row" spacing={1}>
+                        <Typography variant="body2" sx={{ fontFamily: MONO_FONT, minWidth: 120 }}>
+                          {key}
+                        </Typography>
+                        <Typography variant="body2" sx={{ fontFamily: MONO_FONT }}>
+                          {asText(value)}
+                        </Typography>
+                      </Stack>
+                    ))}
+                  </Stack>
+                )}
+              </Box>
+
+              <Box>
+                <Typography variant="overline" sx={{ color: 'text.secondary' }}>
+                  Todas as probabilidades ({probabilityList(detail).length})
+                </Typography>
+                {probabilityList(detail).length === 0 ? (
+                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                    Sem probabilidades no payload.
+                  </Typography>
+                ) : (
+                  <Stack spacing={1}>
+                    {probabilityList(detail).map(([option, value]) => (
+                      <Stack key={option} spacing={0.25}>
+                        <Stack
+                          direction="row"
+                          spacing={1}
+                          sx={{ alignItems: 'center', justifyContent: 'space-between' }}
+                        >
+                          <Typography variant="body2" sx={{ fontFamily: MONO_FONT }}>
+                            {option}
+                          </Typography>
+                          <Typography variant="caption" sx={{ fontFamily: MONO_FONT }}>
+                            {(value * 100).toFixed(1)} %
+                          </Typography>
+                        </Stack>
+                        <LinearProgress
+                          variant="determinate"
+                          value={Math.round(value * 100)}
+                          aria-label={`Probabilidade de ${option}: ${(value * 100).toFixed(1)} por cento`}
+                        />
+                      </Stack>
+                    ))}
+                  </Stack>
+                )}
+              </Box>
+            </Stack>
+          ) : null}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDetailId(null)}>Fechar</Button>
+        </DialogActions>
+      </Dialog>
     </PanelShell>
   );
 }

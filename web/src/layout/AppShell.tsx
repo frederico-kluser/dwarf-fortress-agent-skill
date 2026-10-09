@@ -8,18 +8,26 @@ import Link from '@mui/material/Link';
 import Snackbar from '@mui/material/Snackbar';
 import Stack from '@mui/material/Stack';
 import Toolbar from '@mui/material/Toolbar';
+import useMediaQuery from '@mui/material/useMediaQuery';
+import { useTheme } from '@mui/material/styles';
 
 import { errorMessage } from '../api/events';
 import { useAnswerQuestion, useApiContext, useQuestions, useSetControl } from '../api/queries';
 import type { AnswerQuestionRequest } from '../api/types';
+import AutopilotConfirmDialog from '../components/AutopilotConfirmDialog';
 import { PanelLoading } from '../components/PanelState';
 import { QuestionsQueueDrawer } from '../components/QuestionsQueueDrawer';
-import NavDrawer, { MobileNavDrawer } from './NavDrawer';
-import PanelTabs from './PanelTabs';
+import {
+  controlPatchForKillSwitch,
+  useAutonomyPersistence,
+} from '../hooks/useAutonomyControl';
+import NavDrawer from './NavDrawer';
+import PanelTabs, { PanelIconTabs } from './PanelTabs';
 import TopBar from './TopBar';
 import {
   DEFAULT_PANEL_ID,
   PANELS,
+  panelById,
   panelRegionId,
   panelTabId,
   type PanelId,
@@ -35,12 +43,20 @@ function readHashPanel(): PanelId {
 
 /** Esqueleto da aplicação: barra global, navegação, fila de perguntas e painel ativo. */
 export default function AppShell() {
-  const { campaignsStatus, campaignsError, reloadCampaigns, campaign } = useApiContext();
-
+  const theme = useTheme();
+  const { campaignsStatus, campaignsError, reloadCampaigns, campaign, campaignId } = useApiContext();
   const [active, setActive] = useState<PanelId>(() => readHashPanel());
-  const [navOpen, setNavOpen] = useState(false);
   const [queueOpen, setQueueOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [autopilotConfirm, setAutopilotConfirm] = useState(false);
+
+  /**
+   * Uma só navegação em ecrãs estreitos (auditoria F.2.2.03): abaixo de `md` a
+   * navegação é a barra de separadores com rótulo; a partir de `md` é a navegação
+   * lateral agrupada, com uma barra só-ícone como acesso rápido à fila de perguntas.
+   */
+  const isTabbedNav = useMediaQuery(theme.breakpoints.down('md'));
+  const showNavDrawer = !isTabbedNav;
 
   // Navegação por hash: botão "voltar" do browser e links diretos funcionam.
   useEffect(() => {
@@ -69,20 +85,32 @@ export default function AppShell() {
     onError: (error) => setToast(`Não foi possível alterar o controlo: ${errorMessage(error)}`),
   });
 
+  const mode = campaign?.control.mode ?? 'paused';
+  const { restorableMode } = useAutonomyPersistence(campaignId, mode);
+
   const handleAnswer = (questionId: string, body: AnswerQuestionRequest) => {
     answerMutation.mutate({ qid: questionId, ...body });
   };
 
+  /**
+   * Acionar o kill-switch implica pausar; desligá-lo devolve o último modo
+   * NÃO-pausado guardado (nunca `autopilot` por omissão — auditoria C.1.4.01).
+   */
   const handleKillSwitch = (next: boolean) => {
-    // Acionar o kill-switch implica pausar; desligá-lo devolve o modo anterior.
-    const currentMode = campaign?.control.mode ?? 'autopilot';
-    controlMutation.mutate({
-      mode: next ? 'paused' : currentMode === 'paused' ? 'autopilot' : currentMode,
-      kill_switch: next,
-    });
+    const patch = controlPatchForKillSwitch(next, mode, restorableMode);
+    if (!next && patch.mode === 'autopilot') {
+      setAutopilotConfirm(true);
+      return;
+    }
+    controlMutation.mutate(patch);
   };
 
-  const activePanel = PANELS.find((panel) => panel.id === active) ?? PANELS[0];
+  const confirmAutopilot = () => {
+    controlMutation.mutate({ mode: 'autopilot', kill_switch: false });
+    setAutopilotConfirm(false);
+  };
+
+  const activePanel = panelById(active);
 
   const shell = (children: ReactNode) => (
     <Box sx={{ display: 'flex', minHeight: '100dvh', flexDirection: 'column' }}>
@@ -105,31 +133,32 @@ export default function AppShell() {
       <TopBar
         pendingQuestions={pending.length}
         onOpenQuestions={() => setQueueOpen(true)}
-        onOpenNav={() => setNavOpen(true)}
         onKillSwitch={handleKillSwitch}
         controlBusy={controlMutation.isPending}
       />
       <Stack direction="row" sx={{ flexGrow: 1, minHeight: 0 }}>
-        <NavDrawer active={active} onSelect={selectPanel} />
-        <MobileNavDrawer
-          open={navOpen}
-          onClose={() => setNavOpen(false)}
-          active={active}
-          onSelect={selectPanel}
-        />
+        {showNavDrawer ? (
+          <NavDrawer active={active} onSelect={selectPanel} pendingQuestions={pending.length} />
+        ) : null}
         <Box sx={{ flexGrow: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
           <Toolbar variant="dense" />
           <PanelTabs active={active} onSelect={selectPanel} />
+          <PanelIconTabs active={active} onSelect={selectPanel} pendingQuestions={pending.length} />
           <Container
             component="main"
             id="main"
             maxWidth={false}
             sx={{ py: { xs: 2, md: 3 }, px: { xs: 2, md: 3 }, flexGrow: 1 }}
           >
+            {/*
+              `role=tabpanel` só quando existe mesmo um tablist visível (mobile). Em
+              desktop a navegação é `nav` + `aria-current` e o painel é uma região.
+            */}
             <Box
-              role="tabpanel"
               id={panelRegionId(active)}
-              aria-labelledby={panelTabId(active)}
+              {...(isTabbedNav
+                ? { role: 'tabpanel', 'aria-labelledby': panelTabId(active) }
+                : { role: 'region', 'aria-label': `${activePanel.title} — painel` })}
               tabIndex={-1}
             >
               {children}
@@ -148,6 +177,15 @@ export default function AppShell() {
           selectPanel('perguntas');
           setQueueOpen(false);
         }}
+      />
+
+      <AutopilotConfirmDialog
+        open={autopilotConfirm}
+        from={mode}
+        reason="disarm"
+        busy={controlMutation.isPending}
+        onCancel={() => setAutopilotConfirm(false)}
+        onConfirm={confirmAutopilot}
       />
 
       <Snackbar

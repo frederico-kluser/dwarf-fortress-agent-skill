@@ -17,10 +17,17 @@ export interface KillSwitchButtonProps {
   busy?: boolean;
   /** `icon` (AppBar) ou `button` (painel de controlo). */
   variant?: 'icon' | 'button';
+  /**
+   * O que acontece ao desarmar (ex.: «volta ao modo Checkpoints, não ao autopiloto»).
+   * Sem isto o diálogo não promete um modo — antes era vago (auditoria C.1.4.01).
+   */
+  scope?: string;
+  /** Etiqueta do botão quando está ativo (mostra o modo de destino). */
+  disarmLabel?: string;
 }
 
 /**
- * Kill-switch com diálogo de confirmação.
+ * Kill-switch com diálogo de confirmação (alertdialog: é uma paragem de emergência).
  * Sem `disableEscapeKeyDown` (removido na v9): Esc fecha o diálogo, como deve.
  */
 export default function KillSwitchButton({
@@ -28,6 +35,8 @@ export default function KillSwitchButton({
   onConfirm,
   busy = false,
   variant = 'icon',
+  scope,
+  disarmLabel,
 }: KillSwitchButtonProps) {
   const [open, setOpen] = useState(false);
   const dialogTitleId = 'kill-switch-titulo';
@@ -57,7 +66,7 @@ export default function KillSwitchButton({
           loading={busy}
           loadingPosition="start"
         >
-          {label}
+          {active ? (disarmLabel ?? label) : label}
         </Button>
       )}
 
@@ -66,14 +75,19 @@ export default function KillSwitchButton({
         onClose={() => setOpen(false)}
         maxWidth="xs"
         aria-labelledby={dialogTitleId}
-        aria-describedby={dialogTextId}
+        aria-describedby={scope ? dialogTextId : undefined}
         role="alertdialog"
       >
         <DialogTitle id={dialogTitleId}>
           {active ? 'Desligar o kill-switch?' : 'Acionar o kill-switch?'}
         </DialogTitle>
         <DialogContent>
-          <DialogContentText id={dialogTextId}>
+          {scope ? (
+            <DialogContentText id={dialogTextId} sx={{ mb: 1.5 }}>
+              {scope}
+            </DialogContentText>
+          ) : null}
+          <DialogContentText>
             {active
               ? 'O agente volta a poder agir assim que o modo de autonomia o permitir.'
               : 'O agente para imediatamente de agir sobre o jogo. A memória e as métricas ficam intactas e podes desligar o kill-switch a qualquer momento.'}
@@ -93,7 +107,7 @@ export default function KillSwitchButton({
               setOpen(false);
             }}
           >
-            {active ? 'Desligar kill-switch' : 'Acionar agora'}
+            {active ? (disarmLabel ?? 'Desligar kill-switch') : 'Acionar agora'}
           </Button>
         </DialogActions>
       </Dialog>

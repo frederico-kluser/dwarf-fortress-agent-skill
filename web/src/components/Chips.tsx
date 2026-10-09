@@ -48,12 +48,52 @@ const MODE_LABEL: Record<ControlMode, string> = {
   paused: 'Em pausa',
 };
 
-/** Indicador global do modo de autonomia (também no AppBar). */
-export function ControlModeChip({ mode, blocked = false }: { mode: ControlMode; blocked?: boolean }) {
+/** Forma curta para ecrãs estreitos — a mesma informação, sem truncar. */
+const MODE_COMPACT_LABEL: Record<ControlMode, string> = {
+  autopilot: 'Autop.',
+  checkpoint: 'Checkpt.',
+  paused: 'Pausa',
+};
+
+/**
+ * Indicador global do modo de autonomia (também no AppBar).
+ * `compact` mantém o chip legível em ecrãs estreitos (auditoria C.1.1.01: o chip
+ * desaparecia abaixo de `sm`, deixando o kill-switch visível sem o modo).
+ */
+export function ControlModeChip({
+  mode,
+  blocked = false,
+  compact = false,
+  pendingQuestions = 0,
+}: {
+  mode: ControlMode;
+  blocked?: boolean;
+  compact?: boolean;
+  pendingQuestions?: number;
+}) {
   if (blocked) {
-    return <Chip size="small" color="error" label="Kill-switch ativo" />;
+    return (
+      <Chip
+        size="small"
+        color="error"
+        label={compact ? 'Kill-switch' : 'Kill-switch ativo'}
+        title={compact ? 'Kill-switch ativo' : undefined}
+      />
+    );
   }
-  return <Chip size="small" variant="outlined" color={MODE_COLOR[mode]} label={MODE_LABEL[mode]} />;
+  return (
+    <Chip
+      size="small"
+      variant="outlined"
+      color={MODE_COLOR[mode]}
+      label={compact ? MODE_COMPACT_LABEL[mode] : MODE_LABEL[mode]}
+      title={
+        compact && pendingQuestions > 0
+          ? `${MODE_LABEL[mode]} · ${pendingQuestions} perguntas à espera de resposta`
+          : undefined
+      }
+    />
+  );
 }
 
 /** Estado de uma pergunta da fila. */

@@ -19,9 +19,11 @@ import { errorMessage } from '../api/events';
 import { formatDateTime, valuePt } from '../api/format';
 import { useMemory, usePatchMemory } from '../api/queries';
 import type { MemoryEpisode } from '../api/types';
+import FreshnessIndicator from '../components/FreshnessIndicator';
 import PanelShell from '../components/PanelShell';
 import { PanelError, PanelLoading, PanelNotice } from '../components/PanelState';
 import SectionCard from '../components/SectionCard';
+import { useNow } from '../hooks/useSparkSeries';
 import { MONO_FONT } from '../theme';
 
 function sortEpisodes(episodes: MemoryEpisode[]): MemoryEpisode[] {
@@ -31,6 +33,7 @@ function sortEpisodes(episodes: MemoryEpisode[]): MemoryEpisode[] {
 /** Editor da memória narrativa: mostra PT, guarda através do PATCH em PT. */
 export default function MemoryPanel() {
   const memoryQuery = useMemory();
+  const now = useNow(1000);
   const memory = memoryQuery.data;
 
   // Rascunho derivado (sem efeitos): `base` é o texto do servidor quando começou a edição.
@@ -52,6 +55,14 @@ export default function MemoryPanel() {
 
   const actions = (
     <>
+      <FreshnessIndicator
+        ts={memoryQuery.dataUpdatedAt ? new Date(memoryQuery.dataUpdatedAt).toISOString() : null}
+        now={now}
+        refreshing={memoryQuery.isFetching}
+        refreshDisabled={memoryQuery.isFetching}
+        onRefresh={() => void memoryQuery.refetch()}
+        refreshLabel="Atualizar memória agora"
+      />
       <Button
         variant="outlined"
         startIcon={<Undo />}
