@@ -18,8 +18,14 @@ Design constraints that shaped this module:
   4xx are **terminal**: retrying cannot fix them.
 * **The API key is never logged.** Errors carry status codes and server text
   only; ``repr(client)`` masks the key.
+* **OpenRouter attribution on every request.** ``HTTP-Referer`` +
+  ``X-OpenRouter-Title`` (never ``X-OpenRouter-App``), so the app shows up in
+  the OpenRouter rankings; a provider error arriving with HTTP 200 and an
+  ``error`` body is mapped and handled like the error it is.
 
-Prices (for budget awareness, not enforced): $0.042/Mtok input, output free.
+Prices (used to estimate ``usage.cost`` when the payload omits it): $0.042/Mtok
+input, output free; a reported ``usage.cost`` always wins, and money is the
+project's 6-decimal contract.
 """
 
 from __future__ import annotations
@@ -59,12 +65,29 @@ __all__ = [
     "Usage",
     "DEFAULT_MODEL",
     "DEFAULT_ENDPOINT",
+    "OPENROUTER_REFERER",
+    "OPENROUTER_TITLE",
+    "PRICES_USD_PER_MTOK",
     "RETRYABLE_STATUSES",
     "DEFAULT_MAX_ATTEMPTS",
+    "estimate_cost",
+    "money",
+    "price_for",
 ]
 
 DEFAULT_MODEL = "typesafe/jev-1.13"
 DEFAULT_ENDPOINT = "https://openrouter.ai/api/alpha/decisions"
+
+#: OpenRouter attribution on every outbound request (skill gotcha 11:
+#: ``HTTP-Referer`` + ``X-OpenRouter-Title`` — never ``X-OpenRouter-App``).
+OPENROUTER_REFERER = "https://github.com/frederico-kluser/dwarf-fortress-agent-skill"
+OPENROUTER_TITLE = "System One Dwarf"
+
+#: USD per million tokens: (input, output). Output is free on Jev.
+PRICES_USD_PER_MTOK: dict[str, tuple[float, float]] = {
+    DEFAULT_MODEL: (0.042, 0.0),
+}
+FALLBACK_PRICES_USD_PER_MTOK: tuple[float, float] = (0.042, 0.0)
 
 #: 429/529 are the documented transient codes; the other 5xx are transient too.
 RETRYABLE_STATUSES: frozenset[int] = frozenset({429, 500, 502, 503, 504, 529})
@@ -268,6 +291,52 @@ def _error_detail(response: Any) -> str | None:
     return text[:300]
 
 
+def _json_payload(response: Any) -> Any:
+    parser = getattr(response, "json", None)
+    if callable(parser):
+        try:
+            return parser()
+        except Exception:
+            pass
+    text = _response_text(response)
+    if not text:
+        return None
+    try:
+        return json.loads(text)
+    except (TypeError, ValueError):
+        return None
+
+
+def _error_status_from_body(payload: Any) -> int | None:
+    """HTTP-equivalent status of a 200 response carrying an ``error`` body.
+
+    Provider errors do not always arrive with a non-200 status (skill gotcha
+    20): the body may hold ``{"error": …}`` with HTTP 200. The mapping is the
+    same one the chat clients use — an explicit ``code`` wins, otherwise the
+    message is classified (rate limit → 429, credits/quota → 402, auth → 401,
+    anything else → 400).
+    """
+    if not isinstance(payload, Mapping):
+        return None
+    error = payload.get("error")
+    if not error:
+        return None
+    if isinstance(error, Mapping):
+        status = _as_int(error.get("code"))
+        if status is not None:
+            return status
+        text = f"{error.get('type', '')} {error.get('message', '')}".lower()
+    else:
+        text = str(error).lower()
+    if "rate" in text or "limit" in text:
+        return 429
+    if "quota" in text or "credit" in text or "insufficient" in text:
+        return 402
+    if "auth" in text or "api key" in text or "unauthor" in text:
+        return 401
+    return 400
+
+
 def _parse_retry_after(value: Any) -> float | None:
     """Parse ``Retry-After`` (seconds or HTTP-date) into non-negative seconds."""
     if value is None:
@@ -308,6 +377,25 @@ def _as_float(value: Any) -> float | None:
 def _as_int(value: Any) -> int | None:
     number = _as_float(value)
     return None if number is None else int(number)
+
+
+def money(value: float | int | None) -> float:
+    """Project money contract: ``float`` in USD with 6 decimals."""
+    if value is None:
+        return 0.0
+    return round(float(value), 6)
+
+
+def price_for(model: str) -> tuple[float, float]:
+    """``(input, output)`` USD per Mtok for ``model`` (fallback when unknown)."""
+    return PRICES_USD_PER_MTOK.get(model or "", FALLBACK_PRICES_USD_PER_MTOK)
+
+
+def estimate_cost(input_tokens: int, output_tokens: int, *, model: str = DEFAULT_MODEL) -> float:
+    """Cost in USD from token counts, in the contract's 6-decimal money format."""
+    price_in, price_out = price_for(model)
+    total = (int(input_tokens or 0) * price_in + int(output_tokens or 0) * price_out) / 1_000_000
+    return money(total)
 
 
 def _as_probabilities(value: Any, problems: list[str] | None = None) -> dict[str, float] | None:
@@ -569,6 +657,8 @@ class JevClient:
             "Authorization": f"Bearer {self._api_key}",
             "Content-Type": "application/json",
             "Accept": "application/json",
+            "HTTP-Referer": OPENROUTER_REFERER,
+            "X-OpenRouter-Title": OPENROUTER_TITLE,
         }
 
     def _post(self, body: Mapping[str, Any]) -> Any:
@@ -616,7 +706,12 @@ class JevClient:
             detail = _error_detail(response)
 
             if status == 200:
-                return response, attempt
+                # gotcha 20: a provider error can arrive with HTTP 200 and an
+                # ``error`` body — it is the error it says it is, not success.
+                body_status = _error_status_from_body(_json_payload(response))
+                if body_status is None:
+                    return response, attempt
+                status, detail = body_status, detail or "error body in a 200 response"
             if status == 401:
                 raise JevAuthError(
                     "Jev request rejected with HTTP 401 (missing or invalid OpenRouter API key)"
@@ -899,12 +994,21 @@ def _normalise_usage(payload: Mapping[str, Any]) -> tuple[Usage, list[str]]:
     output_tokens = _as_int(raw.get("output_tokens"))
     cost = _as_float(raw.get("cost"))
     if raw.get("cost") is not None and cost is None:
-        problems.append("usage.cost is not numeric; counted as zero")
+        problems.append("usage.cost is not numeric; estimated from token pricing")
+    if cost is None:
+        # gotcha 19: no provider cost in the payload -> estimate from the
+        # model's token pricing (input $0.042/Mtok, output free).
+        reported_model = payload.get("model")
+        cost = estimate_cost(
+            input_tokens or 0,
+            output_tokens or 0,
+            model=reported_model if isinstance(reported_model, str) else DEFAULT_MODEL,
+        )
     return (
         Usage(
             input_tokens=input_tokens or 0,
             output_tokens=output_tokens or 0,
-            cost_usd=cost or 0.0,
+            cost_usd=money(cost),
             raw=dict(raw),
         ),
         problems,

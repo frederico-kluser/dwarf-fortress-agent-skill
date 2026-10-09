@@ -89,8 +89,9 @@ def test_usage_is_normalised(make_client, make_response, captured_response, tria
     result = harness.client.decide("state", triage_questions)
     assert result.usage.input_tokens == 476
     assert result.usage.output_tokens == 70
-    assert result.usage.cost_usd == pytest.approx(0.000019992)
-    assert result.usage.raw["cost"] == pytest.approx(0.000019992)
+    # the reported cost wins, rounded to the project's 6-decimal money contract
+    assert result.usage.cost_usd == pytest.approx(0.00002)
+    assert result.usage.raw["cost"] == pytest.approx(0.000019992)  # raw keeps full precision
 
 
 def test_missing_usage_is_zero(make_client, make_response, captured_degraded, triage_questions):
@@ -621,3 +622,78 @@ def test_any_degradation_caps_auto_to_hitl(make_client, make_response, triage_qu
 
     # the cap is not a blanket downgrade: a clean answer still earns `auto`
     assert result.answer("is_bug").band == BAND_AUTO
+
+
+# --------------------------------------------------------------------------- #
+# OpenRouter integration alignment (skill gotchas 11, 17, 19, 20)
+# --------------------------------------------------------------------------- #
+def test_attribution_headers_are_sent_on_every_request(make_client, make_response, captured_response, triage_questions):
+    """Gotcha 11: attribution is ``HTTP-Referer`` + ``X-OpenRouter-Title``."""
+    harness = make_client(make_response(200, captured_response))
+    harness.client.decide("state", triage_questions)
+
+    headers = harness.transport.calls[0].headers
+    assert headers["HTTP-Referer"] == "https://github.com/frederico-kluser/dwarf-fortress-agent-skill"
+    assert headers["X-OpenRouter-Title"] == "System One Dwarf"
+    assert "X-OpenRouter-App" not in headers  # the wrong header (gotcha 11)
+
+
+def test_model_and_endpoint_defaults_are_pinned():
+    from system_one_dwarf.jev.client import DEFAULT_ENDPOINT, DEFAULT_MODEL
+
+    assert DEFAULT_MODEL == "typesafe/jev-1.13"
+    assert DEFAULT_ENDPOINT == "https://openrouter.ai/api/alpha/decisions"
+    assert JevClient("test-key").model == "typesafe/jev-1.13"
+
+
+def test_cost_falls_back_to_token_pricing_with_six_decimals(make_client, make_response, triage_questions):
+    """Gotcha 19: no ``usage.cost`` -> token pricing ($0.042/Mtok in, out free)."""
+    from system_one_dwarf.jev.client import estimate_cost, money
+
+    payload = {
+        "id": "gen-dec-cost",
+        "model": "typesafe/jev-1.13",
+        "answers": {"is_bug": {"type": "noul", "noul": 0.99}},
+        "usage": {"input_tokens": 1_000_000, "output_tokens": 10},
+    }
+    harness = make_client(make_response(200, payload))
+    result = harness.client.decide("state", {"is_bug": noul("is_bug", *GOOD_NOUL)})
+
+    assert result.usage.cost_usd == pytest.approx(0.042)  # output is free
+    assert result.usage.cost_usd == money(result.usage.cost_usd)  # 6 decimals
+    assert estimate_cost(476, 70) == 0.00002  # 476 * 0.042 / 1M, 6 decimals
+
+
+def test_200_with_error_body_auth_is_terminal(make_client, make_response, triage_questions):
+    """Gotcha 20: HTTP 200 carrying an ``error`` body is the error it is."""
+    harness = make_client(make_response(200, {"error": {"code": 401, "message": "no auth"}}))
+    with pytest.raises(JevAuthError) as excinfo:
+        harness.client.decide("state", triage_questions)
+    assert excinfo.value.status_code == 401
+    assert harness.transport.call_count == 1
+
+
+def test_200_with_error_body_quota_is_terminal(make_client, make_response, triage_questions):
+    harness = make_client(make_response(200, {"error": {"message": "Insufficient credits"}}))
+    with pytest.raises(JevQuotaError) as excinfo:
+        harness.client.decide("state", triage_questions)
+    assert excinfo.value.status_code == 402
+    assert harness.transport.call_count == 1
+
+
+def test_200_with_error_body_rate_limit_is_retried(make_client, make_response, captured_response, triage_questions):
+    harness = make_client(
+        make_response(200, {"error": {"message": "Rate limit exceeded"}}, headers={"Retry-After": "1"}),
+        make_response(200, captured_response),
+    )
+    result = harness.client.decide("state", triage_questions)
+    assert harness.transport.call_count == 2
+    assert harness.sleeps == [1.0]
+    assert result.attempts == 2
+
+
+def test_200_with_unknown_error_body_is_a_request_error(make_client, make_response, triage_questions):
+    harness = make_client(make_response(200, {"error": {"message": "something odd"}}))
+    with pytest.raises(JevRequestError, match="something odd"):
+        harness.client.decide("state", triage_questions)
+    assert harness.transport.call_count == 1

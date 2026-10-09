@@ -15,6 +15,10 @@ Model facts this module is built around (verified):
 * ``deepseek/deepseek-v4.1-flash`` through
   ``POST https://openrouter.ai/api/v1/chat/completions`` (OpenAI-compatible),
   ``Authorization: Bearer <key>``, $0.30/Mtok input, $1.20/Mtok output, 1M context.
+* Every request carries the OpenRouter attribution headers ``HTTP-Referer`` and
+  ``X-OpenRouter-Title`` (never ``X-OpenRouter-App``), and ``max_tokens`` is
+  clamped to ``context_length − prompt_tokens`` so the call can never trip a
+  ``context_length_exceeded`` 400.
 * Reasoning control lives in the nested ``reasoning`` object.  The cheapest form
   is ``{"reasoning": {"enabled": false}}``; the model's supported efforts are
   ``max``/``high``/``low`` and ``minimal``/``none`` may be rejected.  The client
@@ -64,10 +68,15 @@ __all__ = [
     "DEFAULT_ENDPOINT",
     "DEFAULT_MAX_TOKENS",
     "DEFAULT_TEMPERATURE",
+    "MODEL_CONTEXT_TOKENS",
+    "OPENROUTER_REFERER",
+    "OPENROUTER_TITLE",
     "REASONING_LADDER",
     "RETRYABLE_STATUSES",
     "PRICES_USD_PER_MTOK",
+    "clamp_max_tokens",
     "estimate_cost",
+    "estimate_prompt_tokens",
     "is_translatable",
     "clean_translation",
     "parse_batch_content",
@@ -75,6 +84,14 @@ __all__ = [
 
 DEFAULT_MODEL = "deepseek/deepseek-v4.1-flash"
 DEFAULT_ENDPOINT = "https://openrouter.ai/api/v1/chat/completions"
+
+#: OpenRouter attribution on every outbound request (skill gotcha 11:
+#: ``HTTP-Referer`` + ``X-OpenRouter-Title`` — never ``X-OpenRouter-App``).
+OPENROUTER_REFERER = "https://github.com/frederico-kluser/dwarf-fortress-agent-skill"
+OPENROUTER_TITLE = "System One Dwarf"
+
+#: Context window of ``deepseek/deepseek-v4.1-flash`` (1M tokens).
+MODEL_CONTEXT_TOKENS = 1_000_000
 
 #: USD per million tokens: (input, output).  Used when the API omits ``cost``.
 PRICES_USD_PER_MTOK: dict[str, tuple[float, float]] = {
@@ -212,6 +229,27 @@ def estimate_cost(input_tokens: int, output_tokens: int, *, model: str = DEFAULT
     price_in, price_out = price_for(model)
     total = (int(input_tokens or 0) * price_in + int(output_tokens or 0) * price_out) / 1_000_000
     return money(total)
+
+
+def estimate_prompt_tokens(*parts: str) -> int:
+    """Cheap prompt-token estimate: ``ceil(chars / 4)`` per part (no tokenizer)."""
+    return sum(-(-len(part or "") // 4) for part in parts)
+
+
+def clamp_max_tokens(
+    requested: int,
+    prompt_tokens: int,
+    *,
+    context_length: int = MODEL_CONTEXT_TOKENS,
+) -> int:
+    """``min(requested, context_length - prompt_tokens)``, never below 1.
+
+    Gotcha 17: a ``max_tokens`` above ``context_length − prompt_tokens`` is a
+    400 (``context_length_exceeded``), so the request is clamped to the room
+    the model actually has (shared by the LLM and translator chat clients).
+    """
+    room = max(1, int(context_length) - max(0, int(prompt_tokens)))
+    return max(1, min(int(requested), room))
 
 
 @dataclass(frozen=True)
@@ -1183,6 +1221,8 @@ class DeepSeekTranslator:
             "Authorization": f"Bearer {self._api_key()}",
             "Content-Type": "application/json",
             "Accept": "application/json",
+            "HTTP-Referer": OPENROUTER_REFERER,
+            "X-OpenRouter-Title": OPENROUTER_TITLE,
         }
 
     def _post(self, body: Mapping[str, Any]) -> Any:
@@ -1238,11 +1278,14 @@ class DeepSeekTranslator:
     # --------------------------------------------------------------------- chat
 
     def _body(self, messages: Sequence[Mapping[str, str]], *, max_tokens: int) -> dict[str, Any]:
+        prompt_tokens = estimate_prompt_tokens(
+            *(str(message.get("content", "")) for message in messages)
+        )
         body: dict[str, Any] = {
             "model": self.model,
             "messages": list(messages),
             "temperature": self.temperature,
-            "max_tokens": int(max_tokens),
+            "max_tokens": clamp_max_tokens(int(max_tokens), prompt_tokens),
         }
         reasoning = self.reasoning_param()
         if reasoning is not None:

@@ -647,3 +647,136 @@ def test_deterministic_reply_helper_matches_the_batch_protocol() -> None:
 
     assert translator.to_pt_batch(["a", "b"])[0].text == "[pt] a"
     assert translator.to_en("olá").text == "[en] olá"
+
+
+# ------------------------------------------- OpenRouter integration alignment
+# (skill gotchas 11, 13, 17, 18, 19, 20)
+
+
+def test_attribution_headers_are_sent_on_every_request() -> None:
+    """Gotcha 11: attribution is ``HTTP-Referer`` + ``X-OpenRouter-Title``."""
+    transport = FakeTransport([chat_response("olá")])
+    make_translator(transport).to_pt("hello")
+
+    headers = transport.calls[0]["headers"]
+    assert headers["HTTP-Referer"] == "https://github.com/frederico-kluser/dwarf-fortress-agent-skill"
+    assert headers["X-OpenRouter-Title"] == "System One Dwarf"
+    assert "X-OpenRouter-App" not in headers  # the wrong header (gotcha 11)
+
+
+def test_model_and_endpoint_defaults_are_pinned() -> None:
+    assert DEFAULT_MODEL == "deepseek/deepseek-v4.1-flash"
+    assert DEFAULT_ENDPOINT == "https://openrouter.ai/api/v1/chat/completions"
+
+    transport = FakeTransport([chat_response("olá")])
+    make_translator(transport).to_pt("hello")
+    assert transport.calls[0]["url"] == DEFAULT_ENDPOINT
+    assert transport.bodies()[0]["model"] == DEFAULT_MODEL
+
+
+def test_reasoning_ladder_is_nested_object_only() -> None:
+    """Gotcha 13: only ``{"effort": …}`` / ``{"enabled": …}``, enum has no "min"."""
+    from system_one_dwarf.translate.translator import REASONING_LADDER
+
+    enum = {"max", "xhigh", "high", "medium", "low", "minimal", "none"}
+    for _name, param in REASONING_LADDER:
+        if param is None:
+            continue
+        assert set(param) <= {"effort", "enabled"}
+        if "effort" in param:
+            assert param["effort"] in enum
+            assert param["effort"] != "min"
+
+    transport = FakeTransport([chat_response("olá")])
+    make_translator(transport).to_pt("hello")
+    body = transport.bodies()[0]
+    assert "reasoning_effort" not in body  # nested-only: gotcha 13
+    assert body["reasoning"] == {"enabled": False}
+
+
+def test_retry_defaults_are_three_attempts_and_a_thirty_second_cap() -> None:
+    """Gotcha 18: bounded retries honouring ``Retry-After``, capped at 30 s."""
+    from system_one_dwarf.translate.translator import DEFAULT_MAX_ATTEMPTS
+
+    translator = DeepSeekTranslator(lambda: FAKE_KEY, transport=FakeTransport())
+    assert DEFAULT_MAX_ATTEMPTS == 3
+    assert translator.max_attempts == 3
+    assert translator.max_retry_after == 30.0
+
+    # and the bound is real: three failures, no fourth attempt
+    transport = FakeTransport([error_response(429, "slow down")] * 3)
+    failing = make_translator(transport, sleep=SleepRecorder())
+    with pytest.raises(TranslationTransportError) as excinfo:
+        failing.to_pt("hello")
+    assert transport.count == 3
+    assert excinfo.value.attempts == 3
+
+
+def test_max_tokens_is_clamped_to_the_context_window() -> None:
+    """Gotcha 17: ``max_tokens`` never exceeds ``context_length - prompt``."""
+    from system_one_dwarf.translate.translator import clamp_max_tokens, estimate_prompt_tokens
+
+    transport = FakeTransport([chat_response("olá")])
+    translator = make_translator(transport, max_tokens=2_000_000)
+
+    translator.to_pt("hello")
+
+    body = transport.bodies()[0]
+    prompt_tokens = estimate_prompt_tokens(
+        body["messages"][0]["content"], body["messages"][1]["content"]
+    )
+    assert body["max_tokens"] == clamp_max_tokens(2_000_000, prompt_tokens)
+    assert body["max_tokens"] < 1_000_000
+
+    # an ordinary request is left untouched
+    small = FakeTransport([chat_response("olá")])
+    make_translator(small).to_pt("hello")
+    assert small.bodies()[0]["max_tokens"] == DEFAULT_MAX_TOKENS
+
+
+def test_cost_keeps_the_six_decimal_money_contract() -> None:
+    """Gotcha 19: provider ``cost`` wins, otherwise token pricing, 6 decimals."""
+    from system_one_dwarf.translate.translator import money
+
+    transport = FakeTransport(
+        [chat_response("olá", usage={"input_tokens": 1_000_000, "output_tokens": 1_000_000})]
+    )
+    result = make_translator(transport).to_pt("hello")
+    assert result.usage.cost_usd == 1.50  # 0.30 + 1.20 USD per Mtok
+    assert result.usage.cost_usd == money(result.usage.cost_usd)
+
+    priced = FakeTransport([chat_response("olá", cost=0.0423184)])
+    assert make_translator(priced).to_pt("hello").usage.cost_usd == 0.042318
+
+
+def test_200_with_error_body_auth_is_terminal() -> None:
+    """Gotcha 20: a 200 carrying an ``error`` body is the error it is."""
+    transport = FakeTransport([error_body_response(401, "invalid api key")])
+    translator = make_translator(transport)
+
+    with pytest.raises(TranslationAuthError):
+        translator.to_pt("hello")
+
+    assert transport.count == 1  # terminal: no retry
+
+
+def test_200_with_error_body_classifies_by_message_without_a_code() -> None:
+    from dwarf_translate_fakes import FakeResponse
+
+    quota = FakeTransport([FakeResponse(200, {"error": {"message": "Insufficient credits"}})])
+    with pytest.raises(TranslationQuotaError):
+        make_translator(quota).to_pt("hello")
+
+    limited = FakeTransport(
+        [FakeResponse(200, {"error": {"message": "Rate limit exceeded"}}), chat_response("olá")]
+    )
+    assert make_translator(limited, sleep=SleepRecorder()).to_pt("hello").text == "olá"
+    assert limited.count == 2  # rate limits are retried
+
+
+def test_503_is_retried() -> None:
+    transport = FakeTransport([error_response(503, "no provider available"), chat_response("olá")])
+    translator = make_translator(transport, sleep=SleepRecorder())
+
+    assert translator.to_pt("hello").text == "olá"
+    assert transport.count == 2

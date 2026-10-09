@@ -815,3 +815,106 @@ def test_retry_after_returns_none_when_the_date_parser_yields_nothing(monkeypatc
     monkeypatch.setattr(llm_mod, "parsedate_to_datetime", lambda text: None)
 
     assert llm_mod._parse_retry_after("not-a-number-not-a-date") is None
+
+
+# --------------------------------------------- OpenRouter integration alignment
+# (skill gotchas 11, 13, 17, 19: attribution, nested reasoning, max_tokens guard)
+
+
+def test_attribution_headers_are_sent_on_every_request():
+    """Gotcha 11: attribution is ``HTTP-Referer`` + ``X-OpenRouter-Title``."""
+    transport = FakeTransport(chat_payload("ok"))
+    llm = make_llm(transport)
+
+    llm.complete("s", "u")
+
+    headers = transport.calls[0]["headers"]
+    assert headers["HTTP-Referer"] == "https://github.com/frederico-kluser/dwarf-fortress-agent-skill"
+    assert headers["X-OpenRouter-Title"] == "System One Dwarf"
+    assert "X-OpenRouter-App" not in headers  # the wrong header (gotcha 11)
+
+
+def test_model_and_endpoint_defaults_are_pinned():
+    from system_one_dwarf.agent.llm import DEFAULT_ENDPOINT, DEFAULT_MODEL
+
+    assert DEFAULT_MODEL == "deepseek/deepseek-v4.1-flash"
+    assert DEFAULT_ENDPOINT == "https://openrouter.ai/api/v1/chat/completions"
+
+    transport = FakeTransport(chat_payload("ok"))
+    make_llm(transport).complete("s", "u")
+    assert transport.last_body["model"] == "deepseek/deepseek-v4.1-flash"
+    assert transport.calls[0]["url"] == "https://openrouter.ai/api/v1/chat/completions"
+
+
+def test_reasoning_ladders_are_nested_object_only():
+    """Gotcha 13: only ``{"effort": …}`` / ``{"enabled": …}`` — enum has no "min"."""
+    from system_one_dwarf.agent.llm import REASONING_LEVELS, reasoning_ladder
+
+    assert "min" not in REASONING_LEVELS
+    assert set(REASONING_LEVELS) == {"max", "xhigh", "high", "medium", "low", "minimal", "none"}
+    for level in REASONING_LEVELS:
+        for rung in reasoning_ladder(level):
+            if rung is None:
+                continue
+            assert set(rung) <= {"effort", "enabled"}
+            if "effort" in rung:
+                assert rung["effort"] in REASONING_LEVELS
+            else:
+                assert set(rung.values()) <= {True, False}
+
+
+@pytest.mark.parametrize("effort", ["max", "xhigh", "high", "medium", "low", "minimal", "none"])
+def test_no_top_level_reasoning_effort_is_ever_sent(effort: str):
+    transport = FakeTransport(chat_payload("ok"))
+    make_llm(transport).complete("s", "u", reasoning=effort)
+
+    body = transport.last_body
+    assert "reasoning_effort" not in body  # nested-only: gotcha 13
+    if "reasoning" in body:
+        assert isinstance(body["reasoning"], dict)
+
+
+def test_max_tokens_is_clamped_to_the_context_window():
+    """Gotcha 17: ``max_tokens`` never exceeds ``context_length - prompt``."""
+    from system_one_dwarf.agent.llm import clamp_max_tokens, estimate_prompt_tokens
+
+    transport = FakeTransport(chat_payload("ok"))
+    llm = make_llm(transport, max_tokens=2_000_000)
+
+    llm.complete("You narrate.", "RECENT EVENTS: " + "x" * 120)
+
+    expected = clamp_max_tokens(2_000_000, estimate_prompt_tokens("You narrate.", "RECENT EVENTS: " + "x" * 120))
+    assert transport.last_body["max_tokens"] == expected
+    assert expected < 1_000_000
+
+    # a per-call override is clamped too
+    llm.complete("s", "u", max_tokens=3_000_000)
+    assert transport.last_body["max_tokens"] == 1_000_000 - estimate_prompt_tokens("s", "u")
+
+    # a small request is left untouched (the happy-path test pins 321)
+    llm.complete("s", "u", max_tokens=321)
+    assert transport.last_body["max_tokens"] == 321
+
+
+def test_clamp_and_estimate_helpers():
+    from system_one_dwarf.agent.llm import clamp_max_tokens, estimate_prompt_tokens
+
+    assert estimate_prompt_tokens("abcd") == 1
+    assert estimate_prompt_tokens("abcde") == 2
+    assert estimate_prompt_tokens("", "a") == 1
+    assert estimate_prompt_tokens(None) == 0  # type: ignore[arg-type]
+
+    assert clamp_max_tokens(1200, 10) == 1200
+    assert clamp_max_tokens(2_000_000, 1_000_000 - 50) == 50
+    assert clamp_max_tokens(100, 2_000_000) == 1  # never an invalid 0
+    assert clamp_max_tokens(100, 10, context_length=50) == 40
+
+
+def test_cost_keeps_the_six_decimal_money_contract():
+    from system_one_dwarf.agent import estimate_cost, money, parse_usage
+
+    # provider cost wins and is rounded to 6 decimals; otherwise token pricing
+    assert parse_usage({"usage": {"prompt_tokens": 1, "completion_tokens": 1, "cost": 0.0423184}}).cost_usd == 0.042318
+    assert parse_usage({"usage": {"prompt_tokens": 1_000_000, "completion_tokens": 0}}).cost_usd == 0.30
+    assert parse_usage({"usage": {"prompt_tokens": 0, "completion_tokens": 1_000_000}}).cost_usd == 1.20
+    assert money(estimate_cost(123, 456)) == round(estimate_cost(123, 456), 6)

@@ -4,7 +4,10 @@ One client, one endpoint: ``deepseek/deepseek-v4.1-flash`` through the
 OpenAI-compatible OpenRouter chat API (``POST /api/v1/chat/completions`` with
 ``Authorization: Bearer <key>``).  The key is **never** in the code: it arrives
 through the ``get_key`` callable, is fetched per request, and never reaches a
-log line, an exception message or a ``repr``.
+log line, an exception message or a ``repr``.  Every outbound request carries
+the OpenRouter attribution headers (``HTTP-Referer`` + ``X-OpenRouter-Title``,
+never ``X-OpenRouter-App``) and clamps ``max_tokens`` to the room left in the
+1M-token context, so a call can never trip ``context_length_exceeded``.
 
 Dynamic reasoning effort (the core of the narrator's cost control)
 ------------------------------------------------------------------
@@ -71,6 +74,7 @@ from email.utils import parsedate_to_datetime
 from typing import Any, Callable, Mapping, Protocol, runtime_checkable
 
 from ..campaign.clock import utc_now_iso
+from ..translate.translator import clamp_max_tokens, estimate_prompt_tokens
 
 log = logging.getLogger("system_one_dwarf.agent.llm")
 
@@ -93,11 +97,15 @@ __all__ = [
     "money",
     "parse_usage",
     "spend_recorder",
+    "clamp_max_tokens",
+    "estimate_prompt_tokens",
     "DEFAULT_MODEL",
     "DEFAULT_ENDPOINT",
     "DEFAULT_MAX_TOKENS",
     "DEFAULT_TEMPERATURE",
     "DEFAULT_MAX_ATTEMPTS",
+    "OPENROUTER_REFERER",
+    "OPENROUTER_TITLE",
     "REASONING_LEVELS",
     "MODEL_EFFORTS",
     "REASONING_OFF",
@@ -107,6 +115,11 @@ __all__ = [
 
 DEFAULT_MODEL = "deepseek/deepseek-v4.1-flash"
 DEFAULT_ENDPOINT = "https://openrouter.ai/api/v1/chat/completions"
+
+#: OpenRouter attribution on every outbound request (skill gotcha 11:
+#: ``HTTP-Referer`` + ``X-OpenRouter-Title`` — never ``X-OpenRouter-App``).
+OPENROUTER_REFERER = "https://github.com/frederico-kluser/dwarf-fortress-agent-skill"
+OPENROUTER_TITLE = "System One Dwarf"
 
 #: USD per million tokens: (input, output), the contract's model card.
 PRICES_USD_PER_MTOK: dict[str, tuple[float, float]] = {
@@ -809,7 +822,11 @@ class DeepSeekLLM:
                 {"role": "user", "content": user},
             ],
             "temperature": float(self.temperature if temperature is None else temperature),
-            "max_tokens": int(self.max_tokens if max_tokens is None else max_tokens),
+            # gotcha 17: max_tokens may never exceed context_length - prompt.
+            "max_tokens": clamp_max_tokens(
+                int(self.max_tokens if max_tokens is None else max_tokens),
+                estimate_prompt_tokens(system, user),
+            ),
         }
 
         started = time.perf_counter()
@@ -941,6 +958,8 @@ class DeepSeekLLM:
             "Authorization": f"Bearer {self._api_key()}",
             "Content-Type": "application/json",
             "Accept": "application/json",
+            "HTTP-Referer": OPENROUTER_REFERER,
+            "X-OpenRouter-Title": OPENROUTER_TITLE,
         }
 
     def _post(self, body: Mapping[str, Any]) -> Any:
