@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
-"""System One Dwarf — replays the PROVEN adventurer-creation sequence (stdlib only).
+"""System One Dwarf — replays the PROVEN adventurer-creation sequence (CLI).
+
+This CLI is now a thin **wrapper** around the service piece
+``src/system_one_dwarf/game/driver.py`` (the same flow the web API drives):
+the step engine, the retry rule and the abort report live in
+:class:`system_one_dwarf.game.driver.AdventureDriver`; this script keeps the
+command-line behaviour and output of the original replay tool.
 
 Drives DF 53.16's mouse-first menus through the DFHack bridge. This build's title
 menu does NOT respond to `key SELECT`; the working input is a synthetic mouse click
@@ -28,88 +34,43 @@ actions sent). `--dry-run` prints the plan and exits without touching the game.
 from __future__ import annotations
 
 import argparse
-import json
-import re
-import subprocess
 import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
+SRC = ROOT / "src"
+if str(SRC) not in sys.path:  # o pacote é src-layout e pode não estar instalado
+    sys.path.insert(0, str(SRC))
+
+from system_one_dwarf.game.driver import (  # noqa: E402
+    AdventureDriver,
+    StepAbort,
+    StepCancelled,
+    SubprocessBridge,
+    check_expect,
+    label_centre,
+    load_steps as _load_steps,
+)
+
 DEFAULT_STEPS = HERE / "steps.json"
 MAX_RETRIES = 5
 POLL_TIMEOUT = 240  # seconds for `poll` steps (world gen / export can be slow)
 
 
 def load_steps(path):
-    steps = json.loads(Path(path).read_text(encoding="utf-8"))
-    if not isinstance(steps, list) or not steps:
-        raise SystemExit(f"steps inválido em {path}: esperava lista nao vazia")
-    return steps
+    try:
+        return _load_steps(path)
+    except ValueError as exc:
+        raise SystemExit(str(exc))
 
 
-class Bridge:
-    def __init__(self, df_path, port=None):
-        self.base = ["python3", "dfhack/df_bridge.py"]
-        if df_path:
-            self.base += ["--df-path", df_path]
-        if port:
-            self.base += ["--port", str(port)]
-
-    def _run(self, args, timeout=120):
-        return subprocess.run(self.base + list(args), capture_output=True,
-                              text=True, cwd=str(ROOT), timeout=timeout)
-
-    def screen(self):
-        """-> (focus:str, text:str) from `act screen --json`."""
-        proc = self._run(["act", "screen", "--json"])
-        try:
-            data = json.loads(proc.stdout or "{}").get("data", {})
-        except ValueError:
-            return "", proc.stdout or ""
-        focus = "/".join(data.get("focus") or [])
-        text = "\n".join(data.get("lines") or [])
-        return focus, text
-
-    def click(self, x, y):
-        self._run(["act", "batch", f"click {x},{y}; sleep 500"])
-
-    def keys(self, names):
-        self._run(["act", "batch", "key " + " ".join(names) + "; sleep 500"])
-
-
-def label_centre(text, needle, regex=False):
-    """(x, y) of the centre of `needle` in the screen text, or None."""
-    lines = text.splitlines()
-    for y, line in enumerate(lines):
-        if regex:
-            m = re.search(needle, line)
-            if m:
-                return (m.start() + (m.end() - m.start()) // 2, y)
-        else:
-            idx = line.find(needle)
-            if idx >= 0:
-                return (idx + len(needle) // 2, y)
-    return None
-
-
-def check_expect(expect, focus, text):
-    """True when the step's expect is satisfied by focus/screen text.
-
-    `expect` may be a single string or a list of alternatives (any match passes).
-    """
-    if isinstance(expect, (list, tuple)):
-        return any(check_expect(item, focus, text) for item in expect)
-    if expect.startswith("focus:"):
-        needle = expect[len("focus:"):].split(" (")[0].strip()
-        return needle.lower() in focus.lower()
-    if expect.startswith("screen:"):
-        needle = expect[len("screen:"):].split(" (")[0].strip()
-        return needle.lower() in text.lower()
-    return expect.lower() in (focus + "\n" + text).lower()
+class Bridge(SubprocessBridge):
+    """A ponte do replay — :class:`system_one_dwarf.game.driver.SubprocessBridge`."""
 
 
 def abort_report(step, screens, actions):
+    """Relatório PT de aborto (compat: o texto histórico do CLI)."""
     print("", file=sys.stderr)
     print("=== RELATORIO DE ABORTO (create_adventurer) ===", file=sys.stderr)
     print(f"Passo: {step.get('name')}", file=sys.stderr)
@@ -123,60 +84,25 @@ def abort_report(step, screens, actions):
     raise SystemExit(1)
 
 
-def run_step(step, bridge, out):
-    keys = step.get("keys") or []
-    directive = keys[0] if keys else ""
-    name = step.get("name")
-    print(f"   directive: {directive or '(poll/none)'}", file=out)
+class _Echo:
+    """Reproduz no stdout a narrativa histórica do replay a partir dos eventos."""
 
-    # poll steps: wait for the expected focus without acting
-    if directive == "poll" or directive.startswith("poll"):
-        expect = step.get("expect", "")
-        for _ in range(POLL_TIMEOUT // max(1, int(step.get("wait", 8)))):
-            focus, text = bridge.screen()
-            if check_expect(expect, focus, text):
-                return [(focus, text)], ["poll"]
-            import time
-            time.sleep(step.get("wait", 8))
-        focus, text = bridge.screen()
-        abort_report(step, [(focus, text)], ["poll"])
+    def __init__(self, total: int, out=sys.stdout):
+        self.total = total
+        self.out = out
 
-    screens, actions = [], []
-    for _attempt in range(1, MAX_RETRIES + 1):
-        focus, text = bridge.screen()
-        screens.append((focus, text))
-        if directive.startswith("click_re "):
-            pat = directive[len("click_re "):]
-            centre = label_centre(text, pat, regex=True)
-            if centre:
-                bridge.click(*centre)
-                actions.append(f"click@{centre} /{pat}/")
-            else:
-                actions.append(f"click_re {pat} -> NOT FOUND")
-        elif directive.startswith("click "):
-            label = directive[len("click "):].strip().strip('"')
-            centre = label_centre(text, label)
-            if centre:
-                bridge.click(*centre)
-                actions.append(f"click@{centre} '{label}'")
-            else:
-                actions.append(f"click '{label}' -> NOT FOUND")
-        elif directive.startswith("key "):
-            names = directive[len("key "):].split()
-            bridge.keys(names)
-            actions.append("key " + " ".join(names))
-        else:
-            actions.append(f"unhandled: {directive}")
-
-        import time
-        time.sleep(step.get("wait", 1.0))
-        focus, text = bridge.screen()
-        screens.append((focus, text))
-        if check_expect(step.get("expect", ""), focus, text):
-            print(f"   OK: {step.get('expect')}", file=out)
-            return screens, actions
-        print(f"   falha (tentativa {_attempt}): expect nao visto", file=out)
-    abort_report(step, screens, actions)
+    def __call__(self, event):
+        kind = event.get("event")
+        if kind == "step_start":
+            index = int(event.get("index") or 0)
+            print(f"[{index}/{self.total}] {event.get('name')} "
+                  f"(guessed={event.get('guessed')})", file=self.out)
+            print(f"   directive: {event.get('directive')}", file=self.out)
+        elif kind == "step_ok":
+            print(f"   OK: {event.get('expect')}", file=self.out)
+        elif kind == "attempt_failed":
+            print(f"   falha (tentativa {event.get('attempt')}): expect nao visto",
+                  file=self.out)
 
 
 def parse_args(argv=None):
@@ -192,23 +118,34 @@ def parse_args(argv=None):
     return p.parse_args(argv)
 
 
+def print_plan(steps):
+    for i, step in enumerate(steps, 1):
+        keys = "; ".join(step.get("keys") or [])
+        print(f"[{i}/{len(steps)}] {step.get('name')} (guessed={step.get('guessed')})")
+        print(f"    do:    {keys or '(poll/none)'}")
+        print(f"    wait:  {step.get('wait')}s")
+        print(f"    expect:{step.get('expect')}")
+    print(f"--- dry-run: {len(steps)} passo(s), jogo NAO tocado ---")
+
+
 def main(argv=None):
     args = parse_args(argv)
     steps = load_steps(args.steps)
     if args.dry_run:
-        for i, step in enumerate(steps, 1):
-            keys = "; ".join(step.get("keys") or [])
-            print(f"[{i}/{len(steps)}] {step.get('name')} (guessed={step.get('guessed')})")
-            print(f"    do:    {keys or '(poll/none)'}")
-            print(f"    wait:  {step.get('wait')}s")
-            print(f"    expect:{step.get('expect')}")
-        print(f"--- dry-run: {len(steps)} passo(s), jogo NAO tocado ---")
+        print_plan(steps)
         return 0
 
     bridge = Bridge(args.df_path, args.port)
-    for i, step in enumerate(steps, 1):
-        print(f"[{i}/{len(steps)}] {step.get('name')} (guessed={step.get('guessed')})")
-        run_step(step, bridge, sys.stdout)
+    driver = AdventureDriver(
+        bridge, steps=steps, max_attempts=MAX_RETRIES, poll_timeout=POLL_TIMEOUT
+    )
+    try:
+        driver.run_flow(steps, on_event=_Echo(len(steps)))
+    except StepAbort as exc:
+        abort_report(exc.step, exc.screens, exc.actions)
+    except StepCancelled:
+        print("CANCELADO: fluxo interrompido pelo utilizador.", file=sys.stderr)
+        return 1
     print("--- fluxo de criacao concluido ---")
     return 0
 

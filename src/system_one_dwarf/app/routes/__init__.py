@@ -5,6 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from . import (
+    adventures,
     approvals,
     campaigns,
     control,
@@ -18,10 +19,12 @@ from . import (
     questions,
     screen,
     spend,
+    system,
 )
 
 __all__ = [
     "all_routers",
+    "adventures",
     "approvals",
     "campaigns",
     "control",
@@ -35,6 +38,7 @@ __all__ = [
     "questions",
     "screen",
     "spend",
+    "system",
 ]
 
 
@@ -54,4 +58,6 @@ def all_routers() -> list[APIRouter]:
         approvals.router,
         control.router,
         screen.router,
+        adventures.router,
+        system.router,
     ]

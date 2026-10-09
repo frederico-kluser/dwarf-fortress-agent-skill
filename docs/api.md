@@ -600,6 +600,232 @@ Texto do ecrã **já traduzido** para português (só PT — o original nunca é
 
 ---
 
+## Aventuras: escolher ou criar mundo + personagem
+
+É por aqui que a UI faz **tudo** sem sair do site: escolher uma aventura já
+existente ou criar um mundo novo + personagem — o que antes só existia no CLI
+(`scripts/e2e/create_adventurer.py`, hoje um *wrapper* do mesmo motor). Os
+endpoints arrancam **tarefas assíncronas** que conduzem os menus do jogo
+(cliques sintéticos derivados do `screen_text`; os menus do DF 53.16 são
+*mouse-first*).
+
+### Modelo comum: tarefas de aventura
+
+Os três `POST` (`new-world`, `new-character`, `load`) respondem **`202`** com:
+
+```json
+{ "task_id": "t-8f2c4b19d0aa", "kind": "new_world" }
+```
+
+| Regra | Comportamento |
+|---|---|
+| **Uma tarefa de cada vez por campanha** | Começar uma segunda tarefa com uma em curso → **`409`** `{"detail": "..."}` |
+| Estados | `running` \| `done` \| `error` (o contrato fixa três estados) |
+| Passos | Cada passo dos menus corre com **≤ 5 tentativas**; na falha final a tarefa termina em `error` com o **relatório PT** (passo, tentativas, ações enviadas, telas vistas) no campo `error` |
+| Cancelamento | `POST .../adventures/cancel` faz o motor **parar de enviar teclas**; a tarefa termina em `error` com `error: "cancelled"` |
+| Progresso | `GET .../adventures/status` + evento WS **`adventure_task`** (aditivo) |
+| `last_screen_pt` | Último ecrã traduzido via o seam `display_pt` (tradutor da campanha) — calculado **dentro** da tarefa (uma tradução por passo); os endpoints nunca bloqueiam em tradução nem em I/O de jogo |
+
+Objeto `task` (em `GET .../adventures/status` e no evento WS):
+
+```json
+{
+  "id": "t-8f2c4b19d0aa",
+  "kind": "new_world",
+  "state": "running",
+  "step": 3,
+  "steps_total": 6,
+  "last_screen_pt": "A gerar o mundo…",
+  "error": null
+}
+```
+
+`last_screen_pt` e `error` são **opcionais** (só presentes quando existem).
+
+### Saves: como a lista é derivada (best-effort)
+
+`GET .../adventures` lê a pasta de saves do DF (`<df>/data/save/`). Parsing
+**best-effort** de nomes de pastas e `mtime`s (⚠️ marcas **GUESS** assinaladas):
+
+| Campo | Derivação |
+|---|---|
+| `id` | Nome da pasta do save — é exatamente o argumento do `load-save` do DFHack (GROUND) |
+| `name` | Nome da pasta sem o sufixo de cópia sazonal `region#-AAAA-MM-DD` (**GUESS** parcial — as pastas podem ser renomeadas livremente com o jogo fechado, a wiki do DF confirma-o) |
+| `kind` | `"active"` quando a pasta tem `world.sav` (jogo já iniciado — carregável com `load-save`, GROUND na documentação DFHack) ou `"world"` quando só tem `world.dat` (mundo gerado, nenhum jogo iniciado) — **GUESS** na correspondência exata dos ficheiros |
+| `folder` | Caminho absoluto da pasta do save |
+| `saved_at` | `mtime` de `world.sav`/`world.dat` (ou da pasta) em ISO-8601 UTC |
+| `characters?` | **Omitido hoje** — os nomes de personagens estão em binários dentro do save e não são parseáveis offline (**GUESS**: sem correspondência de nomes) |
+
+### `GET /api/campaigns/{id}/adventures`
+
+**200**
+
+```json
+{
+  "adventures": [
+    { "id": "region1", "name": "region1", "kind": "active",
+      "folder": "/home/ondokai/Games/dwarf-fortress-53.16/data/save/region1",
+      "saved_at": "2026-10-09T18:12:03.000Z" },
+    { "id": "region2-00202-01-01", "name": "region2", "kind": "world",
+      "folder": "/home/ondokai/Games/dwarf-fortress-53.16/data/save/region2-00202-01-01",
+      "saved_at": "2026-10-08T09:00:00.000Z" }
+  ],
+  "current": { "adventure_id": "region1", "adventurer_name": "Omba Ziltacathi",
+               "world_name": "The Planets of Prophecy", "alive": true }
+}
+```
+
+`current` vem do **último snapshot** do jogo e é `null` quando não há
+aventureiro (incl. com o jogo em baixo). `adventure_id?` é preenchido quando é
+conhecido (última carga bem-sucedida, ou pasta cujo nome casa com o nome do
+mundo — **GUESS**); `alive` é best-effort (`false` quando o gamelog marca a
+morte do aventureiro).
+
+### `POST /api/campaigns/{id}/adventures/new-world`
+
+Arranca o fluxo provado de **criação de mundo** (título → worldgen → export →
+ecrã de tipo de jogo). Pode demorar **minutos** (worldgen) — é por isso que é
+assíncrono.
+
+**Corpo**
+
+```json
+{ "world_name": "The Planets of Prophecy", "params": "quick" }
+```
+
+| Campo | Obrigatório | Semântica |
+|---|---|---|
+| `world_name?` | não | Best-effort (**GUESS**): clica o campo de nome e escreve o texto; passo *soft* — nunca aborta o fluxo |
+| `params` | sim | `"quick"`: aceita os parâmetros do ecrã e tenta encurtar o worldgen clicando labels de tamanho/história curtos quando visíveis (**GUESS**, *soft*); `"default"`: aceita os parâmetros do ecrã tal como estão (o fluxo provado) |
+
+**202** → `{ "task_id", "kind": "new_world" }` · **409** ocupada
+
+### `POST /api/campaigns/{id}/adventures/new-character`
+
+Conduz a **criação de personagem** (o fluxo provado: `Adventurer` → destino →
+raça → origem → `Accept …` → `Ready to adventure!` → `Go!`). Composto depois de
+`new-world` (que termina no ecrã de tipo de jogo) ou depois de um `load` de um
+save `world`.
+
+**Corpo**
+
+```json
+{ "name": "Urist", "race": "human", "origin": "Morningflashes", "randomize": false }
+```
+
+| Campo | Obrigatório | Semântica |
+|---|---|---|
+| `name?` | não | Best-effort (**GUESS**): clica o campo de nome e escreve o texto (passo *soft*) |
+| `race?` | não | Guia o label: `Select <race>` (predefinição: `human`) |
+| `origin?` | não | Guia o label: `Select <origin>` (predefinição: a primeira origem visível) |
+| `randomize` | sim | Best-effort (**GUESS**): clica labels `Randomize` quando visíveis antes de aceitar aparência/personalidade (passo *soft*) |
+
+Sem parâmetros o fluxo **aceita tudo** (labels `Accept`/`Ready` do fluxo provado).
+
+**202** → `{ "task_id", "kind": "new_character" }` · **409** ocupada
+
+### `POST /api/campaigns/{id}/adventures/load`
+
+Carrega um save da lista.
+
+**Corpo**
+
+```json
+{ "adventure_id": "region1" }
+```
+
+* save **`active`** → o motor corre o `load-save <pasta>` do DFHack (não
+  interativo; GROUND — só saves ativos) e espera pelo jogo (`dungeonmode`);
+* save **`world`** → fluxo de menus até ao ecrã de tipo de jogo (**GUESS** nos
+  labels, com verificação final), a partir daí compõe com `new-character`.
+
+**202** → `{ "task_id", "kind": "load" }` · **409** ocupada · **422**
+`{"detail": "aventura desconhecida: ..."}` quando o `adventure_id` não existe
+na pasta de saves.
+
+### `GET /api/campaigns/{id}/adventures/status`
+
+Progresso ao vivo — não bloqueia nem em tradução nem em I/O de jogo.
+
+**200**
+
+```json
+{
+  "task": { "id": "t-8f2c4b19d0aa", "kind": "new_character", "state": "running",
+            "step": 4, "steps_total": 13, "last_screen_pt": "Escolha o seu destino" },
+  "current": { "adventurer_name": "Omba Ziltacathi", "alive": true }
+}
+```
+
+`task` é `null` quando esta campanha ainda não correu nenhuma tarefa; `current`
+segue a regra do `GET .../adventures`.
+
+### `POST /api/campaigns/{id}/adventures/cancel`
+
+Cancela a tarefa em curso (o motor para de enviar teclas na próxima verificação,
+entre ações/tentativas). A tarefa termina em `error` com `error: "cancelled"`.
+
+**200**
+
+```json
+{ "cancelled": true, "task": { "id": "t-8f2c4b19d0aa", "kind": "new_character",
+                               "state": "error", "step": 4, "steps_total": 13,
+                               "error": "cancelled" } }
+```
+
+Sem tarefa em curso: `{ "cancelled": false, "task": null }` (ou o registo da
+última tarefa, já terminada, inalterado).
+
+---
+
+## Sistema: estado global e o processo do jogo
+
+### `GET /api/system/status`
+
+**200**
+
+```json
+{
+  "game":     { "running": true, "pid": 12345, "rpc": true,
+                "path": "/home/ondokai/Games/dwarf-fortress-53.16" },
+  "backend":  { "version": "0.1.0" },
+  "frontend": { "running": true, "port": 5173 },
+  "loop":     { "campaigns": [ { "id": "c-1", "mode": "autopilot", "running": true } ] }
+}
+```
+
+| Campo | Derivação |
+|---|---|
+| `game.running` / `game.pid` | Processos `dwarfort` **do caminho configurado** (`pid` é opcional — falta quando em baixo) |
+| `game.rpc` | Sonda TCP best-effort da porta RPC DFHack (`DFHACK_PORT` → `dfhack-config/remote-server.json` → `5000`) |
+| `game.path` | Caminho configurado do DF (`DF_PATH`/`SOD_DF_PATH`/`~/Games/dwarf-fortress-53.16`) |
+| `frontend.running` / `port` | Sonda TCP da porta da UI web (5173) |
+| `loop.campaigns` | `id`, `mode` de controlo e `running` do loop de decisão de cada campanha |
+
+### `POST /api/system/game`
+
+Arranca/pára **o processo do jogo** (o mesmo lançamento do `scripts/sod.sh`).
+Guarda: só gere o jogo **no caminho configurado** — não há caminho no pedido.
+
+**Corpo** `{"action": "start"}` ou `{"action": "stop"}`
+
+* `start` → `env SDL_AUDIODRIVER=dummy SDL_VIDEODRIVER=x11 LIBGL_ALWAYS_SOFTWARE=1
+  ./dfhack` destacado (grupo de processos próprio) com log em `.runtime/game.log`;
+  já a correr → responde com `already_running: true` (não lança outro);
+* `stop` → escalonamento provado: `kill -TERM` **ao grupo**, espera até 10 s e
+  `kill -KILL` ao grupo (o `dwarfort` ignora SIGTERM).
+
+**200**
+
+```json
+{ "action": "start", "running": true, "pid": 12345, "already_running": false }
+```
+
+**503** `{"detail": "..."}` quando o gestor recusa (ex.: lançador
+`<df>/dfhack` ausente) · **422** para `action` inválido.
+
+---
+
 ## WebSocket
 
 ### `WS /ws/campaigns/{id}`
@@ -635,6 +861,7 @@ Canal de tempo real por campanha. Todas as mensagens são **JSON** com envelope 
 | `approval_updated` | **Aditivo** — a mesma entrada depois de decidida (`status` `approved`/`rejected`), venha a decisão de `.../approvals/{id}/approve|reject` ou da resposta da pergunta |
 | `approval_released` | **Aditivo** — `{ "action_id", "ts", "decision" }`; emitido quando uma aprovação humana é **consumida** para libertar a ação retida (execução única). `decision` é o registo do JEV-A já sinalizado com `released_by_approval` em `issues` |
 | `action_executed` | **Aditivo** — `{ "action_id", "ts", "decision" }`; emitido quando a ação é **mesmo despachada** (com ou sem libertação humana). É o que marca o registo do JEV-A com `status: "executed"` no log de decisões |
+| `adventure_task` | **Aditivo** — `{ "task_id", "kind", "state", "step", "steps_total", "last_screen_pt"?, "error"? }`; progresso de uma tarefa de aventura (`POST .../adventures/*`), emitido em cada transição (arranque, mudança de passo, fim) |
 | `error` | **Aditivo** — `{ "detail": "<mensagem>" }`; erro recuperável do canal (JSON inválido, `question_id` em falta, pergunta inexistente). O canal **não** fecha |
 
 Estes eventos aditivos mantêm-se **aditivos** face ao contrato original: um

@@ -21,6 +21,13 @@ Other pieces plug in here:
 * ``create_app(loop_builder=...)`` — per-campaign decision-loop builder (test
   seam; defaults to :func:`system_one_dwarf.app.loop_runner.build_loop`, the real
   ``AgentLoop`` with every collaborator wired).
+* ``create_app(df_path=..., adventure_driver_factory=..., adventure_task_runner=...,
+  game_manager=...)`` — the adventure/system piece (``docs/api.md``):
+  ``adventure_driver_factory`` builds the menu-driving
+  :class:`~system_one_dwarf.game.driver.AdventureDriver` per campaign,
+  ``adventure_task_runner`` starts each async task (tests run it synchronously),
+  ``game_manager`` is the game-process manager (``GameProcessManager`` at the
+  configured ``df_path`` by default — the only place the game is ever managed).
 * ``app.state.services.publish_event(campaign_id, type, payload)`` — the single
   entry point that keeps the REST reads and the WS channel in sync.
 
@@ -43,9 +50,10 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .. import __version__
 from ..campaign import CampaignManager, Translator
+from ..game.driver import GameProcessManager
 from .loop_runner import DEFAULT_STOP_TIMEOUT
 from .routes import all_routers
-from .state import AppServices
+from .state import DEFAULT_WEB_PORT, AppServices
 from .translator import TranslatorFactory
 from . import ws as ws_module
 
@@ -87,6 +95,12 @@ def create_app(
     loop_builder: Callable[..., Any] | None = None,
     loop_stop_timeout: float = DEFAULT_STOP_TIMEOUT,
     python: str | None = None,
+    df_path: Path | str | None = None,
+    adventure_driver_factory: Callable[..., Any] | None = None,
+    adventure_task_runner: Callable[[Callable[[], None]], Any] | None = None,
+    game_manager: Any | None = None,
+    web_port: int | None = None,
+    frontend_probe: Callable[[int], bool] | None = None,
 ) -> FastAPI:
     """Build the application (all state lives on ``app.state.services``)."""
     manager = CampaignManager(
@@ -96,12 +110,20 @@ def create_app(
         translator=translator,
         cli_factory=cli_factory,
     )
+    if game_manager is None:
+        game_manager = GameProcessManager(df_path=str(df_path) if df_path else None)
     services = AppServices(
         manager=manager,
         translator=translator,
         translator_factory=translator_factory,
         loop_builder=loop_builder,
         loop_stop_timeout=loop_stop_timeout,
+        df_path=str(df_path) if df_path else None,
+        adventure_driver_factory=adventure_driver_factory,
+        adventure_task_runner=adventure_task_runner,
+        game=game_manager,
+        web_port=web_port if web_port is not None else DEFAULT_WEB_PORT,
+        frontend_probe=frontend_probe,
     )
 
     app = FastAPI(

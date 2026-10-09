@@ -23,14 +23,22 @@ Three seams live here on purpose, because they are *app* policy:
 * :meth:`apply_event` — mirroring a live event into the REST-visible stores,
   including the additive approvals queue derived from the loop's checkpoint
   questions.
+* :meth:`adventure_driver` / :meth:`adventure_tasks` — the adventure flows
+  (``/api/campaigns/{id}/adventures``): one async task per campaign driving the
+  game menus through the ``game/driver.py`` piece (seams: the driver factory and
+  the task runner).
+* :meth:`system_status` / :meth:`game_action` — ``/api/system``: the game
+  process (start/stop at the configured path) plus frontend/loop health.
 """
 
 from __future__ import annotations
 
 import logging
+import socket
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
+from .. import __version__
 from ..campaign import (
     Campaign,
     CampaignManager,
@@ -41,6 +49,8 @@ from ..campaign import (
     SpendLedger,
     Translator,
 )
+from ..game.driver import AdventureDriver, GameProcessError, SubprocessBridge
+from .adventure_flow import AdventureTasks
 from .bus import EventBus
 from .loop_runner import DEFAULT_STOP_TIMEOUT, LoopRunner, build_loop
 from .runtime import (
@@ -62,6 +72,18 @@ log = logging.getLogger("system_one_dwarf.app.state")
 #: Control mode in which the loop's held actions become approvals.
 CHECKPOINT_MODE = "checkpoint"
 
+#: Porta da UI web (Vite) — a do `scripts/sod.sh` por omissão.
+DEFAULT_WEB_PORT = 5173
+
+
+def probe_tcp_port(port: int, timeout: float = 0.3) -> bool:
+    """Sonda TCP best-effort (frontend a correr? porta do Vite aberta?)."""
+    try:
+        with socket.create_connection(("127.0.0.1", int(port)), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
 
 @dataclass
 class AppServices:
@@ -82,6 +104,19 @@ class AppServices:
     runtimes: dict[str, CampaignRuntime] = field(default_factory=dict)
     loops: dict[str, LoopRunner] = field(default_factory=dict)
     _translators: dict[str, CampaignTranslator] = field(default_factory=dict)
+    # ---- fluxos de aventura + system control (docs/api.md: /adventures, /api/system)
+    #: Caminho configurado do DF (guarda do GameProcessManager: só aqui se gere o jogo).
+    df_path: str | None = None
+    #: Construtor do driver de aventura por campanha (test seam; omissão: o real).
+    adventure_driver_factory: Callable[[Campaign], Any] | None = None
+    #: Arranque do worker das tarefas (test seam; omissão: thread daemon).
+    adventure_task_runner: Callable[[Callable[[], None]], Any] | None = None
+    #: Gestor do processo do jogo (test seam; omissão: ``GameProcessManager``).
+    game: Any | None = None
+    web_port: int = DEFAULT_WEB_PORT
+    #: Sonda do frontend (test seam; omissão: :func:`probe_tcp_port`).
+    frontend_probe: Callable[[int], bool] | None = None
+    _adventures: AdventureTasks | None = None
 
     # ------------------------------------------------------------------ campaigns
 
@@ -198,6 +233,73 @@ class AppServices:
             except Exception:  # pragma: no cover - shutdown is best effort
                 log.warning("could not stop the loop of %s", runner.campaign_id, exc_info=True)
 
+    # ---------------------------------------------------- adventures + system
+
+    def adventure_driver(self, campaign: Campaign) -> Any:
+        """O driver de aventura da campanha (real; ``adventure_driver_factory``)."""
+        if self.adventure_driver_factory is not None:
+            return self.adventure_driver_factory(campaign)
+        return AdventureDriver(
+            SubprocessBridge(df_path=self.df_path),
+            translator=self.translator_for(campaign),
+        )
+
+    def adventure_tasks(self) -> AdventureTasks:
+        """O store das tarefas de aventura (uma por campanha de cada vez)."""
+        if self._adventures is None:
+            self._adventures = AdventureTasks(
+                driver_factory=lambda campaign_id: self.adventure_driver(
+                    self.manager.require(campaign_id)
+                ),
+                publish=self.publish_event_threadsafe,
+                translator_for=lambda campaign_id: self.translator_for(
+                    self.manager.require(campaign_id)
+                ),
+                runner=self.adventure_task_runner,
+            )
+        return self._adventures
+
+    def system_status(self) -> dict[str, Any]:
+        """O payload de ``GET /api/system/status`` (jogo/backend/frontend/loop)."""
+        if self.game is not None:
+            game = self.game.status()
+        else:  # sem gestor: o jogo está simplesmente "em baixo"
+            game = {"running": False, "pid": None, "rpc": False, "path": self.df_path or ""}
+        probe = self.frontend_probe or probe_tcp_port
+        campaigns = []
+        for campaign in self.manager.list_campaigns():
+            loop = self.loop_status(campaign.id)
+            campaigns.append({
+                "id": campaign.id,
+                "mode": loop.get("mode") or campaign.mode,
+                "running": bool(loop.get("running")),
+            })
+        return {
+            "game": {
+                "running": bool(game.get("running")),
+                "pid": game.get("pid"),
+                "rpc": bool(game.get("rpc")),
+                "path": str(game.get("path") or self.df_path or ""),
+            },
+            "backend": {"version": __version__},
+            "frontend": {"running": bool(probe(self.web_port)), "port": self.web_port},
+            "loop": {"campaigns": campaigns},
+        }
+
+    def game_action(self, action: str) -> dict[str, Any]:
+        """``POST /api/system/game`` — start/stop do processo do jogo.
+
+        A guarda é do gestor: só gere o jogo no caminho configurado
+        (:class:`~system_one_dwarf.game.driver.GameProcessManager`).
+        """
+        if self.game is None:
+            raise GameProcessError("gestor do processo do jogo nao configurado")
+        if action == "start":
+            return self.game.start()
+        if action == "stop":
+            return self.game.stop()
+        raise GameProcessError(f"acao invalida: {action!r} (esperava 'start' ou 'stop')")
+
     # -------------------------------------------------------------------- events
 
     def apply_event(
@@ -296,9 +398,11 @@ class AppServices:
 __all__ = [
     "APPROVAL_PENDING",
     "CHECKPOINT_MODE",
+    "DEFAULT_WEB_PORT",
     "SOURCE_LIVE",
     "SOURCE_STUB",
     "AppServices",
     "IdentityTranslator",
     "normalize_question",
+    "probe_tcp_port",
 ]

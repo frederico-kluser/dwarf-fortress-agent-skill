@@ -401,3 +401,129 @@ class WsSetControl(_Model):
 
 class ErrorDetail(_Model):
     detail: str
+
+
+# -------------------------------------------------------------------- adventures
+
+
+class AdventureOut(_Model):
+    """Um save da pasta ``data/save`` do DF (parsing best-effort — ver ``docs/api.md``)."""
+
+    id: str
+    name: str
+    kind: Literal["world", "active"] | str
+    folder: str
+    #: ISO-8601 UTC do save (mtime de ``world.sav``/``world.dat``, senão da pasta).
+    saved_at: str | None = Field(default=None, exclude_if=lambda v: v is None)
+    #: **GUESS/omitted** — nomes de personagens não são parseáveis offline.
+    characters: list[str] | None = Field(default=None, exclude_if=lambda v: v is None)
+
+
+class CurrentAdventure(_Model):
+    """O aventureiro do último snapshot (``null`` quando não existe aventureiro)."""
+
+    adventure_id: str | None = Field(default=None, exclude_if=lambda v: v is None)
+    adventurer_name: str | None = Field(default=None, exclude_if=lambda v: v is None)
+    world_name: str | None = Field(default=None, exclude_if=lambda v: v is None)
+    alive: bool = False
+
+
+class AdventuresOut(_Model):
+    adventures: list[AdventureOut] = Field(default_factory=list)
+    current: CurrentAdventure | None = None
+
+
+class NewWorldRequest(_Model):
+    world_name: str | None = None
+    params: Literal["quick", "default"]
+
+
+class NewCharacterRequest(_Model):
+    name: str | None = None
+    race: str | None = None
+    origin: str | None = None
+    randomize: bool
+
+
+class LoadAdventureRequest(_Model):
+    adventure_id: str
+
+
+class TaskAccepted(_Model):
+    """Resposta ``202`` dos POSTs de aventura."""
+
+    task_id: str
+    kind: str
+
+
+class AdventureTaskOut(_Model):
+    """O objeto ``task`` do contrato — ``state`` é ``running`` | ``done`` | ``error``.
+
+    Um cancelamento termina a tarefa em ``error`` com ``error: "cancelled"``
+    (o contrato fixa três estados).
+    """
+
+    id: str
+    kind: str
+    state: Literal["running", "done", "error"] | str
+    step: int = 0
+    steps_total: int = 0
+    last_screen_pt: str | None = Field(default=None, exclude_if=lambda v: v is None)
+    error: str | None = Field(default=None, exclude_if=lambda v: v is None)
+
+
+class AdventureStatusOut(_Model):
+    task: AdventureTaskOut | None = None
+    current: CurrentAdventure | None = None
+
+
+class AdventureCancelOut(_Model):
+    cancelled: bool
+    task: AdventureTaskOut | None = None
+
+
+# ------------------------------------------------------------------------ system
+
+
+class SystemGame(_Model):
+    running: bool
+    pid: int | None = Field(default=None, exclude_if=lambda v: v is None)
+    rpc: bool
+    path: str
+
+
+class SystemBackend(_Model):
+    version: str
+
+
+class SystemFrontend(_Model):
+    running: bool
+    port: int | None = Field(default=None, exclude_if=lambda v: v is None)
+
+
+class SystemLoopCampaign(_Model):
+    id: str
+    mode: str | None = None
+    running: bool
+
+
+class SystemLoop(_Model):
+    campaigns: list[SystemLoopCampaign] = Field(default_factory=list)
+
+
+class SystemStatusOut(_Model):
+    game: SystemGame
+    backend: SystemBackend
+    frontend: SystemFrontend
+    loop: SystemLoop
+
+
+class GameActionRequest(_Model):
+    action: Literal["start", "stop"]
+
+
+class GameActionOut(_Model):
+    action: str
+    running: bool
+    pid: int | None = Field(default=None, exclude_if=lambda v: v is None)
+    already_running: bool = False
