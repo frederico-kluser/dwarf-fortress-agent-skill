@@ -28,3 +28,4 @@ campanhas/
 #   .agents/skills/scripts/*.py *.tsv      (busca + glossário)
 #   .work/crawl_api.py build_skills.py htmlmd.py taxonomy.py   (pipeline)
 #   requirements.txt
+*.cover
