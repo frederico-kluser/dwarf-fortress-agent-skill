@@ -337,6 +337,13 @@ Gastos **sem teto** — apenas visibilidade total, por campanha, em tempo real.
 
 Log das decisões JEV.
 
+**Query (aditivo)** — `?limit=<n>&before=<ts ISO-8601>` pagina o log:
+`limit` devolve os registos **mais recentes** (a lista mantém a ordem antiga →
+mais antigo primeiro dentro da página) e `before` é um cursor **exclusivo** —
+só registos com `ts` estritamente anterior. `before` inválido → **422**. Sem
+parâmetros, o comportamento antigo está intacto (o anel guarda **5000**
+registos por campanha).
+
 **200**
 
 ```json
@@ -367,6 +374,7 @@ Log das decisões JEV.
 | `latency_ms` | Latência da chamada |
 | `cost_usd` | Custo da chamada |
 | `issues` | **ADITIVO** — array de strings (notas de validação/qualidade do JEV e marcas de auditoria), **omitido quando vazio**. Quando a execução veio de uma aprovação humana já registada, o registo do JEV-A traz a marca `released_by_approval` |
+| `status` | **ADITIVO** — `executed` \| `question` \| `error`: o que aconteceu à ação escolhida. `executed` quando a ação despachou (evento `action_executed`, mesmo sem aprovação) ou quando uma aprovação humana a libertou (`approval_released`); `question` quando a decisão virou pergunta ao humano (a `action_id` retida); `error` quando o passo falhou antes de executar. **Omitido quando desconhecido** (decisões auxiliares JEV-R/M/D) |
 
 **`confidence` pode ser `null` (UNAVAILABLE).** O schema alpha permite que a
 confidence venha **ausente** (e os fallbacks devolvem `0`), pelo que *ausente* e
@@ -391,6 +399,19 @@ existe. (Só o JEV-A, que responde `choice`, traz `probabilities` preenchido.)
 
 Fila de perguntas/dúvidas ao humano (geradas nas bandas `hitl`/`abstain`, nas
 ações retidas pelo modo `checkpoint` e nas escaladas do JEV-D).
+
+**Query (aditivo)** — `?limit=<n>&before=<ts ISO-8601>` pagina a fila (mesma
+semântica de `.../decisions`: `limit` devolve as entradas **mais recentes**, na
+ordem antiga; `before` é um cursor **exclusivo** por `ts`). `before` inválido →
+**422**. Sem parâmetros, o comportamento antigo está intacto (o anel guarda
+**2000** entradas por campanha — a evicção começa pelas **respondidas**; as
+pendentes só caem em último caso).
+
+**Dedupe (anti-flood).** O modo `checkpoint` volta a pedir a **mesma** ação
+retida a cada passo do loop. Enquanto existir uma pergunta por responder daquela
+`action_id`, o re-pedido **não** cria outra entrada: a pendente ganha os campos
+aditivos `attempts` (quantas vezes o loop pediu) e `last_seen_ts` (ts do último
+re-pedido). Depois de respondida, um novo pedido pode voltar a entrar.
 
 **200**
 
@@ -427,6 +448,8 @@ conhecidos:
 | `action_id` | string | A ação retida à espera de resposta (id de macro-ação, ex. `goto:river_bank`) |
 | `why_pt` | string | **PT** (camada human-facing, como `question`): uma frase a explicar o motivo |
 | `source_data` | object | Diagnóstico opcional: `reason`, `band`, `action_mode`/`answer_mode`, `action_en`, `description_en`, confiança, candidatos… Pode vir `{}` |
+| `attempts` | integer | **ADITIVO** — quantas vezes o loop voltou a pedir a **mesma** ação (dedupe). **Omitido na primeira vez** |
+| `last_seen_ts` | string | **ADITIVO** — ts do último re-pedido da mesma ação (omitido na primeira vez) |
 
 Uma pergunta sem proveniência (um produtor antigo) continua a devolver
 **exatamente** os 6 campos originais — os campos aditivos só aparecem quando
@@ -465,6 +488,13 @@ Por omissão devolve só as **pendentes**; `?status=pending|approved|rejected|al
 filtra (com `all` obtém-se o histórico auditável). Ordem por `ts` crescente.
 `X-Source: live` quando existe pelo menos uma aprovação.
 
+**Dedupe + limite (aditivo).** Enquanto existir uma aprovação **pendente** da
+mesma `action_id`, o re-pedido do loop **não** cria outra: a pendente ganha
+`attempts`/`last_seen_ts`. A fila de pendentes está **limitada a 20** — passado
+isso, as **mais antigas** são descartadas. Decidir uma aprovação (approve ou
+reject) também descarta duplicados pendentes da mesma `action_id` (limpeza de
+uma pilha criada antes do dedupe: decidir uma entrada de 391 colapsa a pilha).
+
 **200**
 
 ```json
@@ -494,6 +524,8 @@ filtra (com `all` obtém-se o histórico auditável). Ordem por `ts` crescente.
 | `note` | **Só depois de decidida** — a nota humana (omitida quando não há) |
 | `decided_at` | **Só depois de decidida** — ISO-8601 UTC |
 | `description_en` | Opcional (quando o loop a publica) |
+| `attempts` | **ADITIVO** — quantas vezes o loop voltou a pedir a **mesma** ação (dedupe; omitido na primeira vez) |
+| `last_seen_ts` | **ADITIVO** — ts do último re-pedido (omitido na primeira vez) |
 
 ### `POST /api/campaigns/{id}/approvals/{approval_id}/approve`
 
@@ -602,6 +634,7 @@ Canal de tempo real por campanha. Todas as mensagens são **JSON** com envelope 
 | `approval_new` | **Aditivo** — uma entrada de `GET .../approvals` (aprovação criada em modo `checkpoint`) |
 | `approval_updated` | **Aditivo** — a mesma entrada depois de decidida (`status` `approved`/`rejected`), venha a decisão de `.../approvals/{id}/approve|reject` ou da resposta da pergunta |
 | `approval_released` | **Aditivo** — `{ "action_id", "ts", "decision" }`; emitido quando uma aprovação humana é **consumida** para libertar a ação retida (execução única). `decision` é o registo do JEV-A já sinalizado com `released_by_approval` em `issues` |
+| `action_executed` | **Aditivo** — `{ "action_id", "ts", "decision" }`; emitido quando a ação é **mesmo despachada** (com ou sem libertação humana). É o que marca o registo do JEV-A com `status: "executed"` no log de decisões |
 | `error` | **Aditivo** — `{ "detail": "<mensagem>" }`; erro recuperável do canal (JSON inválido, `question_id` em falta, pergunta inexistente). O canal **não** fecha |
 
 Estes eventos aditivos mantêm-se **aditivos** face ao contrato original: um

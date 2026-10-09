@@ -27,6 +27,16 @@ Two layers decide an approval:
   used twice) and answers *yes*, which lets the loop execute the held action as if
   the band were ``auto``.  Pending and rejected approvals are never returned, so a
   refusal (or a missing decision) keeps the loop asking.
+
+**Dedupe (the approval flood).**  The ``checkpoint`` loop re-publishes the ask
+for the same held action every step; creation is therefore deduped in the store
+(:meth:`~system_one_dwarf.app.runtime.CampaignRuntime.add_approval`: one
+``pending`` approval *and* one unanswered question per ``action_id``, with the
+additive ``attempts``/``last_seen_ts`` counting the repeats) and the pending
+queue is capped.  Deciding one ask answers the action, so
+:func:`drop_duplicate_pending` sweeps the stale duplicates of the same
+``action_id`` left behind by a pre-dedupe store — deciding one approval of a
+391-deep pile collapses it instead of leaving 390 moot entries behind.
 """
 
 from __future__ import annotations
@@ -105,7 +115,35 @@ def mirror_answer(runtime: Any, question_id: str, option_id: str | None) -> dict
         return None
     option = str(option_id or "").strip().lower()
     status = APPROVAL_REJECTED if option in REJECT_OPTIONS else APPROVAL_APPROVED
-    return runtime.decide_approval(str(approval.get("id") or question_id), status=status)
+    decided = runtime.decide_approval(str(approval.get("id") or question_id), status=status)
+    if decided is not None:
+        # Responder à pergunta é decidir a ação: duplicados pendentes da mesma
+        # ``action_id`` (loja pré-dedupe) são a mesma pergunta e caem aqui também.
+        drop_duplicate_pending(
+            runtime, str(decided.get("action_id") or ""), keep_id=str(decided.get("id") or "")
+        )
+    return decided
+
+
+def drop_duplicate_pending(runtime: Any, action_id: str, *, keep_id: str | None = None) -> list[str]:
+    """Drop the stale ``pending`` approvals of ``action_id`` (ids dropped).
+
+    Deciding one ask answers the action: any *other* still-pending approval of
+    the same ``action_id`` is a duplicate of that very ask.  Creation is already
+    deduped (:meth:`~.runtime.CampaignRuntime.add_approval`), so this only fires
+    on a store that predates the dedupe (the checkpoint loop used to pile one
+    approval up per step) — deciding one entry collapses the pile.
+    """
+    dropped: list[str] = []
+    for approval in runtime.list_approvals(status=APPROVAL_PENDING):
+        if str(approval.get("action_id") or "") != str(action_id or ""):
+            continue
+        approval_id = str(approval.get("id") or "")
+        if keep_id is not None and approval_id == str(keep_id):
+            continue
+        runtime.drop_approval(approval_id)
+        dropped.append(approval_id)
+    return dropped
 
 
 async def decide_approval(
@@ -130,6 +168,17 @@ async def decide_approval(
 
     status = APPROVAL_APPROVED if approve else APPROVAL_REJECTED
     runtime.decide_approval(approval_id, status=status, note=(note or None))
+
+    # A decisão responde à ação: duplicados pendentes da mesma ação (loja pré-
+    # dedupe) são a mesma pergunta e caem aqui — a fila fica limpa num gesto.
+    dropped = drop_duplicate_pending(
+        runtime, str(approval.get("action_id") or ""), keep_id=approval_id
+    )
+    if dropped:
+        log.info(
+            "approval %s decided: dropped %d stale duplicate(s) of %s",
+            approval_id, len(dropped), approval.get("action_id"),
+        )
 
     question_id = str(approval.get("question_id") or approval_id)
     options = _question_options(runtime, question_id)
@@ -226,6 +275,7 @@ __all__ = [
     "ApprovalChecker",
     "ApprovalNotFound",
     "decide_approval",
+    "drop_duplicate_pending",
     "mirror_answer",
     "release_approved_action",
 ]

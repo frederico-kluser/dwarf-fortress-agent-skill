@@ -18,6 +18,7 @@ Provider = Literal["openrouter", "typesafe", "deepseek"]
 ControlMode = Literal["autopilot", "checkpoint", "paused"]
 AgentName = Literal["JEV-R", "JEV-A", "JEV-M", "JEV-D"]
 DecisionBand = Literal["auto", "hitl", "abstain"]
+DecisionStatus = Literal["executed", "question", "error"]
 QuestionStatus = Literal["pending", "answered"]
 ApprovalStatus = Literal["pending", "approved", "rejected"]
 
@@ -262,6 +263,11 @@ class DecisionOut(_Model):
     #: humana).  **Omitida quando vazia** — o contrato manda-a faltar, não vir
     #: ``[]``.
     issues: list[str] | None = Field(default=None, exclude_if=lambda v: v is None)
+    #: **Aditivo** (``docs/api.md``): o que aconteceu à ação escolhida —
+    #: ``executed`` (correu, mesmo libertada por aprovação), ``question`` (virou
+    #: pergunta ao humano) ou ``error`` (o passo falhou antes de executar).
+    #: **Omitido quando desconhecido** (decisões auxiliares JEV-R/M/D).
+    status: DecisionStatus | str | None = Field(default=None, exclude_if=lambda v: v is None)
 
 
 # --------------------------------------------------------------------- questions
@@ -300,6 +306,11 @@ class QuestionOut(_Model):
     format: str | None = None
     #: Dados de origem (aditivo, diagnóstico): razão, confiança, candidatos, …
     source_data: dict[str, Any] | None = None
+    #: **Aditivo** — quantas vezes o loop voltou a pedir a **mesma** ação
+    #: (dedupe: a pergunta pendente é atualizada, não duplicada).
+    attempts: int | None = None
+    #: **Aditivo** — ts da última vez que o loop voltou a pedir.
+    last_seen_ts: str | None = None
 
 
 class AnswerRequest(_Model):
@@ -342,6 +353,11 @@ class ApprovalOut(_Model):
     released_at: str | None = None
     #: **Aditivo** — a ação exata que a aprovação libertou (id de macro-ação).
     released_action_id: str | None = None
+    #: **Aditivo** — quantas vezes o loop voltou a pedir a **mesma** ação
+    #: (dedupe: a aprovação pendente é atualizada, não duplicada).
+    attempts: int | None = None
+    #: **Aditivo** — ts da última vez que o loop voltou a pedir.
+    last_seen_ts: str | None = None
 
 
 class ApprovalDecision(_Model):

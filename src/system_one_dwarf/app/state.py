@@ -222,14 +222,25 @@ class AppServices:
             elif event_type == "approval_released":
                 # A libertação é decidida depois de o evento ``decision`` ter sido
                 # publicado (passo 6 vs 7 do loop): o espelho marca aqui o registo
-                # do JEV-A com ``released_by_approval`` para o log mostrar a
-                # auditoria documentada em ``docs/api.md``.
+                # do JEV-A com ``released_by_approval`` e com o ``status``
+                # aditivo ``executed`` — é a execução que o humano libertou.
                 runtime.mark_decision_released(data)
+            elif event_type == "action_executed":
+                # Evento aditivo do loop (a ação despachou mesmo, com ou sem
+                # aprovação): o registo do JEV-A ganha ``status: "executed"``.
+                runtime.mark_decision_executed(data)
             elif event_type == "question_new":
+                # A ação não correu: virou pergunta ao humano.  O espelho é pela
+                # ``action_id`` (o registo do JEV-A que escolheu essa ação).
+                runtime.mark_decision_question(data)
                 data = runtime.add_question(data)
                 approval = self._mirror_approval(campaign_id, runtime, data)
                 if approval is not None:
                     follow.append(("approval_new", dict(approval)))
+            elif event_type == "error":
+                # Passo falhou antes de executar: a decisão de ação mais recente
+                # ainda sem estado morreu com ele.
+                runtime.mark_decision_error(data)
         except Exception:  # pragma: no cover - never let a bad event kill the loop
             log.warning("could not mirror %s into the runtime store", event_type, exc_info=True)
         return data, follow
@@ -241,10 +252,18 @@ class AppServices:
 
         Only in ``checkpoint`` mode: in autopilot the loop does not hold actions
         for permission, so the approvals list stays empty by construction.
+
+        The returned entry is ``None`` when nothing *new* appeared: the queue is
+        deduped by ``action_id`` (a re-ask bumps the pending entry), so only a
+        freshly created approval is announced as ``approval_new``.
         """
         if self.campaign_mode(campaign_id) != CHECKPOINT_MODE:
             return None
-        return runtime.add_approval(question)
+        known = set(runtime.approvals)
+        approval = runtime.add_approval(question)
+        if approval is None or str(approval.get("id") or "") in known:
+            return None
+        return approval
 
     def campaign_mode(self, campaign_id: str) -> str | None:
         try:

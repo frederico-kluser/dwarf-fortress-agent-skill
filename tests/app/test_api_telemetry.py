@@ -362,3 +362,125 @@ class TestSpend:
 )
 def test_every_stub_endpoint_answers_200(client, campaign, path):
     assert client.get(f"/api/campaigns/{campaign['id']}/{path}").status_code == 200
+
+
+class TestPagination:
+    """P2: ``?limit=&before=`` (aditivos) — páginas para trás no log e na fila."""
+
+    def _fill_decisions(self, client, cid: str) -> None:
+        for index in range(3):
+            publish(
+                client, cid, "decision",
+                DECISION | {"id": f"d-{index}", "ts": f"2026-09-27T20:04:0{index}.000Z"},
+            )
+
+    def test_limit_keeps_the_most_recent_page(self, client, campaign):
+        cid = campaign["id"]
+        self._fill_decisions(client, cid)
+
+        body = client.get(f"/api/campaigns/{cid}/decisions?limit=2").json()
+
+        assert [item["id"] for item in body] == ["d-1", "d-2"]
+
+    def test_before_walks_the_log_backwards(self, client, campaign):
+        cid = campaign["id"]
+        self._fill_decisions(client, cid)
+
+        body = client.get(
+            f"/api/campaigns/{cid}/decisions?limit=1&before=2026-09-27T20:04:01.000Z"
+        ).json()
+
+        # o cursor é exclusivo: só o que é estritamente anterior
+        assert [item["id"] for item in body] == ["d-0"]
+
+    def test_an_invalid_cursor_is_422(self, client, campaign):
+        response = client.get(f"/api/campaigns/{campaign['id']}/decisions?before=hoje")
+
+        assert response.status_code == 422
+
+    def test_the_queue_paginates_too(self, client, campaign):
+        cid = campaign["id"]
+        for index in range(3):
+            publish(
+                client, cid, "question_new",
+                QUESTION | {"id": f"q-{index}", "ts": f"2026-09-27T20:04:0{index}.000Z"},
+            )
+
+        recent = client.get(f"/api/campaigns/{cid}/questions?limit=2").json()
+        older = client.get(f"/api/campaigns/{cid}/questions?before=2026-09-27T20:04:01.000Z").json()
+
+        assert [item["id"] for item in recent] == ["q-1", "q-2"]
+        assert [item["id"] for item in older] == ["q-0"]
+
+
+class TestQuestionRing:
+    """P2: o anel das perguntas guarda 2000 e expulsa respondidas primeiro."""
+
+    def test_answered_entries_are_evicted_before_pending(self, client, campaign, monkeypatch):
+        import system_one_dwarf.app.runtime as runtime_module
+
+        monkeypatch.setattr(runtime_module, "QUESTIONS_LIMIT", 3)
+        runtime = client.app.state.services.runtime(campaign["id"])
+        for index in range(3):
+            runtime.add_question(
+                {"id": f"q-{index}", "ts": f"2026-09-27T20:04:0{index}.000Z", "question": "?"}
+            )
+            runtime.answer_question(f"q-{index}")
+        runtime.add_question({"id": "q-live", "ts": "2026-09-27T20:05:00.000Z", "question": "?"})
+
+        ids = [item["id"] for item in runtime.list_questions()]
+
+        assert ids == ["q-1", "q-2", "q-live"]  # a respondida mais antiga caiu primeiro
+        assert runtime.get_question("q-live")["status"] == "pending"
+
+
+class TestDecisionStatus:
+    """P3: campo aditivo ``status`` — o que aconteceu à ação de cada decisão."""
+
+    def test_a_released_execution_is_marked_executed(self, client, campaign):
+        cid = campaign["id"]
+        publish(client, cid, "decision", DECISION)
+        publish(client, cid, "approval_released", {
+            "action_id": "goto:river_bank",
+            "ts": "2026-09-27T20:04:59.000Z",
+            "decision": dict(DECISION, issues=["released_by_approval"]),
+        })
+
+        entry = client.get(f"/api/campaigns/{cid}/decisions").json()[0]
+
+        assert entry["status"] == "executed"
+        assert entry["issues"] == ["released_by_approval"]
+
+    def test_a_dispatched_action_is_marked_executed(self, client, campaign):
+        cid = campaign["id"]
+        publish(client, cid, "decision", DECISION)
+        publish(client, cid, "action_executed", {
+            "action_id": "goto:river_bank",
+            "ts": "2026-09-27T20:04:59.000Z",
+            "decision": dict(DECISION),
+        })
+
+        assert client.get(f"/api/campaigns/{cid}/decisions").json()[0]["status"] == "executed"
+
+    def test_a_held_action_is_marked_question(self, client, campaign):
+        from fakes_loop import hitl_question
+
+        cid = campaign["id"]
+        publish(client, cid, "decision", DECISION)
+        publish(client, cid, "question_new", hitl_question())
+
+        assert client.get(f"/api/campaigns/{cid}/decisions").json()[0]["status"] == "question"
+
+    def test_a_failed_step_is_marked_error(self, client, campaign):
+        cid = campaign["id"]
+        publish(client, cid, "decision", DECISION)
+        publish(client, cid, "error", {"detail": "step 7 failed: executor refused"})
+
+        assert client.get(f"/api/campaigns/{cid}/decisions").json()[0]["status"] == "error"
+
+    def test_the_status_is_omitted_while_unknown(self, client, campaign):
+        publish(client, campaign["id"], "decision", DECISION)
+
+        entry = client.get(f"/api/campaigns/{campaign['id']}/decisions").json()[0]
+
+        assert "status" not in entry

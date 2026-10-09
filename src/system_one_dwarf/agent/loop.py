@@ -1011,6 +1011,16 @@ class AgentLoop:
         if blocked_reason is None and action is not None:
             executed = self.executor.execute(action, state)
             status = _status_for(executed)
+            if status == STATUS_EXECUTED:
+                # Evento aditivo: a ação despachou mesmo (com ou sem libertação
+                # humana).  É o que marca o registo do JEV-A com ``status``
+                # ``executed`` no log de decisões da app — sem ele, uma execução
+                # ``auto`` era invisível no histórico.
+                self.publish("action_executed", {
+                    "action_id": action.id,
+                    "ts": self.clock(),
+                    "decision": _released_record(decisions),
+                })
             if executed.errors:
                 errors.extend(executed.errors)
             if executed.status == STATUS_EXECUTED and self.config.advance_on_execute:

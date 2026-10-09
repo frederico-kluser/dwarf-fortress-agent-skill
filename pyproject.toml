@@ -26,3 +26,8 @@ where = ["src"]
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]
+filterwarnings = [
+    # Ruído de import do TestClient (fastapi -> starlette.testclient): o aviso é
+    # da ferramenta de teste, não do projeto (identificado na suite, 2026-10).
+    "ignore:Using `httpx` with `starlette.testclient` is deprecated:starlette.exceptions.StarletteDeprecationWarning",
+]

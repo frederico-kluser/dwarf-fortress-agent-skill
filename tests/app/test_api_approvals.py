@@ -307,12 +307,16 @@ class TestRelease:
     def test_an_old_approval_of_another_question_still_releases_the_action(
         self, client: TestClient, campaign
     ):
-        """Uma aprovação antiga (por id) liberta a ação; a mais recente fica pendente."""
+        """Uma aprovação antiga (por id) liberta a ação; a mais recente fica pendente.
+
+        (Dedupe P1: duas aprovações **pendentes** da mesma ação já não coexistem —
+        a pergunta seguinte só nasce depois de a anterior estar decidida.)
+        """
         cid = campaign["id"]
         checkpoint(client, cid)
         publish_approval(client, cid, qid="q-1-1")
-        publish_approval(client, cid, qid="q-2-1")
         client.post(f"/api/campaigns/{cid}/approvals/q-1-1/approve")
+        publish_approval(client, cid, qid="q-2-1")
 
         checker = self.checker(client, cid)
 
@@ -416,3 +420,124 @@ class TestJevAHoldMirroring:
         log = client.get(f"/api/campaigns/{cid}/decisions").json()
         assert "issues" not in log[0]  # omitido quando vazio (docs/api.md)
         assert log[1]["issues"] == ["released_by_approval"]
+
+
+class TestFloodDedupe:
+    """P1: o modo ``checkpoint`` não pode criar 1 pergunta+aprovação por passo.
+
+    O loop volta a pedir a MESMA ação retida a cada passo (391+ pendentes na
+    sessão live): enquanto houver uma pergunta por responder / uma aprovação
+    pendente daquela ``action_id``, o re-pedido **atualiza** a entrada (campos
+    aditivos ``attempts``/``last_seen_ts``) em vez de empilhar outra.
+    """
+
+    def test_the_same_action_is_asked_once_and_counts_the_repeats(
+        self, client: TestClient, campaign
+    ):
+        cid = campaign["id"]
+        checkpoint(client, cid)
+        for step in range(5):
+            publish(
+                client, cid, "question_new",
+                approval_question(qid=f"q-{step}-1", ts=f"2026-10-08T12:00:0{step}.000Z"),
+            )
+
+        questions = client.get(f"/api/campaigns/{cid}/questions").json()
+        approvals = client.get(f"/api/campaigns/{cid}/approvals").json()
+
+        assert [q["id"] for q in questions] == ["q-0-1"]
+        assert questions[0]["attempts"] == 5
+        assert questions[0]["last_seen_ts"] == "2026-10-08T12:00:04.000Z"
+        assert [a["id"] for a in approvals] == ["q-0-1"]
+        assert approvals[0]["attempts"] == 5
+        assert approvals[0]["last_seen_ts"] == "2026-10-08T12:00:04.000Z"
+
+    def test_the_repeat_bump_is_not_announced_as_a_new_approval(
+        self, client: TestClient, campaign
+    ):
+        cid = campaign["id"]
+        checkpoint(client, cid)
+        with client.websocket_connect(f"/ws/campaigns/{cid}") as ws:
+            assert ws.receive_json()["type"] == "control_state"
+            publish_approval(client, cid, qid="q-1-1")
+            publish_approval(client, cid, qid="q-2-1")
+            received = [ws.receive_json() for _ in range(3)]
+
+        # 1º pedido: question_new + approval_new; 2º: só o re-pedido (bump)
+        assert [message["type"] for message in received] == [
+            "question_new",
+            "approval_new",
+            "question_new",
+        ]
+
+    def test_an_answered_ask_does_not_block_the_next_one(self, client: TestClient, campaign):
+        cid = campaign["id"]
+        checkpoint(client, cid)
+        publish_approval(client, cid, qid="q-1-1")
+        client.post(f"/api/campaigns/{cid}/questions/q-1-1/answer", json={"option_id": "no"})
+        publish_approval(client, cid, qid="q-2-1", ts="2026-10-08T12:00:06.000Z")
+
+        history = client.get(f"/api/campaigns/{cid}/approvals?status=all").json()
+
+        assert [item["id"] for item in history] == ["q-1-1", "q-2-1"]
+        assert [item["status"] for item in history] == ["rejected", "pending"]
+
+    def test_a_re_ask_in_checkpoint_upgrades_the_ask_to_an_approval(
+        self, client: TestClient, campaign
+    ):
+        """A pergunta herdada do autopilot vira pedido de aprovação **sem** duplicar."""
+        cid = campaign["id"]
+        publish(client, cid, "question_new", hitl_question(qid="q-1-1"))
+        assert client.get(f"/api/campaigns/{cid}/approvals").json() == []
+
+        checkpoint(client, cid)
+        publish(client, cid, "question_new", approval_question(qid="q-2-1"))
+
+        questions = client.get(f"/api/campaigns/{cid}/questions").json()
+        approvals = client.get(f"/api/campaigns/{cid}/approvals").json()
+
+        assert [q["id"] for q in questions] == ["q-1-1"]
+        assert questions[0]["attempts"] == 2
+        assert [a["id"] for a in approvals] == ["q-1-1"]  # a mesma pergunta, agora aprovação
+        assert approvals[0]["question_id"] == "q-1-1"
+        assert approvals[0]["attempts"] == 2
+        assert approvals[0]["status"] == "pending"
+
+    def test_pending_approvals_are_capped_at_twenty_dropping_the_oldest(
+        self, client: TestClient, campaign
+    ):
+        cid = campaign["id"]
+        checkpoint(client, cid)
+        for step in range(25):
+            publish_approval(
+                client, cid,
+                qid=f"q-{step:02d}-1",
+                action_id=f"goto:spot_{step:02d}",
+                action_en=f"Go to spot {step:02d}",
+                ts=f"2026-10-08T12:{step:02d}:00.000Z",
+            )
+
+        pending = client.get(f"/api/campaigns/{cid}/approvals").json()
+
+        assert len(pending) == 20
+        assert pending[0]["action_id"] == "goto:spot_05"   # as 5 mais antigas caíram
+        assert pending[-1]["action_id"] == "goto:spot_24"
+
+    def test_deciding_collapses_a_pre_dedupe_pile(self, client: TestClient, campaign):
+        """Loja herdada (pilha de pendentes da MESMA ação): decidir uma limpa-a."""
+        from system_one_dwarf.app.runtime import approval_from_question
+
+        cid = campaign["id"]
+        checkpoint(client, cid)
+        runtime = client.app.state.services.runtime(cid)
+        for index in range(5):
+            entry = approval_from_question(
+                approval_question(qid=f"q-9-{index}", action_id="explore:savanna_temperate")
+            )
+            runtime.approvals[entry["id"]] = entry
+
+        client.post(f"/api/campaigns/{cid}/approvals/q-9-0/approve")
+
+        assert client.get(f"/api/campaigns/{cid}/approvals").json() == []
+        history = client.get(f"/api/campaigns/{cid}/approvals?status=all").json()
+        assert [item["id"] for item in history] == ["q-9-0"]

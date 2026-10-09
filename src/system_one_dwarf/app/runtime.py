@@ -30,13 +30,41 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Mapping
 
-from ..campaign.clock import utc_now_iso
+from ..campaign.clock import parse_iso, utc_now_iso
 
 SOURCE_LIVE = "live"
 SOURCE_STUB = "stub"
 
-#: How many decisions/inputs we keep in memory per campaign (ring buffer).
-HISTORY_LIMIT = 500
+#: How many decisions we keep in memory per campaign (ring buffer).
+DECISIONS_LIMIT = 5000
+
+#: How many questions we keep in memory per campaign (ring buffer).  Overflow
+#: evicts **answered** entries first — the pending asks are the live queue.
+QUESTIONS_LIMIT = 2000
+
+#: How many inputs we keep in memory per campaign (ring buffer).
+INPUTS_LIMIT = 500
+
+#: Back-compat alias of the old single ring size (inputs keep it).
+HISTORY_LIMIT = INPUTS_LIMIT
+
+#: Cap of the *pending* approvals queue (the oldest are dropped past it).  The
+#: checkpoint loop re-asks the same held action every step: without both the
+#: action dedupe (see :meth:`CampaignRuntime.add_approval`) and this cap the
+#: queue grew to hundreds of identical pending entries.
+APPROVAL_PENDING_LIMIT = 20
+
+#: Additive repeat-tracking fields: a re-ask of the same ``action_id`` bumps
+#: them on the pending entry instead of piling up a new one.
+ATTEMPTS = "attempts"
+LAST_SEEN_TS = "last_seen_ts"
+
+#: Additive outcome of a decision record (``docs/api.md``): what happened to
+#: the action it chose.  Omitted while unknown (auxiliary JEV-R/M/D records).
+DECISION_EXECUTED = "executed"
+DECISION_QUESTION = "question"
+DECISION_ERROR = "error"
+DECISION_STATUSES: tuple[str, ...] = (DECISION_EXECUTED, DECISION_QUESTION, DECISION_ERROR)
 
 #: Action bands of ``docs/api.md`` (a question outside them is dropped).
 BANDS: tuple[str, str, str] = ("auto", "hitl", "abstain")
@@ -70,6 +98,44 @@ def _clean_str(value: Any) -> str | None:
     if isinstance(value, str) and value.strip():
         return value.strip()
     return None
+
+
+def mark_repeat(item: dict[str, Any], ts: str | None = None) -> dict[str, Any]:
+    """Bump the additive ``attempts``/``last_seen_ts`` of an already pending ask.
+
+    This is the **dedupe** answer to a re-ask of the same ``action_id``: the
+    pending entry is kept and counts the repeat instead of a second
+    question/approval being created (the checkpoint loop publishes one ask per
+    step for the same held action).
+    """
+    item[ATTEMPTS] = int(item.get(ATTEMPTS) or 1) + 1
+    item[LAST_SEEN_TS] = ts or utc_now_iso()
+    return item
+
+
+def _page(
+    items: list[dict[str, Any]], *, limit: int | None = None, before: str | None = None
+) -> list[dict[str, Any]]:
+    """The ``?limit=&before=`` page of ``items`` (kept in their given order).
+
+    ``before`` is an exclusive ISO-8601 cursor: only entries with a strictly
+    older ``ts`` stay.  ``limit`` then keeps the **most recent** entries of what
+    remains (still oldest-first in the result), which is what makes
+    ``before=<ts of the first item>`` walk history backwards.
+    """
+    if before is not None:
+        cutoff = parse_iso(before)
+        if cutoff is None:
+            raise ValueError(f"before must be an ISO-8601 timestamp, got {before!r}")
+        picked: list[dict[str, Any]] = []
+        for item in items:
+            stamp = parse_iso(str(item.get("ts") or ""))
+            if stamp is not None and stamp < cutoff:
+                picked.append(item)
+        items = picked
+    if limit is not None and len(items) > limit:
+        items = items[-limit:]
+    return list(items)
 
 
 def _source_action_id(item: Mapping[str, Any]) -> str | None:
@@ -230,6 +296,12 @@ def approval_from_question(question: Mapping[str, Any]) -> dict[str, Any]:
     description = _clean_str(source.get("description_en"))
     if description:
         entry["description_en"] = description
+    # A pergunta já pode ter sido repetida (dedupe na fila): a aprovação espelha
+    # a contagem, senão parecia uma pergunta nova aos olhos do humano.
+    if question.get(ATTEMPTS):
+        entry[ATTEMPTS] = int(question[ATTEMPTS])
+    if question.get(LAST_SEEN_TS):
+        entry[LAST_SEEN_TS] = question[LAST_SEEN_TS]
     return entry
 
 
@@ -281,11 +353,12 @@ class CampaignRuntime:
         item.setdefault("id", f"d-{len(self.decisions) + 1}")
         item.setdefault("ts", utc_now_iso())
         self.decisions.append(item)
-        del self.decisions[:-HISTORY_LIMIT]
+        del self.decisions[:-DECISIONS_LIMIT]
         return item
 
-    def list_decisions(self) -> list[dict[str, Any]]:
-        return list(self.decisions)
+    def list_decisions(self, *, limit: int | None = None, before: str | None = None) -> list[dict[str, Any]]:
+        """The decision log, paginated (``?limit=&before=`` of ``docs/api.md``)."""
+        return _page(self.decisions, limit=limit, before=before)
 
     def mark_decision_released(self, payload: Mapping[str, Any]) -> dict[str, Any] | None:
         """Mirror :data:`RELEASED_BY_APPROVAL` onto the stored JEV-A decision.
@@ -296,8 +369,71 @@ class CampaignRuntime:
         ``GET .../decisions`` could never show the documented
         ``released_by_approval`` audit mark.  The entry is found by the ``ts`` of
         the released record (the same record the event carries) and the mark is
-        added at most once.
+        added at most once.  The same mirror also records the additive
+        ``status: "executed"`` (``docs/api.md``): the approval released this
+        exact execution.
         """
+        item = self._decision_of(payload)
+        if item is None:
+            return None
+        issues = [str(value) for value in item.get("issues") or ()]
+        if RELEASED_BY_APPROVAL not in issues:
+            issues.append(RELEASED_BY_APPROVAL)
+            item["issues"] = issues
+        item["status"] = DECISION_EXECUTED
+        return item
+
+    def mark_decision_executed(self, payload: Mapping[str, Any]) -> dict[str, Any] | None:
+        """Mirror ``status: "executed"`` (additive) onto the matching decision.
+
+        Fired by the loop's additive ``action_executed`` event: the action the
+        record chose was actually dispatched, so the log can tell an executed
+        decision from one that only raised a question.
+        """
+        item = self._decision_of(payload)
+        if item is None:
+            return None
+        item["status"] = DECISION_EXECUTED
+        return item
+
+    def mark_decision_question(self, payload: Mapping[str, Any]) -> dict[str, Any] | None:
+        """Mirror ``status: "question"`` onto the decision the question is about.
+
+        The match is by ``action_id``: the latest undecided JEV-A record whose
+        ``answers`` chose that exact action (the question would not exist if the
+        action had not been held).  A question without an ``action_id`` (a JEV-D
+        doubt) matches nothing and nothing is marked.
+        """
+        action_id = _source_action_id(payload)
+        if not action_id:
+            return None
+        for item in reversed(self.decisions):
+            if item.get("status") or str(item.get("agent") or "") != "JEV-A":
+                continue
+            answers = item.get("answers")
+            if isinstance(answers, Mapping) and any(
+                str(value) == action_id for value in answers.values()
+            ):
+                item["status"] = DECISION_QUESTION
+                return item
+        return None
+
+    def mark_decision_error(self, payload: Mapping[str, Any]) -> dict[str, Any] | None:
+        """Mirror ``status: "error"`` onto the latest undecided action decision.
+
+        The loop publishes ``error`` when a step failed (the held action never
+        ran): the newest JEV-A record that never got a verdict is the one that
+        died with the step.
+        """
+        for item in reversed(self.decisions):
+            if item.get("status") or str(item.get("agent") or "") != "JEV-A":
+                continue
+            item["status"] = DECISION_ERROR
+            return item
+        return None
+
+    def _decision_of(self, payload: Mapping[str, Any]) -> dict[str, Any] | None:
+        """The stored decision an event's ``decision`` ref points at (ts + agent)."""
         decision = payload.get("decision")
         decision = decision if isinstance(decision, Mapping) else {}
         ts = _clean_str(decision.get("ts"))
@@ -307,10 +443,6 @@ class CampaignRuntime:
                 continue
             if ts and str(item.get("ts") or "") != ts:
                 continue
-            issues = [str(value) for value in item.get("issues") or ()]
-            if RELEASED_BY_APPROVAL not in issues:
-                issues.append(RELEASED_BY_APPROVAL)
-                item["issues"] = issues
             return item
         return None
 
@@ -326,6 +458,12 @@ class CampaignRuntime:
         Frozen fields get the same defaults as before; the additive provenance
         (``band``/``role``/``action_id``/``why_pt``/``source_data``) is kept when
         present and omitted when not (see :func:`normalize_question`).
+
+        **Dedupe**: while an *unanswered* question for the same ``action_id`` is
+        in the queue, a re-ask never creates another entry — the pending one
+        gets its additive ``attempts``/``last_seen_ts`` bumped (one action held =
+        one question to answer).  The store is capped at :data:`QUESTIONS_LIMIT`,
+        evicting answered entries before pending ones.
         """
         item = normalize_question(question)
         qid = str(item.get("id") or self.next_question_id())
@@ -335,18 +473,62 @@ class CampaignRuntime:
         item["options"] = list(item.get("options") or [])
         item.setdefault("free_text_allowed", True)
         item.setdefault("status", "pending")
+        pending = self._pending_question_for(_source_action_id(item))
+        if pending is not None:
+            # O re-pedido traz a proveniência **atual** (ex.: a ação passou de
+            # dúvida ``hitl`` para pedido de aprovação do ``checkpoint``): a
+            # entrada pendente é atualizada — sem isto, um ask herdado de outro
+            # modo nunca seria espelhado como aprovação.
+            for key in (*PROVENANCE_FIELDS, "format"):
+                if key in item:
+                    pending[key] = item[key]
+            return mark_repeat(pending, item.get("ts"))
         self.questions[qid] = item
+        self._evict_questions()
         return item
+
+    def _pending_question_for(self, action_id: str | None) -> dict[str, Any] | None:
+        """The unanswered question already asking about ``action_id`` (if any)."""
+        if not action_id:
+            return None
+        for item in self.questions.values():
+            if item.get("status") != "pending":
+                continue
+            if _source_action_id(item) == action_id:
+                return item
+        return None
+
+    def _evict_questions(self) -> None:
+        """Ring-buffer the queue past :data:`QUESTIONS_LIMIT`.
+
+        Answered entries are the first to go (they are the proofs of asks long
+        gone); the pending queue — what the human still has to answer — is only
+        touched when the overflow leaves no other choice.
+        """
+        overflow = len(self.questions) - QUESTIONS_LIMIT
+        if overflow <= 0:
+            return
+        answered = [item for item in self.questions.values() if item.get("status") != "pending"]
+        pending = [item for item in self.questions.values() if item.get("status") == "pending"]
+        for item in (answered + pending)[:overflow]:
+            self.questions.pop(str(item.get("id") or ""), None)
 
     def get_question(self, question_id: str) -> dict[str, Any] | None:
         return self.questions.get(question_id)
 
-    def list_questions(self, *, status: str | None = None) -> list[dict[str, Any]]:
+    def list_questions(
+        self,
+        *,
+        status: str | None = None,
+        limit: int | None = None,
+        before: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Questions oldest-first, optionally filtered and paginated."""
         items = list(self.questions.values())
         if status:
             items = [q for q in items if q.get("status") == status]
         items.sort(key=lambda q: str(q.get("ts") or ""))
-        return items
+        return _page(items, limit=limit, before=before)
 
     def answer_question(
         self,
@@ -386,17 +568,51 @@ class CampaignRuntime:
         routing provenance) — see :func:`is_approval_question` /
         :func:`is_action_hold`.  Idempotent: one question maps to one entry, and a
         re-published question never downgrades an already decided/released one.
+
+        **Dedupe**: while a ``pending`` approval for the same ``action_id``
+        exists, a re-ask bumps its additive ``attempts``/``last_seen_ts`` instead
+        of creating a second one (the checkpoint loop re-publishes the same held
+        action every step).  The pending queue is capped at
+        :data:`APPROVAL_PENDING_LIMIT` — the oldest pending entries are dropped.
         """
         if not (is_approval_question(question) or is_action_hold(question)):
             return None
         entry = approval_from_question(question)
         if not entry["id"] or not entry["question_id"]:
             return None
+        # O re-pedido chega pela pergunta (que já foi "vista" agora): é esse o
+        # momento do bump, não o ts de criação da pergunta original.
+        seen_ts = _clean_str(question.get(LAST_SEEN_TS)) or entry.get("ts")
+        pending = self._pending_approval_for(str(entry.get("action_id") or ""))
+        if pending is not None:
+            return mark_repeat(pending, seen_ts)
         existing = self.approvals.get(entry["id"])
-        if existing is not None and existing.get("status") != APPROVAL_PENDING:
-            return existing
+        if existing is not None:
+            return mark_repeat(existing, seen_ts)
         self.approvals[entry["id"]] = entry
+        self._trim_pending_approvals()
         return entry
+
+    def _pending_approval_for(self, action_id: str) -> dict[str, Any] | None:
+        """The ``pending`` approval already covering ``action_id`` (if any)."""
+        if not action_id:
+            return None
+        for item in self.approvals.values():
+            if item.get("status") != APPROVAL_PENDING:
+                continue
+            if str(item.get("action_id") or "") == action_id:
+                return item
+        return None
+
+    def _trim_pending_approvals(self) -> None:
+        """Keep the pending queue at :data:`APPROVAL_PENDING_LIMIT` (oldest out)."""
+        pending = self.list_approvals(status=APPROVAL_PENDING)
+        for item in pending[: max(0, len(pending) - APPROVAL_PENDING_LIMIT)]:
+            self.drop_approval(str(item.get("id") or ""))
+
+    def drop_approval(self, approval_id: str) -> dict[str, Any] | None:
+        """Remove an approval from the store (dropped duplicates / cap overflow)."""
+        return self.approvals.pop(str(approval_id or ""), None)
 
     def get_approval(self, approval_id: str) -> dict[str, Any] | None:
         return self.approvals.get(approval_id)

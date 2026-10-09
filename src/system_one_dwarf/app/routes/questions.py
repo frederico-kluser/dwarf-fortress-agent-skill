@@ -8,11 +8,15 @@ The additive provenance fields (``band``, ``role``, ``action_id``, ``why_pt``,
 ``source_data`` — finding #2 of ``docs/uxui-audit-ui.json``) travel only when the
 loop published them, so the 6-field entry of the original contract is unchanged
 for a client that never learned about them (``response_model_exclude_none``).
+
+The additive ``?limit=&before=`` pair paginates the queue (``docs/api.md``):
+``limit`` keeps the most recent entries (oldest-first in the answer) and
+``before`` is an exclusive ISO-8601 cursor to walk history backwards.
 """
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 
 from ...campaign import Campaign
 from ..deps import get_campaign, get_runtime, get_services, tag_source
@@ -31,11 +35,18 @@ router = APIRouter(tags=["questions"])
 )
 def list_questions(
     response: Response,
+    limit: int | None = Query(default=None, ge=1, description="máximo de entradas (as mais recentes)"),
+    before: str | None = Query(
+        default=None, description="cursor ISO-8601: só entradas estritamente anteriores"
+    ),
     campaign: Campaign = Depends(get_campaign),
     runtime: CampaignRuntime = Depends(get_runtime),
 ) -> list[dict]:
     tag_source(response, runtime.source_of("questions"))
-    return runtime.list_questions()
+    try:
+        return runtime.list_questions(limit=limit, before=before)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="before must be an ISO-8601 timestamp")
 
 
 @router.post(
