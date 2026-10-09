@@ -5,11 +5,13 @@
  * WebSocket (`useCampaignEvents`) a escrever na cache do React Query.
  */
 
-import { useContext } from 'react';
+import { useContext, useMemo } from 'react';
 import {
+  useInfiniteQuery,
   useMutation,
   useQuery,
   useQueryClient,
+  type InfiniteData,
   type UseMutationResult,
   type UseQueryResult,
 } from '@tanstack/react-query';
@@ -123,6 +125,109 @@ export function useCampaignQuery<T>(
   });
 }
 
+/* ------------------------------------------------------------ paginação --- */
+
+/** Tamanho de página do log de decisões e da fila de perguntas (contrato `?limit=`). */
+export const PAGE_SIZE = 25;
+
+/**
+ * Resultado normalizado de uma lista paginada (`?limit=&before=`): itens já
+ * carregados e o «carregar mais».
+ */
+export interface PagedQueryResult<T> {
+  items: T[];
+  isLoading: boolean;
+  isFetching: boolean;
+  isError: boolean;
+  error: Error | null;
+  dataUpdatedAt: number;
+  refetch: () => void;
+  /** Há mais registos no anel (`before` do registo mais antigo carregado). */
+  hasMore: boolean;
+  /** Pede a página seguinte com o cursor exclusivo do contrato. */
+  loadMore: () => void;
+  isLoadingMore: boolean;
+}
+
+/** Items de uma lista paginada — todos têm `ts` (cursor do contrato). */
+interface TsItem {
+  ts: string;
+}
+
+/**
+ * Lista paginada ligada à campanha. A página inicial pede `PAGE_SIZE` registos
+ * mais recentes; cada «carregar mais» pede os anteriores com `before=<ts do
+ * registo mais antigo carregado>` (cursor **exclusivo**, docs/api.md).
+ */
+function usePagedQuery<T extends TsItem>(
+  key: readonly unknown[],
+  fetchPage: (client: ApiClient, campaignId: string, before?: string) => Promise<T[]>,
+  options: CampaignQueryOptions = {},
+): PagedQueryResult<T> {
+  const client = useApi();
+  const campaignId = useCampaignId();
+  const query = useInfiniteQuery({
+    queryKey: key,
+    queryFn: ({ pageParam }) => fetchPage(client, campaignId as string, pageParam),
+    enabled: Boolean(campaignId) && (options.enabled ?? true),
+    refetchInterval: options.refetchInterval,
+    staleTime: 1000,
+    initialPageParam: undefined as string | undefined,
+    // Páginas do contrato vêm mais antigo primeiro dentro da página; o cursor
+    // seguinte é o `ts` do registo mais antigo da última página (exclusivo).
+    getNextPageParam: (lastPage: T[]) =>
+      lastPage.length < PAGE_SIZE ? undefined : (lastPage[0]?.ts ?? undefined),
+  });
+
+  const items = useMemo(() => (query.data?.pages ?? []).flat() as T[], [query.data]);
+
+  return {
+    items,
+    isLoading: query.isLoading,
+    isFetching: query.isFetching,
+    isError: query.isError,
+    error: query.error,
+    dataUpdatedAt: query.dataUpdatedAt,
+    refetch: () => void query.refetch(),
+    hasMore: query.hasNextPage,
+    loadMore: () => {
+      if (query.hasNextPage && !query.isFetchingNextPage) void query.fetchNextPage();
+    },
+    isLoadingMore: query.isFetchingNextPage,
+  };
+}
+
+/**
+ * Insere/atualiza um item na primeira página de uma lista paginada (chegada por
+ * WS). A primeira página é aparada para não crescer sem limite — o histórico
+ * antigo continua acessível pela paginação (`?before=`).
+ */
+function upsertFirstPage<T extends { id: string }>(
+  prev: InfiniteData<T[], string | undefined> | undefined,
+  item: T,
+): InfiniteData<T[], string | undefined> {
+  const pages = prev?.pages ?? [];
+  const first = pages[0] ?? [];
+  const merged = [item, ...first.filter((entry) => entry.id !== item.id)].slice(0, 250);
+  return {
+    pages: [merged, ...pages.slice(1)],
+    pageParams: prev?.pageParams ?? [undefined],
+  };
+}
+
+/** Atualiza um item (por `id`) em qualquer página de uma lista paginada. */
+function updateInPages<T extends { id: string }>(
+  prev: InfiniteData<T[], string | undefined> | undefined,
+  id: string,
+  patch: (item: T) => T,
+): InfiniteData<T[], string | undefined> | undefined {
+  if (!prev) return prev;
+  return {
+    ...prev,
+    pages: prev.pages.map((page) => page.map((item) => (item.id === id ? patch(item) : item))),
+  };
+}
+
 export function useMemory(): UseQueryResult<Memory, Error> {
   const campaignId = useCampaignId() ?? '';
   return useCampaignQuery(queryKeys.memory(campaignId), (c, id) => c.getMemory(id));
@@ -152,18 +257,30 @@ export function useSpend(): UseQueryResult<Spend, Error> {
   });
 }
 
-export function useDecisions(): UseQueryResult<Decision[], Error> {
+/**
+ * `GET .../decisions` paginado (`?limit=&before=`): página inicial de
+ * `PAGE_SIZE` decisões mais recentes, «carregar mais» pelo cursor exclusivo.
+ */
+export function useDecisions(): PagedQueryResult<Decision> {
   const campaignId = useCampaignId() ?? '';
-  return useCampaignQuery(queryKeys.decisions(campaignId), (c, id) => c.getDecisions(id), {
-    refetchInterval: 20000,
-  });
+  return usePagedQuery<Decision>(
+    queryKeys.decisions(campaignId),
+    (c, id, before) => c.getDecisions(id, before ? { limit: PAGE_SIZE, before } : { limit: PAGE_SIZE }),
+    { refetchInterval: 20000 },
+  );
 }
 
-export function useQuestions(): UseQueryResult<Question[], Error> {
+/**
+ * `GET .../questions` paginado (`?limit=&before=`): a página inicial cobre a
+ * fila viva; o histórico antigo carrega a pedido.
+ */
+export function useQuestions(): PagedQueryResult<Question> {
   const campaignId = useCampaignId() ?? '';
-  return useCampaignQuery(queryKeys.questions(campaignId), (c, id) => c.getQuestions(id), {
-    refetchInterval: 15000,
-  });
+  return usePagedQuery<Question>(
+    queryKeys.questions(campaignId),
+    (c, id, before) => c.getQuestions(id, before ? { limit: PAGE_SIZE, before } : { limit: PAGE_SIZE }),
+    { refetchInterval: 15000 },
+  );
 }
 
 /**
@@ -215,28 +332,30 @@ export function applyServerEvent(
       });
       break;
     case 'decision':
-      queryClient.setQueryData<Decision[]>(queryKeys.decisions(campaignId), (prev) =>
-        [event.payload, ...(prev ?? []).filter((d) => d.id !== event.payload.id)].slice(0, 250),
+      queryClient.setQueryData<InfiniteData<Decision[], string | undefined>>(
+        queryKeys.decisions(campaignId),
+        (prev) => upsertFirstPage(prev, event.payload),
       );
       break;
     case 'question_new':
-      queryClient.setQueryData<Question[]>(queryKeys.questions(campaignId), (prev) =>
-        [event.payload, ...(prev ?? []).filter((q) => q.id !== event.payload.id)],
+      // O backend coalesce re-pedidos da mesma `action_id`: o mesmo id volta a
+      // chegar com `attempts`/`last_seen_ts` atualizados — substitui, não duplica.
+      queryClient.setQueryData<InfiniteData<Question[], string | undefined>>(
+        queryKeys.questions(campaignId),
+        (prev) => upsertFirstPage(prev, event.payload),
       );
       break;
     case 'question_answered':
       // Aditivo: a mesma resposta, venha ela do REST ou do WS.
-      queryClient.setQueryData<Question[]>(queryKeys.questions(campaignId), (prev) =>
-        (prev ?? []).map((question) =>
-          question.id === event.payload.id
-            ? {
-                ...question,
-                status: event.payload.status,
-                answer_text: event.payload.answer_text,
-                option_id: event.payload.option_id ?? null,
-              }
-            : question,
-        ),
+      queryClient.setQueryData<InfiniteData<Question[], string | undefined>>(
+        queryKeys.questions(campaignId),
+        (prev) =>
+          updateInPages(prev, event.payload.id, (question) => ({
+            ...question,
+            status: event.payload.status,
+            answer_text: event.payload.answer_text,
+            option_id: event.payload.option_id ?? null,
+          })),
       );
       break;
     case 'approval_new':
@@ -351,17 +470,15 @@ export function useAnswerQuestion(options?: {
   return useMutation<AnswerQuestionResponse, Error, { qid: string } & AnswerQuestionRequest>({
     mutationFn: ({ qid, ...body }) => client.answerQuestion(campaignId, qid, body),
     onSuccess: (response, variables) => {
-      queryClient.setQueryData<Question[]>(queryKeys.questions(campaignId), (prev) =>
-        (prev ?? []).map((question) =>
-          question.id === response.id
-            ? {
-                ...question,
-                status: response.status,
-                answer_text: response.answer_text,
-                option_id: response.option_id ?? variables.option_id ?? null,
-              }
-            : question,
-        ),
+      queryClient.setQueryData<InfiniteData<Question[], string | undefined>>(
+        queryKeys.questions(campaignId),
+        (prev) =>
+          updateInPages(prev, response.id, (question) => ({
+            ...question,
+            status: response.status,
+            answer_text: response.answer_text,
+            option_id: response.option_id ?? variables.option_id ?? null,
+          })),
       );
       void queryClient.invalidateQueries({ queryKey: queryKeys.memory(campaignId) });
       // Responder a uma pergunta de aprovação decide também a aprovação.

@@ -3,7 +3,7 @@
  * Dinheiro é sempre USD (contrato) — só a apresentação é pt-PT.
  */
 
-import type { ControlMode, DecisionBand, JevAgent, QuestionStatus } from './types';
+import type { ControlMode, DecisionBand, DecisionStatus, JevAgent, QuestionStatus } from './types';
 
 const timeFmt = new Intl.DateTimeFormat('pt-PT', {
   hour: '2-digit',
@@ -109,6 +109,30 @@ export const BAND_LABEL: Record<DecisionBand, string> = {
   auto: 'auto',
   hitl: 'hitl · confirmação',
   abstain: 'abstenção',
+};
+
+/**
+ * Vocabulário das bandas — o modelo mental do produto (auditoria v2, achado 4):
+ * cada chip de banda leva esta frase no tooltip, e as opções de filtro também.
+ * Intervalos conforme `docs/arquitetura.md` §Bandas de ação.
+ */
+export const BAND_DESCRIPTION: Record<DecisionBand, string> = {
+  auto: 'auto · confiança ≥ 0,90 — a ação executa sozinha, sem pedir confirmação',
+  hitl: 'hitl · confiança 0,50–0,89 — a ação fica retida até um humano confirmar',
+  abstain: 'abstain · confiança < 0,50 — o agente não age e escala a dúvida ao humano',
+};
+
+/** Desfecho da ação escolhida (`Decision.status`, ADITIVO). */
+export const DECISION_STATUS_LABEL: Record<DecisionStatus, string> = {
+  executed: 'executada',
+  question: 'virou pergunta',
+  error: 'erro',
+};
+
+export const DECISION_STATUS_DESCRIPTION: Record<DecisionStatus, string> = {
+  executed: 'A ação escolhida foi executada (despachada ou libertada por aprovação humana)',
+  question: 'A decisão virou pergunta ao humano — a ação ficou retida à espera de resposta',
+  error: 'O passo falhou antes de executar a ação',
 };
 
 export const JEV_ROLE_LABEL: Record<JevAgent, string> = {

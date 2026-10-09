@@ -13,6 +13,7 @@ import QuestionAnswer from '@mui/icons-material/QuestionAnswer';
 import type { AnswerQuestionRequest, Question } from '../api/types';
 import { PanelEmpty } from './PanelState';
 import QuestionCard from './QuestionCard';
+import { groupQuestionsByAction } from './questionGroups';
 
 const DRAWER_TITLE_ID = 'perguntas-pendentes-titulo';
 
@@ -64,6 +65,8 @@ export function QuestionsQueueDrawer({
   busyId = null,
   onOpenPanel,
 }: QuestionsQueueDrawerProps) {
+  // Coalescência visual: pedidos da mesma `action_id` num só cartão (achado 1).
+  const groups = groupQuestionsByAction(questions);
   return (
     <Drawer
       anchor="right"
@@ -88,7 +91,9 @@ export function QuestionsQueueDrawer({
           <Typography variant="caption" sx={{ color: 'text.secondary' }}>
             {questions.length === 0
               ? 'Nada à espera de resposta'
-              : `${questions.length} à espera de resposta`}
+              : groups.length < questions.length
+                ? `${questions.length} pedidos · ${groups.length} ações à espera de resposta`
+                : `${questions.length} à espera de resposta`}
           </Typography>
         </Box>
         <IconButton onClick={onClose} aria-label="Fechar a fila de perguntas">
@@ -105,13 +110,14 @@ export function QuestionsQueueDrawer({
           />
         ) : (
           <Stack spacing={1.5}>
-            {questions.map((question) => (
+            {groups.map((group) => (
               <QuestionCard
-                key={question.id}
-                question={question}
+                key={group.key}
+                question={group.representative}
+                coalesced={group.coalesced}
                 dense
-                busy={busyId === question.id}
-                onAnswer={(body) => onAnswer(question.id, body)}
+                busy={busyId === group.representative.id}
+                onAnswer={(body) => onAnswer(group.representative.id, body)}
               />
             ))}
           </Stack>

@@ -1,0 +1,52 @@
+{
+ "interface_type": "dashboard",
+ "interface_type_note": "RE-AVALIACAO POS-REPARACAO (v2 → v2.1) do mesmo interface da `docs/uxui-audit-ui-v2.json`: dashboard (mission control) com ai-chat/data-table adjacentes, Partes 1/2/4 + 5. Os 7 achados da v2 foram reparados em web/** e verificados em duas vias: (a) codigo (tipos do contrato espelhados em types.ts, queries paginadas com cursor `before`, coalescencia por action_id, chips de vocabulario com tooltip); (b) render real headless-Chrome/CDP sobre o build de producao — os 8 paineis pintam sem error boundary e sem excecoes de runtime, e a UI nova foi observada no DOM: chip «pedido N vezes» (perguntas e aprovacoes), «Agrupados: N pedidos da mesma ação», «Diagnóstico do pedido» (source_data), coluna Estado com «executada»/«virou pergunta»/«erro»/«desconhecido», filtro Estado, «Carregar mais decisões» (clique real: 25 → 51 linhas), dialogo de detalhe com «Notas de Auditoria» (released_by_approval), toast «Nova pergunta do agente…» e regiao aria-live «N pergunta(s) do agente à espera de resposta». Sem violacoes observaveis nas Partes 1/2/4+5, o rubrica da skill (100 − 15/critical − 7/warning − 3/suggestion) devolve 100. LIMITES: avaliacao de codigo + render headless, nao de ecra humano; contrastes herdados da v1 (paleta intocada); volumes do mock/da campanha viva.",
+ "overall_score": 100,
+ "band": "excellent",
+ "findings": [],
+ "strengths": [
+  {
+   "principle": {
+    "code": "S.1.3.01",
+    "slug": "ai-transparency",
+    "title": "AI Transparency Principle"
+   },
+   "message": "A fila de supervisao diz tudo o que o contrato sabe: banda com tooltip (auto ≥ 0,90 executa · hitl 0,50–0,89 confirma · abstain < 0,50 não age), papel JEV, ação retida, why_pt em PT, chip «pedido N vezes» com último re-pedido (`attempts`/`last_seen_ts`), coalescência visual por `action_id` e «Diagnóstico do pedido» com `source_data` num segundo nível colapsado. No log, cada decisão traz o desfecho (`status`) e as marcas `issues` (ex. released_by_approval)."
+  },
+  {
+   "principle": {
+    "code": "S.1.1.01",
+    "slug": "conversational-flow-principle",
+    "title": "Conversational Flow Principle"
+   },
+   "message": "A conversa humano-agente deixa de ser silenciosa: toda a pergunta nova ou re-pedido produz toast role=status («Nova pergunta do agente…» / «Re-pedido do agente… (N vezes)»), a região aria-live permanente resume a fila para tecnologias de assistência e o badge/drawer dão acesso imediato de qualquer painel."
+  },
+  {
+   "principle": {
+    "code": "C.1.4.01",
+    "slug": "error-prevention",
+    "title": "Error Prevention"
+   },
+   "message": "Fricção alinhada com irreversibilidade (mantida da v1) + feedback de desfecho: transições para autopilot confirmadas e nomeadas, respostas com pré-visualização/confirmação, e agora nenhum passo fica sem sinal — «erro»/«executada»/«virou pergunta» na tabela, com «desconhecido» honesto para decisões auxiliares."
+  },
+  {
+   "principle": {
+    "code": "F.1.1.02",
+    "slug": "cognitive-load",
+    "title": "Cognitive Load"
+   },
+   "message": "Densidade sob controlo em todas as superfícies: log paginado (25 por página, «carregar mais» pelo cursor `before`, anel de 5000 acessível), fila agrupada por ação (N pedidos repetidos viram um cartão), métricas em acordeões por severidade com 5 sinais vitais acima da dobra, e vocabulário explicado onde é usado (tooltips + helperText dos filtros)."
+  },
+  {
+   "principle": {
+    "code": "C.1.1.01",
+    "slug": "consistency-standards",
+    "title": "Consistency and Standards"
+   },
+   "message": "Uma só disciplina de estado: chips rotulados e com tooltip para todas as vocabulários (banda, desfecho, dedupe), frescura com o mesmo indicador em todos os painéis, ordem de apresentação coerente com o texto (log do mais recente para o mais antigo) e o painel de entrada coincide com o topo da navegação («Perguntas»)."
+  }
+ ],
+ "priority_fixes": [],
+ "api_enriched": false,
+ "api_note": "Mesmo metodo da v1/v2: sem UXUI_API_KEY, avaliacao com o framework interno da skill `uxui-evaluator` (codigos/slugs dos principios ja fixados via indice publico na v1). A verificacao desta re-avalicao acrescenta render real headless-Chrome/CDP sobre `vite build` (8 paineis, zero error boundaries, zero excecoes de runtime) e clique real no controlo de paginacao. Para findings enriquecidos com citacoes e business impact da API: uxuiprinciples.com/en/checkout."
+}

@@ -24,10 +24,20 @@ import Typography from '@mui/material/Typography';
 import ExpandMore from '@mui/icons-material/ExpandMore';
 
 import { errorMessage } from '../api/events';
-import { asText, formatConfidence, formatDateTime, formatTime, formatUsd } from '../api/format';
-import { useDecisions } from '../api/queries';
-import type { Decision, DecisionBand, JevAgent } from '../api/types';
-import { AgentChip, BandChip } from '../components/Chips';
+import {
+  BAND_DESCRIPTION,
+  BAND_LABEL,
+  DECISION_STATUS_DESCRIPTION,
+  DECISION_STATUS_LABEL,
+  asText,
+  formatConfidence,
+  formatDateTime,
+  formatTime,
+  formatUsd,
+} from '../api/format';
+import { PAGE_SIZE, useDecisions } from '../api/queries';
+import type { Decision, DecisionBand, DecisionStatus, JevAgent } from '../api/types';
+import { AgentChip, BandChip, DecisionStatusChip } from '../components/Chips';
 import FreshnessIndicator from '../components/FreshnessIndicator';
 import PanelShell from '../components/PanelShell';
 import { PanelEmpty, PanelError, PanelLoading } from '../components/PanelState';
@@ -36,6 +46,8 @@ import { useNow } from '../hooks/useSparkSeries';
 import { MONO_FONT } from '../theme';
 
 const ALL = 'todos';
+/** Filtro de desfecho para decisões sem `status` no contrato (auxiliares). */
+const NO_STATUS = 'sem-desfecho';
 
 function answerSummary(decision: Decision): string {
   const entries = Object.entries(decision.answers ?? {});
@@ -65,17 +77,28 @@ export default function DecisionsPanel() {
   const now = useNow(1000);
   const [agent, setAgent] = useState<string>(ALL);
   const [band, setBand] = useState<string>(ALL);
+  const [status, setStatus] = useState<string>(ALL);
   const [search, setSearch] = useState('');
   const [lowConfidenceOnly, setLowConfidenceOnly] = useState(false);
   const [detailId, setDetailId] = useState<string | null>(null);
 
-  const decisions = useMemo(() => decisionsQuery.data ?? [], [decisionsQuery.data]);
+  /*
+   * As páginas do contrato vêm mais antigas primeiro dentro da página; a tabela
+   * promete «do mais recente para o mais antigo», por isso ordena-se a vista.
+   * A paginação usa o cursor por `ts` e não depende da ordem de apresentação.
+   */
+  const decisions = useMemo(
+    () => [...decisionsQuery.items].sort((a, b) => (a.ts < b.ts ? 1 : a.ts > b.ts ? -1 : 0)),
+    [decisionsQuery.items],
+  );
 
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
     return decisions.filter((decision) => {
       if (agent !== ALL && decision.agent !== agent) return false;
       if (band !== ALL && decision.band !== band) return false;
+      if (status === NO_STATUS && decision.status) return false;
+      if (status !== ALL && status !== NO_STATUS && decision.status !== status) return false;
       if (lowConfidenceOnly && !isLowConfidence(decision)) return false;
       if (!term) return true;
       return (
@@ -84,10 +107,10 @@ export default function DecisionsPanel() {
         decision.id.toLowerCase().includes(term)
       );
     });
-  }, [decisions, agent, band, search, lowConfidenceOnly]);
+  }, [decisions, agent, band, status, search, lowConfidenceOnly]);
 
   const filtersActive =
-    agent !== ALL || band !== ALL || lowConfidenceOnly || search.trim().length > 0;
+    agent !== ALL || band !== ALL || status !== ALL || lowConfidenceOnly || search.trim().length > 0;
   const detail = decisions.find((decision) => decision.id === detailId) ?? null;
 
   return (
@@ -99,7 +122,7 @@ export default function DecisionsPanel() {
           <Chip
             size="small"
             variant="outlined"
-            label={`${filtered.length} de ${decisions.length} decisões`}
+            label={`${filtered.length} de ${decisions.length} carregadas`}
           />
           <FreshnessIndicator
             ts={decisionsQuery.dataUpdatedAt ? new Date(decisionsQuery.dataUpdatedAt).toISOString() : null}
@@ -132,6 +155,7 @@ export default function DecisionsPanel() {
                 onClick={() => {
                   setAgent(ALL);
                   setBand(ALL);
+                  setStatus(ALL);
                   setSearch('');
                   setLowConfidenceOnly(false);
                 }}
@@ -167,13 +191,41 @@ export default function DecisionsPanel() {
               value={band}
               onChange={(event) => setBand(event.target.value)}
               sx={{ minWidth: 170 }}
+              helperText={
+                band === ALL
+                  ? 'auto ≥ 0,90 · hitl 0,50–0,89 · abstain < 0,50'
+                  : BAND_DESCRIPTION[band as DecisionBand]
+              }
             >
               <MenuItem value={ALL}>Todas as bandas</MenuItem>
               {(['auto', 'hitl', 'abstain'] as DecisionBand[]).map((item) => (
                 <MenuItem key={item} value={item}>
-                  {item}
+                  {BAND_LABEL[item]}
                 </MenuItem>
               ))}
+            </TextField>
+
+            <TextField
+              select
+              label="Estado"
+              value={status}
+              onChange={(event) => setStatus(event.target.value)}
+              sx={{ minWidth: 190 }}
+              helperText={
+                status === ALL
+                  ? 'O que aconteceu à ação escolhida (desfecho do contrato)'
+                  : status === NO_STATUS
+                    ? 'Decisões auxiliares (JEV-R/M/D) sem desfecho no contrato'
+                    : DECISION_STATUS_DESCRIPTION[status as DecisionStatus]
+              }
+            >
+              <MenuItem value={ALL}>Todos os estados</MenuItem>
+              {(['executed', 'question', 'error'] as DecisionStatus[]).map((item) => (
+                <MenuItem key={item} value={item}>
+                  {DECISION_STATUS_LABEL[item]}
+                </MenuItem>
+              ))}
+              <MenuItem value={NO_STATUS}>Sem desfecho</MenuItem>
             </TextField>
 
             <TextField
@@ -215,13 +267,15 @@ export default function DecisionsPanel() {
             <TableContainer sx={{ maxHeight: 620 }}>
               <Table stickyHeader size="small" aria-label="Log de decisões JEV">
                 <caption style={{ captionSide: 'bottom', padding: 8 }}>
-                  {filtered.length} decisões apresentadas de {decisions.length} recebidas
+                  {filtered.length} decisões apresentadas de {decisions.length} carregadas (páginas
+                  de {PAGE_SIZE} — o anel do contrato guarda até 5000)
                 </caption>
                 <TableHead>
                   <TableRow>
                     <TableCell scope="col">Hora</TableCell>
                     <TableCell scope="col">Papel</TableCell>
                     <TableCell scope="col">Banda</TableCell>
+                    <TableCell scope="col">Estado</TableCell>
                     <TableCell scope="col">Confiança</TableCell>
                     <TableCell scope="col">Resumo do pedido</TableCell>
                     <TableCell scope="col" align="right">
@@ -252,6 +306,9 @@ export default function DecisionsPanel() {
                         </TableCell>
                         <TableCell>
                           <BandChip band={decision.band} />
+                        </TableCell>
+                        <TableCell>
+                          <DecisionStatusChip status={decision.status} />
                         </TableCell>
                         <TableCell>
                           {confidence ? (
@@ -306,6 +363,23 @@ export default function DecisionsPanel() {
               </Table>
             </TableContainer>
           )}
+
+          {decisionsQuery.hasMore ? (
+            <Stack sx={{ alignItems: 'center', p: 2 }}>
+              <Button
+                variant="outlined"
+                onClick={decisionsQuery.loadMore}
+                loading={decisionsQuery.isLoadingMore}
+                disabled={decisionsQuery.isLoadingMore}
+                aria-label="Carregar mais decisões (página anterior do log)"
+              >
+                Carregar mais decisões
+              </Button>
+              <Typography variant="caption" sx={{ color: 'text.secondary', mt: 0.5, textAlign: 'center' }}>
+                {decisions.length} carregadas — mais antigas disponíveis com o cursor `before` do contrato
+              </Typography>
+            </Stack>
+          ) : null}
         </SectionCard>
       </Stack>
 
@@ -325,6 +399,7 @@ export default function DecisionsPanel() {
               <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
                 <AgentChip agent={detail.agent} />
                 <BandChip band={detail.band} />
+                <DecisionStatusChip status={detail.status} />
                 <Chip
                   size="small"
                   variant="outlined"
@@ -349,6 +424,21 @@ export default function DecisionsPanel() {
                   {detail.request_summary}
                 </Typography>
               </Box>
+
+              {detail.issues && detail.issues.length > 0 ? (
+                <Box>
+                  <Typography variant="overline" sx={{ color: 'text.secondary' }}>
+                    Notas de auditoria ({detail.issues.length})
+                  </Typography>
+                  <Stack component="ul" spacing={0.25} sx={{ m: 0, pl: 2 }}>
+                    {detail.issues.map((issue) => (
+                      <Typography key={issue} component="li" variant="body2" sx={{ fontFamily: MONO_FONT }}>
+                        {issue}
+                      </Typography>
+                    ))}
+                  </Stack>
+                </Box>
+              ) : null}
 
               <Box>
                 <Typography variant="overline" sx={{ color: 'text.secondary' }}>

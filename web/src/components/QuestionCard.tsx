@@ -1,22 +1,25 @@
 import { useState } from 'react';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
+import Collapse from '@mui/material/Collapse';
 import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
+import ExpandMore from '@mui/icons-material/ExpandMore';
 import Send from '@mui/icons-material/Send';
 
-import { formatRelative } from '../api/format';
+import { asText, formatRelative } from '../api/format';
 import {
   isDecisionBand,
   isJevAgent,
   type AnswerQuestionRequest,
   type DecisionBand,
   type Question,
+  type QuestionSourceData,
 } from '../api/types';
 import AnswerConfirmDialog from './AnswerConfirmDialog';
-import { BandChip, QuestionStatusChip } from './Chips';
+import { AttemptsChip, BandChip, QuestionStatusChip } from './Chips';
 import { MONO_FONT } from '../theme';
 
 export interface QuestionCardProps {
@@ -26,6 +29,11 @@ export interface QuestionCardProps {
   busy?: boolean;
   /** Versão compacta para o drawer da fila. */
   dense?: boolean;
+  /**
+   * Coalescência visual (auditoria v2, achado 1): outros pedidos PENDENTES da
+   * MESMA `action_id`, agrupados neste cartão em vez de virarem cartões novos.
+   */
+  coalesced?: Question[];
 }
 
 interface PendingAnswer {
@@ -43,6 +51,70 @@ const BAND_WHY_PT: Record<DecisionBand, string> = {
   abstain: 'a confiança ficou abaixo de 0.50: o agente não age sozinho',
 };
 
+/** Ordem de leitura do diagnóstico — o que explica primeiro, o resto depois. */
+const SOURCE_KEY_ORDER = [
+  'reason',
+  'band',
+  'action_id',
+  'action_en',
+  'description_en',
+  'action_confidence',
+  'confidence',
+  'answer_mode',
+  'action_mode',
+];
+
+function sourceEntries(data: QuestionSourceData): [string, unknown][] {
+  return Object.entries(data).sort(([a], [b]) => {
+    const ia = SOURCE_KEY_ORDER.indexOf(a);
+    const ib = SOURCE_KEY_ORDER.indexOf(b);
+    return (ia === -1 ? SOURCE_KEY_ORDER.length : ia) - (ib === -1 ? SOURCE_KEY_ORDER.length : ib);
+  });
+}
+
+/**
+ * Segundo nível de divulgação (auditoria v2, achado 7): o diagnóstico
+ * `source_data` do contrato (reason, confiança da ação, candidatos…) num
+ * expansível colapsado por omissão — nunca polui o cartao fechado.
+ */
+function SourceDataDetails({ data, dense }: { data: QuestionSourceData; dense: boolean }) {
+  const [open, setOpen] = useState(false);
+  const entries = sourceEntries(data);
+  if (entries.length === 0) return null;
+  return (
+    <Box sx={{ mt: dense ? 0.5 : 1 }}>
+      <Button
+        size="small"
+        aria-expanded={open}
+        aria-label={`Diagnóstico do pedido (${entries.length} campos)`}
+        onClick={() => setOpen((value) => !value)}
+        endIcon={
+          <ExpandMore
+            fontSize="small"
+            sx={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 150ms' }}
+          />
+        }
+      >
+        Diagnóstico do pedido ({entries.length})
+      </Button>
+      <Collapse in={open}>
+        <Stack spacing={0.25} sx={{ pt: 0.5, pl: 1, borderLeft: '2px solid var(--mui-palette-divider)' }}>
+          {entries.map(([key, value]) => (
+            <Stack key={key} direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
+              <Typography variant="caption" sx={{ fontFamily: MONO_FONT, color: 'text.secondary', minWidth: 150 }}>
+                {key}
+              </Typography>
+              <Typography variant="caption" sx={{ fontFamily: MONO_FONT, whiteSpace: 'pre-wrap' }}>
+                {asText(value)}
+              </Typography>
+            </Stack>
+          ))}
+        </Stack>
+      </Collapse>
+    </Box>
+  );
+}
+
 /**
  * Proveniência da pergunta (achado #2 de `docs/uxui-audit-ui.json`): a fila tem
  * de dizer **porque** o agente pergunta, em que banda e com que ação retida.
@@ -55,8 +127,9 @@ function QuestionProvenance({ question, dense }: { question: Question; dense: bo
   const role = isJevAgent(question.role) ? question.role : null;
   const actionId = question.action_id?.trim() ? question.action_id.trim() : null;
   const why = question.why_pt?.trim() ? question.why_pt.trim() : band ? BAND_WHY_PT[band] : null;
+  const source = question.source_data ?? null;
 
-  if (!band && !role && !actionId && !why) return null;
+  if (!band && !role && !actionId && !why && !source) return null;
 
   return (
     <Box
@@ -89,6 +162,8 @@ function QuestionProvenance({ question, dense }: { question: Question; dense: bo
             {actionId ? `ação ${actionId}` : ''}
           </Typography>
         ) : null}
+
+        {source ? <SourceDataDetails data={source} dense={dense} /> : null}
       </Stack>
     </Box>
   );
@@ -103,12 +178,31 @@ function QuestionProvenance({ question, dense }: { question: Question; dense: bo
  * um clique acidental — opção rápida pede confirmação com o texto exato, texto
  * livre tem pré-visualização antes do envio.
  */
-export default function QuestionCard({ question, onAnswer, busy = false, dense = false }: QuestionCardProps) {
+export default function QuestionCard({
+  question,
+  onAnswer,
+  busy = false,
+  dense = false,
+  coalesced = [],
+}: QuestionCardProps) {
   const [freeText, setFreeText] = useState('');
   const [reviewing, setReviewing] = useState(false);
   const [pending, setPending] = useState<PendingAnswer | null>(null);
   const answered = question.status === 'answered';
   const fieldId = `resposta-livre-${question.id}`;
+
+  /**
+   * Dedupe/agrupamento (auditoria v2, achado 1): o total de pedidos desta ação é
+   * a soma dos `attempts` de todas as entradas agrupadas (1 quando ausente), e o
+   * último re-pedido é o `last_seen_ts` mais recente.
+   */
+  const groupAttempts =
+    [question, ...coalesced].reduce((total, item) => total + (item.attempts ?? 1), 0) || 1;
+  const lastSeen = [question, ...coalesced]
+    .map((item) => item.last_seen_ts)
+    .filter((ts): ts is string => Boolean(ts))
+    .sort()
+    .at(-1);
 
   const resetDraft = () => {
     setFreeText('');
@@ -148,15 +242,44 @@ export default function QuestionCard({ question, onAnswer, busy = false, dense =
             spacing={0.5}
             sx={{ alignItems: 'center', flexShrink: 0 }}
           >
+            <AttemptsChip attempts={groupAttempts} lastSeenTs={lastSeen} />
             <QuestionStatusChip status={question.status} />
           </Stack>
         </Stack>
 
         <Typography variant="caption" sx={{ color: 'text.secondary' }}>
           {question.id} · {formatRelative(question.ts)}
+          {groupAttempts > 1 && lastSeen ? ` · último re-pedido ${formatRelative(lastSeen)}` : ''}
         </Typography>
 
         <QuestionProvenance question={question} dense={dense} />
+
+        {coalesced.length > 0 ? (
+          <Box
+            sx={{
+              p: 1,
+              borderRadius: 1,
+              border: '1px dashed var(--mui-palette-warning-main)',
+            }}
+          >
+            <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
+              Agrupados: {coalesced.length + 1} pedidos da mesma ação
+              {question.action_id ? ` (${question.action_id})` : ''} —{' '}
+              {question.source_data?.answer_mode === 'approval' ||
+              question.source_data?.reason === 'checkpoint_mode'
+                ? 'responder decide o grupo (duplicados pendentes são descartados).'
+                : 'cada entrada mantém a sua resposta; o contador soma todos os pedidos.'}
+            </Typography>
+            <Stack component="ul" spacing={0.25} sx={{ m: 0, pl: 2 }}>
+              {coalesced.map((item) => (
+                <Typography key={item.id} component="li" variant="caption" sx={{ fontFamily: MONO_FONT }}>
+                  {item.id} · {formatRelative(item.ts)}
+                  {item.attempts ? ` · ${item.attempts} tentativa(s)` : ''}
+                </Typography>
+              ))}
+            </Stack>
+          </Box>
+        ) : null}
 
         {answered ? (
           <Box>

@@ -1,8 +1,23 @@
 import Chip from '@mui/material/Chip';
 import Tooltip from '@mui/material/Tooltip';
 
-import { BAND_LABEL, JEV_ROLE_LABEL, QUESTION_STATUS_LABEL, valuePt } from '../api/format';
-import type { ControlMode, DecisionBand, JevAgent, QuestionStatus } from '../api/types';
+import {
+  BAND_DESCRIPTION,
+  BAND_LABEL,
+  DECISION_STATUS_DESCRIPTION,
+  DECISION_STATUS_LABEL,
+  JEV_ROLE_LABEL,
+  QUESTION_STATUS_LABEL,
+  formatDateTime,
+  valuePt,
+} from '../api/format';
+import type {
+  ControlMode,
+  DecisionBand,
+  DecisionStatus,
+  JevAgent,
+  QuestionStatus,
+} from '../api/types';
 
 const BAND_COLOR: Record<DecisionBand, 'success' | 'warning' | 'error'> = {
   auto: 'success',
@@ -12,16 +27,73 @@ const BAND_COLOR: Record<DecisionBand, 'success' | 'warning' | 'error'> = {
 
 /**
  * Banda de ação do JEV. A cor nunca é o único sinal: a etiqueta diz o que é
- * (WCAG 2.2 — não depender só da cor).
+ * (WCAG 2.2 — não depender só da cor) e o tooltip explica o vocabulário
+ * (auditoria v2, achado 4): auto ≥ 0,90 executa sozinho · hitl 0,50–0,89
+ * confirma · abstain < 0,50 não age.
  */
 export function BandChip({ band, size = 'small' }: { band: DecisionBand; size?: 'small' | 'medium' }) {
   return (
-    <Chip
-      size={size}
-      variant="outlined"
-      color={BAND_COLOR[band] ?? 'default'}
-      label={BAND_LABEL[band] ?? band}
-    />
+    <Tooltip title={BAND_DESCRIPTION[band] ?? band}>
+      <Chip
+        size={size}
+        variant="outlined"
+        color={BAND_COLOR[band] ?? 'default'}
+        label={BAND_LABEL[band] ?? band}
+      />
+    </Tooltip>
+  );
+}
+
+/**
+ * Desfecho da decisão (`Decision.status`, aditivo) — executada | virou pergunta
+ * | erro. Quando o contrato omite o estado (decisão auxiliar), desenha-se
+ * «desconhecido» em vez de fingir um valor (auditoria v2, achado 2).
+ */
+export function DecisionStatusChip({
+  status,
+  size = 'small',
+}: {
+  status: DecisionStatus | null | undefined;
+  size?: 'small' | 'medium';
+}) {
+  if (!status) {
+    return (
+      <Tooltip title="O contrato não traz desfecho para decisões auxiliares (JEV-R/M/D) — desconhecido, não «executada».">
+        <Chip size={size} variant="outlined" color="default" label="desconhecido" />
+      </Tooltip>
+    );
+  }
+  const color = status === 'executed' ? 'success' : status === 'question' ? 'warning' : 'error';
+  return (
+    <Tooltip title={DECISION_STATUS_DESCRIPTION[status] ?? status}>
+      <Chip size={size} variant="outlined" color={color} label={DECISION_STATUS_LABEL[status] ?? status} />
+    </Tooltip>
+  );
+}
+
+/**
+ * Dedupe anti-flood do contrato: quantas vezes o loop voltou a pedir a MESMA
+ * ação. A cor não é o único sinal; o tooltip traz o último re-pedido.
+ */
+export function AttemptsChip({
+  attempts,
+  lastSeenTs,
+  size = 'small',
+}: {
+  attempts?: number | null;
+  lastSeenTs?: string | null;
+  size?: 'small' | 'medium';
+}) {
+  const count = typeof attempts === 'number' && attempts > 1 ? attempts : null;
+  if (!count) return null;
+  return (
+    <Tooltip
+      title={`O agente pediu esta mesma ação ${count} vezes (dedupe: aparece como um só pedido)${
+        lastSeenTs ? `; último re-pedido: ${formatDateTime(lastSeenTs)}` : ''
+      }`}
+    >
+      <Chip size={size} variant="outlined" color="warning" label={`pedido ${count} vezes`} />
+    </Tooltip>
   );
 }
 

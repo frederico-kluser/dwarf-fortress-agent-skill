@@ -110,7 +110,12 @@ export const PANELS: PanelDefinition[] = [
   },
 ];
 
-export const DEFAULT_PANEL_ID: PanelId = 'metricas';
+/**
+ * Painel de entrada = primeiro da navegação (auditoria v2, achado 6): a ordem
+ * de abertura coincide com a ordem de navegação e com o trabalho do humano —
+ * responder ao agente — nunca com o painel ambiental.
+ */
+export const DEFAULT_PANEL_ID: PanelId = 'perguntas';
 
 /**
  * Grupo de navegação (auditoria F.2.2.03): 8 itens planos davam o mesmo peso à

@@ -1,0 +1,152 @@
+{
+ "interface_type": "dashboard",
+ "interface_type_note": "Tipo dominante: dashboard (mission control de supervisao de um agente autonomo que joga Dwarf Fortress). Tipos secundarios presentes e avaliados como adjacentes: ai-chat (fila de perguntas do agente — QuestionsPanel.tsx + QuestionsQueueDrawer.tsx, o ponto em que a IA fala com o humano), data-table (log de decisoes JEV — DecisionsPanel.tsx) e form (memoria/objetivo/inputs). Partes priorizadas: 1 (Foundations), 2 (Core), 4 (Interface Patterns) — dashboard — mais a Parte 5 (AI-Native), porque o trabalho humano aqui e supervisionar um agente. V2 da auditoria (`docs/uxui-audit-ui.json` = v1, 40/100): os achados 1, 3, 4, 5, 6, 7 e 8 da v1 estao reparados no codigo atual (modo restauravel + confirmacao de autopiloto em useAutonomyControl.ts/AppShell.tsx; tira de sinais vitais + acordeoes por severidade em MetricsPanel.tsx; superficie de aprovacao com ApprovalsSection.tsx + approvals no contrato; navegacao agrupada em NAV_GROUPS com «Perguntas» primeiro; detalhe de linha + filtros em DecisionsPanel.tsx; FreshnessIndicator em todos os paineis; aria-current/tabpanel/skip-link ja ligados). O achado 2 da v1 (proveniencia das perguntas) esta PARCIALMENTE reparado: `band`/`role`/`action_id`/`why_pt`/`source_data` existem em types.ts e QuestionCard.tsx desenha a proveniencia, mas a chegada continua sem anuncio e o novo material do contrato (`attempts`/`last_seen_ts`, `status` das decisoes, paginacao `?limit=&before=`) ainda nao chega ao ecra — sao os achados 1-3 desta v2. LIMITES DE VERIFICACAO: avaliacao a partir do codigo-fonte (JSX, tema, contrato, mock), com leitura integral de web/src/panels + web/src/components + web/src/layout + web/src/api; nao houve renderizacao real neste passo (o render headless e feito depois, na verificacao). Contagens de itens sao estruturais (Grid/Tabs/Table/maxHeight) e nao medidas em pixeis; contrastes calculados a partir dos hex de web/src/theme.ts (WCAG 2.x, luminancia relativa). Os padroes de dados citados vem do mock (web/src/api/mock.ts) e da campanha viva descrita no pedido (10+ perguntas em PT, bandas hitl/abstain dominantes, spend ~$0.3, uma acao re-pedida 11 vezes em 45 s).",
+ "overall_score": 43,
+ "band": "fair",
+ "findings": [
+  {
+   "id": "finding-1",
+   "principle": {
+    "code": "S.1.3.01",
+    "slug": "ai-transparency",
+    "title": "AI Transparency Principle",
+    "part": "part-5"
+   },
+   "severity": "critical",
+   "message": "O contrato ja coalesce re-pedidos da mesma acao (`attempts`/`last_seen_ts`, docs/api.md §questions/§approvals) e a campanha viva mostra o problema real (uma acao re-pedida 11 vezes em 45 s), mas a UI ignora os dois campos: `Question` e `Approval` em web/src/api/types.ts nao os declaram, QuestionCard.tsx e ApprovalsSection.tsx nao os mostram, e nao ha coalescencia visual de acoes identicas — uma pilha de perguntas da mesma `action_id` aparece como N cartoes independentes, indistinguiveis de N duvidas distintas. O supervisor, que decide com pressa sobre urgencia e repeticao, le o oposto do que esta a acontecer: o agente insistente parece calado e o pedido repetido parece trabalho novo. A fila de aprovacoes esta ainda limitada a 20 entradas com descarte das mais antigas (drop oldest), mas a UI mostra so «N pendentes» sem sinalizar que a janela esta cheia e que pedidos podem ter sido perdidos.",
+   "remediation": "1) Declarar `attempts?: number` e `last_seen_ts?: string` em `Question` e `Approval`. 2) Em cada cartao, um chip «pedido N vezes» (N = attempts) quando attempts > 1, com tooltip/legenda com `last_seen_ts` («último re-pedido há X»). 3) Coalescer visualmente por `action_id`: as perguntas pendentes da mesma acao aparecem num so cartao (o mais recente) com a lista compacta dos restantes pedidos agrupados; responder decide o grupo. 4) Em aprovacoes, o mesmo agrupamento (decidir uma entrada descarta duplicados pendentes da mesma acao, semantica do contrato) e um aviso quando a lista chegar ao limite de 20. Resultado mensuravel: nenhuma repeticao de acao invisivel — um re-pedido aparece sempre como contador, nunca como cartao novo.",
+   "business_impact": "A transparencia do persistencia do agente e o que permite ao humano calibrar a friccao: sem ver que a acao foi pedida 11 vezes, o supervisor ou responde com pressa (erro numa campanha com morte permanente) ou abandona a fila por ruido — nos dois casos o gate humano deixa de cumprir a funcao que a arquitetura lhe deu."
+  },
+  {
+   "id": "finding-2",
+   "principle": {
+    "code": "C.1.4.01",
+    "slug": "error-prevention",
+    "title": "Error Prevention",
+    "part": "part-2"
+   },
+   "severity": "critical",
+   "message": "O log de decisoes mostra o que o JEV escolheu mas nao o que aconteceu depois: o campo aditivo `status` (executed|question|error, docs/api.md §decisions) e a marca `issues` (ex. `released_by_approval`) nao existem em `Decision` (web/src/api/types.ts:334-352) nem em DecisionsPanel.tsx — a tabela so tem Hora/Papel/Banda/Confiança/Resumo/Custo/Detalhe (DecisionsPanel.tsx:220-233). Na pratica, uma decisao que errou antes de executar, uma que virou pergunta ao humano e uma que executou sao visualmente identicas; nao ha feedback de erro nenhum para o passo falhado (o criterio critical de «no error feedback») nem ligacao entre a decisao `question` e a pergunta que gerou. Para um painel de controlo de um agente com acoes irreversiveis, esconder o desfecho e esconder o erro.",
+   "remediation": "1) Declarar `status?: 'executed' | 'question' | 'error'` (e `issues?: string[]`) em `Decision`. 2) Coluna «Estado» com chip rotulado (executada / virou pergunta / erro), nunca so cor; decisoes auxiliares sem status mostram «—» com tooltip «desconhecido». 3) Filtro por estado nos filtros existentes e o estado tambem no dialogo de detalhe, com a lista `issues` (marcas de auditoria). 4) Nas linhas `question`, mostrar a `action_id` retida e atalho para a pergunta correspondente. Resultado mensuravel: 100 % das decisoes com desfecho visivel ou rotulo explicito de desconhecido; nenhum erro de passo sem sinal no log.",
+   "business_impact": "Sem desfecho nao ha supervisao: o humano nao consegue auditar se as suas aprovacoes executaram, se o agente falhou em silencio ou se ficou bloqueado — e e exactamente essa auditoria que sustenta a confianca para deixar o loop correr em sessoes longas."
+  },
+  {
+   "id": "finding-3",
+   "principle": {
+    "code": "F.1.1.02",
+    "slug": "cognitive-load",
+    "title": "Cognitive Load",
+    "part": "part-1"
+   },
+   "severity": "warning",
+   "message": "A paginacao do contrato (`?limit=&before=`, aneis de 5000 decisoes / 2000 perguntas) nao e usada: `getDecisions`/`getQuestions` (web/src/api/client.ts:235-241) pedem tudo sem parametros e o WS trunca a cache em 250 (queries.ts:217-220). O log desenha tudo de uma vez numa tabela com `maxHeight: 620` (DecisionsPanel.tsx:215) — numa campanha longa isto significa milhares de linhas num unico pedido e no DOM, latencia de primeira leitura a crescer com a idade da campanha, e zero controlo sobre o historico antigo. O utilizador nao tem «carregar mais» nem qualquer indicio de que ha registos alem do que ve.",
+   "remediation": "1) `getDecisions`/`getQuestions` aceitam `{ limit, before }` e as queries passam a paginadas (pagina inicial com limite fixo, ex. 25). 2) Botao «Carregar mais decisões» (e na fila de perguntas) que pede a pagina seguinte com `before=<ts do registo mais antigo carregado>` (cursor exclusivo do contrato) e acrescenta ao fim. 3) Contador honesto («25 de 5000 no anel» quando souber) e estado de carregamento no botao. Resultado mensuravel: primeira pintura do log com numero fixo de linhas, independente da idade da campanha; historico completo acessivel em passos de 25.",
+   "business_impact": "Carga cognitiva e de sistema: um log que engorda sem limites atrasa o painel inteiro e empurra o utilizador para fora da vista de auditoria — a paginacao mantém a primeira resposta rapida e o historico auditavel ate ao fim."
+  },
+  {
+   "id": "finding-4",
+   "principle": {
+    "code": "F.1.1.03",
+    "slug": "mental-model",
+    "title": "Mental Model",
+    "part": "part-1"
+   },
+   "severity": "warning",
+   "message": "O vocabulario central do produto (bandas `auto`/`hitl`/`abstain`) nunca e explicado onde e usado: `BAND_LABEL` mostra «auto», «hitl · confirmação», «abstenção» (format.ts:108-112) e `BandChip` nao tem tooltip (Chips.tsx:24-31); pior, o filtro de banda do log mostra os valores EN crus «auto»/«hitl»/«abstain» como opcoes do select (DecisionsPanel.tsx:170-177). Um utilizador novo nao tem forma de construir o modelo mental (auto = confianca >= 0,90 executa sozinho; hitl = 0,50-0,89 confirma; abstain < 0,50 nao age) e o termo «hitl» e jargao de investigacao, nao lingua de jogo. O vocabulario novo do contrato (`status` das decisoes) vai herdar o mesmo problema se entrar sem dicionario.",
+   "remediation": "1) `BAND_DESCRIPTION` com a semantica de cada banda (intervalos de confianca e o que o agente faz) em tooltip de TODOS os `BandChip` e nas opcoes do filtro (etiqueta PT + descricao). 2) Chips de estado com a mesma disciplina: etiqueta PT + tooltip que explica o desfecho. 3) Legenda compacta de bandas numa linha de ajuda do log (ou num Tooltip do titulo). Resultado mensuravel: zero valores EN crus em controlos visiveis; cada chip de vocabulario com tooltip de uma frase.",
+   "business_impact": "O modelo mental certo e o que transforma um chip em decisao: sem saber o que `hitl` implica, o supervisor trata as confirmacoes como burocracia e nao como o ponto exato onde a arquitetura lhe pede atencao."
+  },
+  {
+   "id": "finding-5",
+   "principle": {
+    "code": "S.1.1.01",
+    "slug": "conversational-flow-principle",
+    "title": "Conversational Flow Principle",
+    "part": "part-5"
+   },
+   "severity": "warning",
+   "message": "A chegada de uma pergunta do agente continua silenciosa (metade nao reparada do achado 2 da v1): o evento `question_new` so escreve na cache do React Query (queries.ts:222-225) — sem toast, sem banner e sem regiao aria-live dedicada. O unico sinal e o badge numerico entre os controlos da AppBar (TopBar.tsx / QuestionsQueueDrawer.tsx) e o drawer so abre por clique; o toast existente (AppShell.tsx) cobre respostas enviadas e erros, nunca a chegada. Com 10+ perguntas em PT a chegar durante uma sessao longa (padrao da campanha viva), o agente pode ficar bloqueado a espera enquanto o supervisor esta noutro painel, e um leitor de ecrã nao e notificado de todo.",
+   "remediation": "1) Efeito em AppShell que compara os ids de perguntas pendentes e, por id novo, mostra toast `role=status` («Nova pergunta do agente — o agente esta bloqueado a tua resposta») com acao para abrir o drawer. 2) Regiao `aria-live=polite` permanente com o resumo («N perguntas pendentes») para tecnologias de assistencia. 3) Quando uma pendente ganhar `attempts`, anunciar tambem («re-pedido da mesma acao»). Resultado mensuravel: toda a pergunta nova produz um anuncio visivel/legivel em < 1 s sem exigir navegacao.",
+   "business_impact": "Num loop humano-agente a pergunta e o unico ponto em que o agente para: se a sua chegada passa despercebida, todo o investimento em bandas hitl/abstain vira latencia invisivel em vez de decisao humana."
+  },
+  {
+   "id": "finding-6",
+   "principle": {
+    "code": "C.1.1.01",
+    "slug": "consistency-standards",
+    "title": "Consistency and Standards",
+    "part": "part-2"
+   },
+   "severity": "suggestion",
+   "message": "A navegacao agrupada (NAV_GROUPS) comeca em «Perguntas» porque e o trabalho do humano, mas a aplicacao abre em `DEFAULT_PANEL_ID = 'metricas'` (registry.tsx:113) — o 4.º item da ordem de navegacao e o painel ambiental, nao a superficie de trabalho principal. O estado inicial contradiz a hierarquia que a propria navegacao declara (mesmo padrao mental-model/consistencia), e quando ha perguntas pendentes o primeiro ecra devia ser a fila que bloqueia o agente.",
+   "remediation": "1) `DEFAULT_PANEL_ID = 'perguntas'` (primeiro grupo da navegacao) ou, melhor, painel inicial dinamico: «perguntas» quando ha pendentes, «controlo» quando ha aprovacoes retidas, caso contrario o primeiro da navegacao. 2) Alinhar o texto de ajuda do estado vazio de «Perguntas» com o papel de ecra inicial. Resultado mensuravel: a ordem de abertura coincide com a ordem de navegacao e com o trabalho pendente.",
+   "business_impact": "Coerencia barata com efeito direto no tempo-para-resposta: abrir na fila certa poupa uma navegacao em cada sessao e evita que as pendentes fiquem escondidas atras de metricas."
+  },
+  {
+   "id": "finding-7",
+   "principle": {
+    "code": "D.1.1.01",
+    "slug": "progressive-disclosure",
+    "title": "Progressive Disclosure",
+    "part": "part-1"
+   },
+   "severity": "suggestion",
+   "message": "A proveniencia chega ao cartao (`why_pt`, banda, papel, acao) mas o diagnostico `source_data` (reason, confianca da acao, candidatos, action_en/description_en — docs/api.md §questions) nunca e mostrado em lado nenhum: QuestionCard.tsx desenha so os campos de topo e nao ha expansivel. Quem quiser perceber PORQUE o agente escolheu aquela acao (ex.: `reason: checkpoint_mode` vs `band_hitl`, `action_confidence: 0.62`) tem de ir buscar a API a mao. E um caso classico de divulgacao progressiva: o detalhe existe, so falta o segundo nivel.",
+   "remediation": "1) Expansivel «Diagnostico do pedido» no QuestionCard (e no detalhe de decisao) que lista `source_data` em chaves PT + valores, colapsado por omissao. 2) Ordenar as chaves mais uteis primeiro (reason, band, confianca, acao) e mostrar `{}`/ausente como «sem diagnostico». Resultado mensuravel: o diagnostico completo de qualquer pergunta a um clique, sem poluir o cartao fechado.",
+   "business_impact": "O segundo nivel de explicacao e o que sustenta a confianca calibrada: o supervisor valida o raciocinio do agente sem abandonar a UI, e o suporte de sessoes longas deixa de depender de curl."
+  }
+ ],
+ "strengths": [
+  {
+   "principle": {
+    "code": "C.1.4.01",
+    "slug": "error-prevention",
+    "title": "Error Prevention"
+   },
+   "message": "A friccao esta agora onde ha irreversibilidade: retomar devolve o ultimo modo explicito (useAutonomyControl.ts guarda `restorableMode`, nunca autopilot por omissao), qualquer transicao para autopilot passa por AutopilotConfirmDialog nomeando o modo de destino, e responder a uma pergunta exige confirmacao com o texto exato (AnswerConfirmDialog) com pre-visualizacao do texto livre em 2 passos."
+  },
+  {
+   "principle": {
+    "code": "F.1.1.03",
+    "slug": "mental-model",
+    "title": "Mental Model"
+   },
+   "message": "O modo «Checkpoints» tem agora superficie real: ApprovalsSection.tsx lista o que aguarda aprovacao com Aprovar/Rejeitar confirmados, badge proprio na AppBar, estado vazio explicativo por modo e aviso quando as acoes ficam retidas durante o autopiloto — o modelo mental do modo coincide com o comportamento do backend."
+  },
+  {
+   "principle": {
+    "code": "F.2.2.03",
+    "slug": "hicks-law",
+    "title": "Hick's Law"
+   },
+   "message": "A navegacao saiu da lista plana: NAV_GROUPS (Supervisão / Agente / Memória) com «Perguntas» primeiro, uma so navegacao em mobile (tablist com labels ou drawer, nunca ambos), tablist ligado por aria-controls/aria-labelledby e `aria-current=page` no drawer."
+  },
+  {
+   "principle": {
+    "code": "H.1.1.01",
+    "slug": "perceivable-principle",
+    "title": "Perceivable Principle"
+   },
+   "message": "Base de acessibilidade mantida e alargada: contraste AA verificado nos dois esquemas, focus-visible, skip-link, `role=status`/`role=alert` nos estados, regioes nomeadas por painel (role=region/tabpanel condicional), alvos de toque >= 40 px e a cor nunca sozinha (chips com etiqueta)."
+  },
+  {
+   "principle": {
+    "code": "D.1.1.01",
+    "slug": "progressive-disclosure",
+    "title": "Progressive Disclosure"
+   },
+   "message": "Métricas e log de decisoes reestruturados em niveis: tira de 5 sinais vitais + acordeoes dos 8 grupos ordenados por severidade (MetricsPanel.tsx), e a tabela de decisoes mostra colunas de leitura rapida com dialogo de detalhe que revela todas as probabilidades, respostas tipadas e latencia."
+  },
+  {
+   "principle": {
+    "code": "S.1.3.01",
+    "slug": "ai-transparency",
+    "title": "AI Transparency Principle"
+   },
+   "message": "Honestidade sobre incerteza preservada: confianca ausente/0 renderiza «indisponível» com tooltip explicito, probabilidades null nunca viram barras vazias, mock inclui propositadamente payloads antigos (6 campos) e sem confianca para manter os caminhos degradados exercitados, e os dados simulados sao sempre divulgados."
+  }
+ ],
+ "priority_fixes": ["finding-1", "finding-2", "finding-3", "finding-4", "finding-5", "finding-6", "finding-7"],
+ "api_enriched": false,
+ "api_note": "Sem UXUI_API_KEY nesta sessao: o endpoint `audit` (pro) exige subscricao e o lookup de principios fora do lote gratuito devolve 403, pelo que a avaliacao foi feita com o framework e conhecimento interno da skill `uxui-evaluator` (mesmo metodo da v1). Codigos/slugs seguem a taxonomia do framework e os fixados na v1 via indice publico de principios (F.1.1.02 cognitive-load, F.1.1.03 mental-model, C.1.1.01 consistency-standards, C.1.4.01 error-prevention, D.1.1.01 progressive-disclosure, S.1.1.01 conversational-flow-principle, S.1.3.01 ai-transparency). `business_impact` e derivado do framework, nao citado da API. Para findings enriquecidos com citacoes: uxuiprinciples.com/en/checkout."
+}

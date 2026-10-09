@@ -1,4 +1,7 @@
 import { useState } from 'react';
+import Accordion from '@mui/material/Accordion';
+import AccordionDetails from '@mui/material/AccordionDetails';
+import AccordionSummary from '@mui/material/AccordionSummary';
 import Alert from '@mui/material/Alert';
 import Badge from '@mui/material/Badge';
 import Button from '@mui/material/Button';
@@ -12,6 +15,7 @@ import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
 import ApprovalIcon from '@mui/icons-material/Approval';
 import Block from '@mui/icons-material/Block';
+import ExpandMore from '@mui/icons-material/ExpandMore';
 import TaskAlt from '@mui/icons-material/TaskAlt';
 
 import { errorMessage } from '../api/events';
@@ -21,10 +25,18 @@ import { isDecisionBand, type Approval, type ControlMode } from '../api/types';
 import { useNow } from '../hooks/useSparkSeries';
 import { MONO_FONT } from '../theme';
 import ApprovalConfirmDialog from './ApprovalConfirmDialog';
-import { BandChip } from './Chips';
+import { AttemptsChip, BandChip } from './Chips';
 import FreshnessIndicator from './FreshnessIndicator';
 import { PanelEmpty, PanelError, PanelLoading, PanelNotice } from './PanelState';
 import SectionCard from './SectionCard';
+import { groupApprovalsByAction } from './questionGroups';
+
+/**
+ * Limite da fila de pendentes no contrato (`docs/api.md` §approvals): passado
+ * isto, as mais antigas são descartadas pelo backend — a UI avisa quando a
+ * janela está cheia para o descarte não ser uma surpresa (auditoria v2, achado 1).
+ */
+const PENDING_APPROVALS_CAP = 20;
 
 /** Botão do AppBar com o contador de aprovações pendentes (modo `checkpoint`). */
 export function ApprovalsBadgeButton({
@@ -73,6 +85,8 @@ interface PendingDecision {
  */
 export default function ApprovalsSection({ mode }: ApprovalsSectionProps) {
   const approvalsQuery = useApprovals();
+  // Histórico auditável (`?status=all`): o contrato guarda a decisão humana.
+  const historyQuery = useApprovals('all');
   const now = useNow(1000);
   const [feedback, setFeedback] = useState<{ tone: 'success' | 'error'; text: string } | null>(null);
   const [pending, setPending] = useState<PendingDecision | null>(null);
@@ -91,6 +105,14 @@ export default function ApprovalsSection({ mode }: ApprovalsSectionProps) {
   });
 
   const approvals = approvalsQuery.data ?? [];
+  // Coalescência visual: pedidos da mesma `action_id` num só cartão (achado 1).
+  const approvalGroups = groupApprovalsByAction(approvals);
+  const coalescedCount = approvals.length - approvalGroups.length;
+  const queueFull = approvals.length >= PENDING_APPROVALS_CAP;
+  // Histórico decidido (mais recente primeiro) — a trilha de auditoria humana.
+  const decided = (historyQuery.data ?? [])
+    .filter((approval) => approval.status !== 'pending')
+    .sort((a, b) => (a.ts < b.ts ? 1 : -1));
   const heldWhileAutopilot = mode === 'autopilot' && approvals.length > 0;
 
   const confirmDecision = () => {
@@ -102,7 +124,11 @@ export default function ApprovalsSection({ mode }: ApprovalsSectionProps) {
   return (
     <SectionCard
       title="Aprovações retidas"
-      subtitle="Em «Checkpoints» o agente retém cada ação aqui até a aprovares ou rejeitares"
+      subtitle={
+        coalescedCount > 0
+          ? `Em «Checkpoints» o agente retém cada ação aqui até a aprovares ou rejeitares — ${coalescedCount} pedido(s) da mesma ação agrupados`
+          : 'Em «Checkpoints» o agente retém cada ação aqui até a aprovares ou rejeitares'
+      }
       flush
       action={
         <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
@@ -153,6 +179,15 @@ export default function ApprovalsSection({ mode }: ApprovalsSectionProps) {
         </Stack>
       ) : null}
 
+      {queueFull ? (
+        <Stack sx={{ p: 2, pb: 0 }}>
+          <PanelNotice severity="warning">
+            Fila no limite ({PENDING_APPROVALS_CAP} pendentes): o contrato descarta as entradas mais
+            antigas quando chega mais uma — decide ou agrupa para não perderes pedidos.
+          </PanelNotice>
+        </Stack>
+      ) : null}
+
       {!approvalsQuery.isLoading && approvals.length === 0 ? (
         mode === 'autopilot' ? (
           <PanelEmpty
@@ -169,10 +204,20 @@ export default function ApprovalsSection({ mode }: ApprovalsSectionProps) {
 
       {approvals.length > 0 ? (
         <List dense disablePadding>
-          {approvals.map((approval, index) => (
+          {approvalGroups.map(({ representative: approval, coalesced }, index) => {
+            const groupAttempts = [approval, ...coalesced].reduce(
+              (total, item) => total + (item.attempts ?? 1),
+              0,
+            );
+            const lastSeen = [approval, ...coalesced]
+              .map((item) => item.last_seen_ts)
+              .filter((ts): ts is string => Boolean(ts))
+              .sort()
+              .at(-1);
+            return (
             <ListItem
               key={approval.id}
-              divider={index < approvals.length - 1}
+              divider={index < approvalGroups.length - 1}
               alignItems="flex-start"
               sx={{ gap: 1, flexWrap: 'wrap', py: 1.5 }}
             >
@@ -189,6 +234,7 @@ export default function ApprovalsSection({ mode }: ApprovalsSectionProps) {
                       {approval.action_name_en}
                     </Typography>
                     {isDecisionBand(approval.band) ? <BandChip band={approval.band} /> : null}
+                    <AttemptsChip attempts={groupAttempts} lastSeenTs={lastSeen} />
                   </Stack>
                 }
                 secondary={
@@ -209,6 +255,12 @@ export default function ApprovalsSection({ mode }: ApprovalsSectionProps) {
                     {approval.description_en ? (
                       <Typography variant="caption" component="span" sx={{ color: 'text.secondary' }}>
                         {approval.description_en}
+                      </Typography>
+                    ) : null}
+                    {coalesced.length > 0 ? (
+                      <Typography variant="caption" component="span" sx={{ color: 'text.secondary' }}>
+                        Agrupados: {coalesced.length + 1} pedidos da mesma ação ({approval.action_id}) —
+                        decidir esta decide o grupo (duplicados pendentes são descartados).
                       </Typography>
                     ) : null}
                   </Stack>
@@ -236,9 +288,65 @@ export default function ApprovalsSection({ mode }: ApprovalsSectionProps) {
                 </Button>
               </Stack>
             </ListItem>
-          ))}
+            );
+          })}
         </List>
       ) : null}
+
+      <Accordion variant="outlined" disableGutters sx={{ m: 2, mt: 0 }}>
+        <AccordionSummary
+          expandIcon={<ExpandMore />}
+          id="historico-aprovacoes-cabecalho"
+          aria-controls="historico-aprovacoes-conteudo"
+        >
+          <Typography variant="h5" component="h2">
+            Histórico de decisões ({decided.length})
+          </Typography>
+        </AccordionSummary>
+        <AccordionDetails id="historico-aprovacoes-conteudo">
+          {decided.length === 0 ? (
+            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+              Ainda não decidiste nenhuma ação retida nesta campanha.
+            </Typography>
+          ) : (
+            <List dense disablePadding>
+              {decided.map((approval, index) => (
+                <ListItem key={approval.id} divider={index < decided.length - 1} alignItems="flex-start">
+                  <ListItemText
+                    primary={
+                      <Stack direction="row" spacing={1} useFlexGap sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
+                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                          {approval.action_name_en}
+                        </Typography>
+                        <Chip
+                          size="small"
+                          variant="outlined"
+                          color={approval.status === 'approved' ? 'success' : 'error'}
+                          label={approval.status === 'approved' ? 'aprovada' : 'rejeitada'}
+                        />
+                        {isDecisionBand(approval.band) ? <BandChip band={approval.band} /> : null}
+                      </Stack>
+                    }
+                    secondary={
+                      <Stack spacing={0.25} sx={{ mt: 0.5 }}>
+                        <Typography variant="caption" component="span" sx={{ color: 'text.secondary', fontFamily: MONO_FONT }}>
+                          {approval.action_id} · decidida {approval.decided_at ? formatDateTime(approval.decided_at) : formatDateTime(approval.ts)}
+                          {approval.attempts ? ` · pedido ${approval.attempts} vez(es)` : ''}
+                        </Typography>
+                        {approval.note ? (
+                          <Typography variant="caption" component="span">
+                            nota: {approval.note}
+                          </Typography>
+                        ) : null}
+                      </Stack>
+                    }
+                  />
+                </ListItem>
+              ))}
+            </List>
+          )}
+        </AccordionDetails>
+      </Accordion>
 
       <ApprovalConfirmDialog
         approval={pending?.approval ?? null}

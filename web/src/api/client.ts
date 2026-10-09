@@ -26,6 +26,7 @@ import {
   type InputHistoryEntry,
   type InputInjection,
   type KeyInfo,
+  type ListPageQuery,
   type Memory,
   type Metrics,
   type Objective,
@@ -74,8 +75,10 @@ export interface ApiClient {
 
   getMetrics(id: string): Promise<Metrics>;
   getSpend(id: string): Promise<Spend>;
-  getDecisions(id: string): Promise<Decision[]>;
-  getQuestions(id: string): Promise<Question[]>;
+  /** `GET .../decisions` — `page` pagina o log (`?limit=&before=`, aditivo). */
+  getDecisions(id: string, page?: ListPageQuery): Promise<Decision[]>;
+  /** `GET .../questions` — `page` pagina a fila (`?limit=&before=`, aditivo). */
+  getQuestions(id: string, page?: ListPageQuery): Promise<Question[]>;
   answerQuestion(
     id: string,
     qid: string,
@@ -232,12 +235,12 @@ export class HttpApiClient implements ApiClient {
     return this.request<Spend>(API_PATHS.spend(id));
   }
 
-  getDecisions(id: string) {
-    return this.request<Decision[]>(API_PATHS.decisions(id));
+  getDecisions(id: string, page?: ListPageQuery) {
+    return this.request<Decision[]>(API_PATHS.decisions(id, page));
   }
 
-  getQuestions(id: string) {
-    return this.request<Question[]>(API_PATHS.questions(id));
+  getQuestions(id: string, page?: ListPageQuery) {
+    return this.request<Question[]>(API_PATHS.questions(id, page));
   }
 
   answerQuestion(id: string, qid: string, body: AnswerQuestionRequest) {

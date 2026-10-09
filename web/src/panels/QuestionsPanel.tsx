@@ -3,6 +3,7 @@ import Accordion from '@mui/material/Accordion';
 import AccordionDetails from '@mui/material/AccordionDetails';
 import AccordionSummary from '@mui/material/AccordionSummary';
 import Alert from '@mui/material/Alert';
+import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
 import List from '@mui/material/List';
 import ListItem from '@mui/material/ListItem';
@@ -18,6 +19,7 @@ import FreshnessIndicator from '../components/FreshnessIndicator';
 import PanelShell from '../components/PanelShell';
 import { PanelEmpty, PanelError, PanelLoading } from '../components/PanelState';
 import QuestionCard from '../components/QuestionCard';
+import { groupQuestionsByAction } from '../components/questionGroups';
 import SectionCard from '../components/SectionCard';
 import { useNow } from '../hooks/useSparkSeries';
 
@@ -33,11 +35,14 @@ export default function QuestionsPanel() {
       setFeedback({ tone: 'error', text: `Falha ao responder: ${errorMessage(error)}` }),
   });
 
-  const questions = questionsQuery.data ?? [];
+  const questions = questionsQuery.items;
   const pending = questions.filter((question) => question.status === 'pending');
   const answered = questions
     .filter((question) => question.status === 'answered')
     .sort((a, b) => (a.ts < b.ts ? 1 : -1));
+  // Coalescência visual: pedidos da mesma `action_id` num só cartão (achado 1).
+  const pendingGroups = groupQuestionsByAction(pending);
+  const coalescedCount = pending.length - pendingGroups.length;
 
   return (
     <PanelShell
@@ -76,7 +81,11 @@ export default function QuestionsPanel() {
 
         <SectionCard
           title="Pendentes"
-          subtitle="Escolhe uma opção rápida ou escreve uma resposta livre"
+          subtitle={
+            coalescedCount > 0
+              ? `Escolhe uma opção rápida ou escreve uma resposta livre — ${coalescedCount} pedido(s) da mesma ação agrupados`
+              : 'Escolhe uma opção rápida ou escreve uma resposta livre'
+          }
         >
           {!questionsQuery.isLoading && pending.length === 0 ? (
             <PanelEmpty
@@ -85,12 +94,13 @@ export default function QuestionsPanel() {
             />
           ) : (
             <Stack spacing={1.5}>
-              {pending.map((question) => (
+              {pendingGroups.map((group) => (
                 <QuestionCard
-                  key={question.id}
-                  question={question}
-                  busy={answerMutation.isPending && answerMutation.variables?.qid === question.id}
-                  onAnswer={(body) => answerMutation.mutate({ qid: question.id, ...body })}
+                  key={group.key}
+                  question={group.representative}
+                  coalesced={group.coalesced}
+                  busy={answerMutation.isPending && answerMutation.variables?.qid === group.representative.id}
+                  onAnswer={(body) => answerMutation.mutate({ qid: group.representative.id, ...body })}
                 />
               ))}
             </Stack>
@@ -132,6 +142,23 @@ export default function QuestionsPanel() {
             )}
           </AccordionDetails>
         </Accordion>
+
+        {questionsQuery.hasMore ? (
+          <Stack sx={{ alignItems: 'center' }}>
+            <Button
+              variant="outlined"
+              onClick={questionsQuery.loadMore}
+              loading={questionsQuery.isLoadingMore}
+              disabled={questionsQuery.isLoadingMore}
+              aria-label="Carregar mais perguntas do histórico (página anterior do anel)"
+            >
+              Carregar mais perguntas
+            </Button>
+            <Typography variant="caption" sx={{ color: 'text.secondary', mt: 0.5 }}>
+              {questions.length} carregadas — o anel guarda até 2000 por campanha
+            </Typography>
+          </Stack>
+        ) : null}
       </Stack>
     </PanelShell>
   );

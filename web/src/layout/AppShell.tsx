@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import Alert from '@mui/material/Alert';
 import AlertTitle from '@mui/material/AlertTitle';
 import Box from '@mui/material/Box';
@@ -72,9 +72,39 @@ export default function AppShell() {
 
   const questionsQuery = useQuestions();
   const pending = useMemo(
-    () => (questionsQuery.data ?? []).filter((question) => question.status === 'pending'),
-    [questionsQuery.data],
+    () => questionsQuery.items.filter((question) => question.status === 'pending'),
+    [questionsQuery.items],
   );
+
+  /**
+   * Anúncio da chegada (auditoria v2, achado 5): uma pergunta nova ou um
+   * re-pedido da mesma ação (`attempts` a subir) produz um toast `role=status`;
+   * o primeiro carregamento não toasta — o resumo vive na região `aria-live`.
+   */
+  const seenQuestions = useRef<Map<string, number> | null>(null);
+  useEffect(() => {
+    const seen = seenQuestions.current;
+    const next = new Map<string, number>();
+    for (const question of pending) next.set(question.id, question.attempts ?? 1);
+    if (seen) {
+      const fresh = pending.filter((question) => !seen.has(question.id));
+      const bumped = pending.filter((question) => {
+        const previous = seen.get(question.id);
+        return previous !== undefined && (question.attempts ?? 1) > previous;
+      });
+      if (fresh.length === 1) {
+        setToast(`Nova pergunta do agente: ${fresh[0]?.question ?? ''}`);
+      } else if (fresh.length > 1) {
+        setToast(`${fresh.length} novas perguntas do agente — aguardam resposta`);
+      } else if (bumped.length > 0) {
+        const question = bumped[0];
+        setToast(
+          `Re-pedido do agente: «${question?.question ?? ''}» (${question?.attempts ?? 1} vezes)`,
+        );
+      }
+    }
+    seenQuestions.current = next;
+  }, [pending]);
 
   // Ações retidas do modo `checkpoint` — badge próprio na barra superior.
   const approvalsQuery = useApprovals();
@@ -137,6 +167,30 @@ export default function AppShell() {
       >
         Saltar para o conteúdo principal
       </Link>
+      {/*
+        Região `aria-live` permanente (auditoria v2, achado 5): o resumo da fila
+        de perguntas é anunciado a tecnologias de assistência, mesmo quando o
+        utilizador está noutro painel.
+      */}
+      <Box
+        role="status"
+        aria-live="polite"
+        sx={{
+          position: 'absolute',
+          width: '1px',
+          height: '1px',
+          p: 0,
+          m: -1,
+          overflow: 'hidden',
+          clip: 'rect(0 0 0 0)',
+          whiteSpace: 'nowrap',
+          border: 0,
+        }}
+      >
+        {pending.length === 0
+          ? 'Sem perguntas pendentes.'
+          : `${pending.length} pergunta(s) do agente à espera de resposta.`}
+      </Box>
       <TopBar
         pendingQuestions={pending.length}
         onOpenQuestions={() => setQueueOpen(true)}

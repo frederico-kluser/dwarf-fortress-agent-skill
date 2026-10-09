@@ -24,11 +24,13 @@ import type {
   CreateInputRequest,
   Decision,
   DecisionBand,
+  DecisionStatus,
   HealthResponse,
   InputHistoryEntry,
   InputInjection,
   JevAgent,
   KeyInfo,
+  ListPageQuery,
   Memory,
   Metrics,
   Objective,
@@ -59,6 +61,19 @@ function round(value: number, decimals: number): number {
 
 function pick<T>(items: readonly T[], index: number): T {
   return items[((index % items.length) + items.length) % items.length] as T;
+}
+
+/**
+ * Paginação do contrato (`?limit=&before=`, docs/api.md): `limit` devolve os
+ * registos **mais recentes** mantendo a ordem antiga (mais antigo primeiro
+ * dentro da página) e `before` é um cursor **exclusivo** por `ts`.
+ */
+function pageSlice<T extends { ts: string }>(items: T[], page?: ListPageQuery): T[] {
+  const ascending = [...items].sort((a, b) => (a.ts < b.ts ? -1 : a.ts > b.ts ? 1 : 0));
+  const before = page?.before;
+  const eligible = before ? ascending.filter((item) => item.ts < before) : ascending;
+  const limit = typeof page?.limit === 'number' && page.limit > 0 ? page.limit : undefined;
+  return limit ? eligible.slice(-limit) : eligible;
 }
 
 /* ----------------------------------------------------------------- seeds --- */
@@ -233,6 +248,8 @@ interface QuestionSeed {
   action_id?: string;
   why_pt?: string;
   source_data?: Record<string, unknown>;
+  /** Dedupe (aditivo): quantas vezes o loop voltou a pedir a MESMA ação. */
+  attempts?: number;
 }
 
 const QUESTION_SEEDS: QuestionSeed[] = [
@@ -256,6 +273,30 @@ const QUESTION_SEEDS: QuestionSeed[] = [
       confidence_available: true,
       action_confidence: 0.62,
     },
+    // O checkpoint volta a pedir a MESMA ação a cada passo do loop (dedupe).
+    attempts: 7,
+  },
+  {
+    // Pilha pré-dedupe: outra entrada pendente da MESMA `action_id` — a UI tem
+    // de coalescer as duas num só cartão (auditoria v2, achado 1).
+    question: 'A margem do rio está lamacenta. Manter o plano de ir à margem do rio?',
+    options: [
+      { id: 'opt-20', text: 'Manter o plano' },
+      { id: 'opt-21', text: 'Contornar por rocha seca' },
+    ],
+    status: 'pending',
+    minutes: 2,
+    band: 'hitl',
+    role: 'JEV-A',
+    action_id: 'goto:river_bank',
+    why_pt: 'o modo checkpoint retém a ação até confirmação humana (banda hitl)',
+    source_data: {
+      reason: 'checkpoint_mode',
+      band: 'hitl',
+      action_id: 'goto:river_bank',
+      answer_mode: 'approval',
+    },
+    attempts: 2,
   },
   {
     question: 'Os goblins junto à caverna: contornar ou enfrentar?',
@@ -317,6 +358,8 @@ interface ApprovalSeed {
   description_en: string;
   band: DecisionBand;
   minutes: number;
+  /** Dedupe (aditivo): quantas vezes o loop voltou a pedir a MESMA ação. */
+  attempts?: number;
 }
 
 const APPROVAL_SEEDS: ApprovalSeed[] = [
@@ -327,6 +370,8 @@ const APPROVAL_SEEDS: ApprovalSeed[] = [
     description_en: 'Travel to the river bank and look for a crossing',
     band: 'auto',
     minutes: 2,
+    // Re-pedido da mesma ação: o backend não cria outra entrada, incrementa.
+    attempts: 5,
   },
   {
     qid: 'q-3-2',
@@ -376,6 +421,9 @@ function makeApproval(seed: ApprovalSeed): Approval {
     note: null,
     decided_at: null,
     description_en: seed.description_en,
+    ...(seed.attempts
+      ? { attempts: seed.attempts, last_seen_ts: minutesAgo(Math.max(0, seed.minutes - 1)) }
+      : {}),
   };
 }
 
@@ -402,6 +450,9 @@ function approvalQuestion(seed: ApprovalSeed): Question {
       reason: 'checkpoint_mode',
       answer_mode: 'approval',
     },
+    ...(seed.attempts
+      ? { attempts: seed.attempts, last_seen_ts: minutesAgo(Math.max(0, seed.minutes - 1)) }
+      : {}),
   };
 }
 
@@ -635,12 +686,12 @@ export class MockApiClient implements ApiClient {
     return this.delay(clone(this.state(id).spend));
   }
 
-  getDecisions(id: string) {
-    return this.delay(clone(this.state(id).decisions));
+  getDecisions(id: string, page?: ListPageQuery) {
+    return this.delay(clone(pageSlice(this.state(id).decisions, page)));
   }
 
-  getQuestions(id: string) {
-    return this.delay(clone(this.state(id).questions));
+  getQuestions(id: string, page?: ListPageQuery) {
+    return this.delay(clone(pageSlice(this.state(id).questions, page)));
   }
 
   listApprovals(id: string, status?: ApprovalStatusFilter) {
@@ -996,7 +1047,7 @@ function buildSpend(): Spend {
 }
 
 function buildDecisions(): Decision[] {
-  const bands: Decision['band'][] = [
+  const bandCycle: Decision['band'][] = [
     'auto',
     'auto',
     'hitl',
@@ -1012,6 +1063,11 @@ function buildDecisions(): Decision[] {
     'auto',
     'auto',
   ];
+  // 63 decisões: mais do que 2 páginas de 25 — o «carregar mais» aparece sempre.
+  const bands = Array.from(
+    { length: 63 },
+    (_, i) => bandCycle[i % bandCycle.length] as Decision['band'],
+  );
   const decisions: Decision[] = [];
   for (let i = 0; i < bands.length; i += 1) {
     const band = bands[i] as Decision['band'];
@@ -1019,7 +1075,19 @@ function buildDecisions(): Decision[] {
     // Uma decisão com confidence ausente: "indisponível", não "certo".
     const confidence =
       i === 4 ? null : band === 'auto' ? round(randomBetween(0.9, 0.99), 2) : round(randomBetween(0.42, 0.79), 2);
-    decisions.push(makeDecision(i, agent, band, confidence, minutesAgo(1 + i * 2.5)));
+    /*
+     * Desfecho (aditivo): só o JEV-A (que escolhe ação) o tem; auxiliares
+     * JEV-R/M/D ficam sem `status` — «desconhecido», nunca «executada». Os
+     * `issues` são as marcas de auditoria do contrato; os índices escolhidos
+     * (8/12) são recentes (i=0 é o mais novo) para caírem na primeira página.
+     */
+    const status: DecisionStatus | undefined =
+      agent === 'JEV-A' ? (i === 8 ? 'error' : band === 'auto' ? 'executed' : 'question') : undefined;
+    const issues: string[] | undefined =
+      i === 12 ? ['released_by_approval'] : i === 8 ? ['step_failed_before_dispatch'] : undefined;
+    decisions.push(
+      makeDecision(i, agent, band, confidence, minutesAgo(1 + i * 2.5), status, issues),
+    );
   }
   return decisions.reverse();
 }
@@ -1030,6 +1098,8 @@ function makeDecision(
   band: Decision['band'],
   confidence: number | null,
   ts: string,
+  status?: DecisionStatus,
+  issues?: string[],
 ): Decision {
   const winner = pick(ACTION_CANDIDATES, index);
   const probabilities: Record<string, number> = {};
@@ -1059,6 +1129,9 @@ function makeDecision(
     band,
     latency_ms: Math.round(randomBetween(180, 720)),
     cost_usd: round(randomBetween(0.00008, 0.00042), 6),
+    // Aditivos: omitidos quando desconhecidos/vazios (semântica do contrato).
+    ...(status ? { status } : {}),
+    ...(issues && issues.length > 0 ? { issues } : {}),
   };
 }
 
@@ -1084,6 +1157,10 @@ function buildQuestions(mode: ControlState['mode']): Question[] {
       ...(seed.action_id ? { action_id: seed.action_id } : {}),
       ...(seed.why_pt ? { why_pt: seed.why_pt } : {}),
       ...(seed.source_data ? { source_data: seed.source_data } : {}),
+      // Dedupe: `attempts`/`last_seen_ts` só quando o loop voltou a pedir.
+      ...(seed.attempts
+        ? { attempts: seed.attempts, last_seen_ts: minutesAgo(Math.max(0, seed.minutes - 1)) }
+        : {}),
     })),
   ];
 }
@@ -1106,7 +1183,11 @@ function burst(state: MockState, type: string): unknown {
       const index = state.decisions.length;
       const band = pick<Decision['band']>(['auto', 'auto', 'hitl', 'auto', 'abstain'], index);
       const confidence = band === 'auto' ? round(randomBetween(0.9, 0.99), 2) : round(randomBetween(0.4, 0.8), 2);
-      const decision = makeDecision(index, pick(JEV_AGENTS, index), band, confidence, ts);
+      const agent = pick(JEV_AGENTS, index);
+      // Só o JEV-A tem desfecho; auxiliares ficam sem `status` (desconhecido).
+      const status: DecisionStatus | undefined =
+        agent === 'JEV-A' ? (band === 'auto' ? 'executed' : 'question') : undefined;
+      const decision = makeDecision(index, agent, band, confidence, ts, status);
       state.decisions = [decision, ...state.decisions].slice(0, 120);
       state.metrics.agent.calls += 1;
       state.metrics.agent.cost_usd = round(state.metrics.agent.cost_usd + decision.cost_usd, 6);
@@ -1118,6 +1199,20 @@ function burst(state: MockState, type: string): unknown {
     }
     case 'question_new': {
       const index = state.questions.length;
+      /*
+       * Dedupe anti-flood: de vez em quando o loop VOLTA a pedir uma ação já
+       * pendente — o backend não cria entrada nova, a pendente ganha
+       * `attempts`/`last_seen_ts` (docs/api.md §questions).
+       */
+      const reask =
+        index % 3 === 2
+          ? state.questions.find((item) => item.status === 'pending' && item.action_id)
+          : undefined;
+      if (reask) {
+        reask.attempts = (reask.attempts ?? 1) + 1;
+        reask.last_seen_ts = ts;
+        return { type: 'question_new', ts, payload: clone(reask) };
+      }
       const seed = pick(QUESTION_BURSTS, index);
       // Proveniência realista: banda, ação retida (JEV-A) ou escalada de dúvida
       // sem ação (JEV-D) — a mesma imputação que o backend faz.

@@ -41,6 +41,23 @@ export const DECISION_BANDS: readonly DecisionBand[] = ['auto', 'hitl', 'abstain
 /** Estado da pergunta na fila. */
 export type QuestionStatus = 'pending' | 'answered';
 
+/**
+ * Desfecho da ação escolhida numa decisão (`Decision.status`, ADITIVO).
+ * `docs/api.md` §decisions: `executed` quando a ação despachou (mesmo sem
+ * aprovação) ou quando uma aprovação humana a libertou; `question` quando a
+ * decisão virou pergunta ao humano; `error` quando o passo falhou antes de
+ * executar. **Omitido quando desconhecido** (decisões auxiliares JEV-R/M/D).
+ */
+export type DecisionStatus = 'executed' | 'question' | 'error';
+
+/** Desfechos do contrato — guard para payloads que podem trazer lixo. */
+export const DECISION_STATUSES: readonly DecisionStatus[] = ['executed', 'question', 'error'];
+
+/** `true` se o valor for um desfecho de decisão conhecido. */
+export function isDecisionStatus(value: unknown): value is DecisionStatus {
+  return typeof value === 'string' && (DECISION_STATUSES as readonly string[]).includes(value);
+}
+
 /** `true` se o valor for um papel JEV conhecido (`meta.role` do pedido). */
 export function isJevAgent(value: unknown): value is JevAgent {
   return typeof value === 'string' && (JEV_AGENT_ROLES as readonly string[]).includes(value);
@@ -60,6 +77,27 @@ export type ApprovalStatus = 'pending' | 'approved' | 'rejected';
 /** Filtro de `GET .../approvals?status=…` (por omissão só as pendentes). */
 export type ApprovalStatusFilter = ApprovalStatus | 'all';
 
+/**
+ * Paginação aditiva de `GET .../decisions` e `GET .../questions`
+ * (`?limit=<n>&before=<ts ISO-8601>`): `limit` devolve os registos mais
+ * recentes (pela ordem antiga dentro da página) e `before` é um cursor
+ * **exclusivo** por `ts` — só registos estritamente anteriores.
+ * Sem parâmetros o comportamento antigo está intacto.
+ */
+export interface ListPageQuery {
+  limit?: number;
+  before?: Iso8601;
+}
+
+/** Sufixo de query da paginação — vazio quando não há parâmetros. */
+function pageQuerySuffix(page?: ListPageQuery): string {
+  const params = new URLSearchParams();
+  if (typeof page?.limit === 'number') params.set('limit', String(page.limit));
+  if (page?.before) params.set('before', page.before);
+  const query = params.toString();
+  return query ? `?${query}` : '';
+}
+
 /** Caminhos canónicos — um só sítio para todos os endpoints do contrato. */
 export const API_PATHS = {
   health: '/api/health',
@@ -71,8 +109,10 @@ export const API_PATHS = {
   inputs: (id: string) => `/api/campaigns/${encodeURIComponent(id)}/inputs`,
   metrics: (id: string) => `/api/campaigns/${encodeURIComponent(id)}/metrics`,
   spend: (id: string) => `/api/campaigns/${encodeURIComponent(id)}/spend`,
-  decisions: (id: string) => `/api/campaigns/${encodeURIComponent(id)}/decisions`,
-  questions: (id: string) => `/api/campaigns/${encodeURIComponent(id)}/questions`,
+  decisions: (id: string, page?: ListPageQuery) =>
+    `/api/campaigns/${encodeURIComponent(id)}/decisions${pageQuerySuffix(page)}`,
+  questions: (id: string, page?: ListPageQuery) =>
+    `/api/campaigns/${encodeURIComponent(id)}/questions${pageQuerySuffix(page)}`,
   answer: (id: string, qid: string) =>
     `/api/campaigns/${encodeURIComponent(id)}/questions/${encodeURIComponent(qid)}/answer`,
   control: (id: string) => `/api/campaigns/${encodeURIComponent(id)}/control`,
@@ -340,8 +380,13 @@ export interface Decision {
   request_summary: string;
   /** Respostas tipadas devolvidas pelo JEV. */
   answers: Record<string, unknown>;
-  /** Distribuição por opção (`choice`). */
-  probabilities: Record<string, number>;
+  /**
+   * Distribuição por opção (`choice`). Pode vir **`null`**: decisões que só
+   * fazem perguntas `noul`/`score` (JEV-R/M/D) não têm distribuição — `null`
+   * nunca pode ser convertido em `{}` (um objeto vazio afirmaria uma
+   * distribuição que não existe).
+   */
+  probabilities: Record<string, number> | null;
   /**
    * Pode vir **ausente ou 0** = indisponível — NUNCA ler como "certo".
    * A UI mostra "indisponível" nesses casos.
@@ -350,6 +395,16 @@ export interface Decision {
   band: DecisionBand;
   latency_ms: number;
   cost_usd: Usd;
+  /**
+   * Notas de validação/qualidade do JEV e marcas de auditoria (ex.
+   * `released_by_approval`) — **ADITIVO**, omitido quando vazio.
+   */
+  issues?: string[];
+  /**
+   * Desfecho da ação escolhida — **ADITIVO**, omitido quando desconhecido
+   * (decisões auxiliares JEV-R/M/D).
+   */
+  status?: DecisionStatus;
 }
 
 /* -------------------------------------------------------------- perguntas --- */
@@ -397,6 +452,17 @@ export interface Question {
   why_pt?: string;
   /** Diagnóstico opcional do pedido que a gerou. */
   source_data?: QuestionSourceData;
+
+  /*
+   * Dedupe (anti-flood) — campos ADITIVOS: o modo `checkpoint` volta a pedir a
+   * mesma `action_id` a cada passo do loop; enquanto houver pendente daquela
+   * ação, o re-pedido não cria outra entrada — a pendente ganha estes campos.
+   * **Omitidos na primeira vez** (produtor antigo não os manda).
+   */
+  /** Quantas vezes o loop voltou a pedir a **mesma** ação. */
+  attempts?: number;
+  /** Ts do último re-pedido da mesma ação. */
+  last_seen_ts?: Iso8601;
 }
 
 /** `POST /api/campaigns/{id}/questions/{qid}/answer` body. */
@@ -444,6 +510,15 @@ export interface Approval {
   decided_at?: Iso8601 | null;
   /** Opcional (quando o loop a publica). */
   description_en?: string | null;
+  /**
+   * Dedupe — **ADITIVO**: quantas vezes o loop voltou a pedir a **mesma** ação
+   * (omitido na primeira vez). Enquanto houver pendente desta `action_id`, o
+   * re-pedido não cria outra entrada; decidir uma entrada descarta duplicados
+   * pendentes da mesma ação. A fila de pendentes está limitada a 20.
+   */
+  attempts?: number;
+  /** Ts do último re-pedido da mesma ação (omitido na primeira vez). */
+  last_seen_ts?: Iso8601;
 }
 
 /** Corpo opcional de `POST .../approvals/{id}/approve|reject`. */
