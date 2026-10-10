@@ -1,0 +1,1433 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="plannotator-theme" content="host">
+<title>System One Dwarf — arquitetura conceptual e mapa de mudanças</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%235537eb'/%3E%3Ctext x='16' y='22' font-family='Georgia,serif' font-size='17' fill='%23fff' text-anchor='middle'%3E1%3C/text%3E%3C/svg%3E">
+<style>
+  :root {
+    color-scheme: light dark;
+    /* Surfaces */
+    --background: oklch(0.97 0.005 260);
+    --foreground: oklch(0.18 0.02 260);
+    --card: oklch(1 0 0);
+    --card-foreground: oklch(0.18 0.02 260);
+    --muted: oklch(0.92 0.01 260);
+    --muted-foreground: oklch(0.40 0.02 260);
+    /* Accents */
+    --primary: oklch(0.50 0.25 280);
+    --primary-foreground: oklch(1 0 0);
+    --secondary: oklch(0.50 0.18 180);
+    --secondary-foreground: oklch(1 0 0);
+    --accent: oklch(0.60 0.22 50);
+    --accent-foreground: oklch(0.18 0.02 260);
+    /* Semantic */
+    --destructive: oklch(0.50 0.25 25);
+    --success: oklch(0.45 0.20 150);
+    --warning: oklch(0.55 0.18 85);
+    /* Structure */
+    --border: oklch(0.88 0.01 260);
+    --input: oklch(0.92 0.01 260);
+    --ring: oklch(0.50 0.25 280);
+    --code-bg: oklch(0.92 0.01 260);
+    --radius: 0.625rem;
+    /* Typography */
+    --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --font-mono: 'JetBrains Mono', 'Fira Code', ui-monospace, 'SFMono-Regular', monospace;
+    --font-display: ui-serif, Georgia, 'Times New Roman', serif;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --background: oklch(0.15 0.02 260);
+      --foreground: oklch(0.90 0.01 260);
+      --card: oklch(0.22 0.02 260);
+      --card-foreground: oklch(0.90 0.01 260);
+      --muted: oklch(0.26 0.02 260);
+      --muted-foreground: oklch(0.72 0.02 260);
+      --primary: oklch(0.75 0.18 280);
+      --primary-foreground: oklch(0.15 0.02 260);
+      --secondary: oklch(0.72 0.15 180);
+      --accent: oklch(0.70 0.20 60);
+      --border: oklch(0.35 0.02 260);
+      --code-bg: oklch(0.26 0.02 260);
+      --destructive: oklch(0.65 0.20 25);
+      --success: oklch(0.72 0.17 150);
+      --warning: oklch(0.75 0.15 85);
+    }
+  }
+
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: var(--font-sans);
+    background: var(--background);
+    color: var(--foreground);
+    line-height: 1.65;
+    font-size: 15px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .container {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 64px 24px;
+  }
+
+  a { color: var(--primary); text-underline-offset: 3px; }
+  a:hover { text-decoration-thickness: 2px; }
+  a:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+    border-radius: 3px;
+  }
+
+  .skip-link {
+    position: absolute; left: -9999px; top: 0;
+    background: var(--card); color: var(--foreground);
+    padding: 8px 16px; border: 1.5px solid var(--border);
+    border-radius: var(--radius); z-index: 10;
+  }
+  .skip-link:focus { left: 16px; top: 16px; }
+
+  /* ---------- Header ---------- */
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted-foreground);
+    display: block;
+    margin-bottom: 12px;
+  }
+
+  header h1 {
+    font-family: var(--font-display);
+    font-size: 2.5rem;
+    font-weight: 500;
+    margin: 0 0 20px;
+    line-height: 1.15;
+    text-wrap: balance;
+    max-width: 22ch;
+  }
+
+  .lead {
+    font-size: 1.12rem;
+    line-height: 1.7;
+    max-width: 65ch;
+    color: var(--foreground);
+    margin-bottom: 24px;
+  }
+
+  .prompt-box {
+    background: var(--muted);
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px 24px;
+    max-width: 72ch;
+  }
+  .prompt-label {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted-foreground);
+    display: block;
+    margin-bottom: 6px;
+  }
+  .prompt-box p {
+    font-size: 0.95rem;
+    color: var(--muted-foreground);
+    line-height: 1.6;
+  }
+
+  /* ---------- Contents ---------- */
+  .toc {
+    display: flex; flex-wrap: wrap; gap: 8px;
+    margin: 32px 0 0;
+    list-style: none;
+  }
+  .toc a {
+    display: inline-block;
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.03em;
+    text-decoration: none;
+    color: var(--muted-foreground);
+    background: var(--card);
+    border: 1.5px solid var(--border);
+    border-radius: 999px;
+    padding: 5px 12px;
+  }
+  .toc a:hover { color: var(--primary); border-color: var(--primary); }
+
+  /* ---------- Sections ---------- */
+  section { margin-top: 88px; }
+
+  .section-header {
+    display: flex;
+    align-items: baseline;
+    gap: 16px;
+    margin-bottom: 28px;
+    padding-bottom: 10px;
+    border-bottom: 1.5px solid var(--border);
+  }
+  .section-number {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--primary);
+    flex-shrink: 0;
+  }
+  .section-header h2 {
+    font-family: var(--font-display);
+    font-size: 1.55rem;
+    font-weight: 500;
+    text-wrap: balance;
+  }
+
+  .part-banner {
+    margin-top: 96px;
+    padding: 20px 24px;
+    border-left: 4px solid var(--primary);
+    background: color-mix(in oklab, var(--primary) 7%, var(--card));
+    border-radius: 0 var(--radius) var(--radius) 0;
+  }
+  .part-banner h2 {
+    font-family: var(--font-display);
+    font-size: 1.7rem;
+    font-weight: 500;
+    text-wrap: balance;
+  }
+  .part-banner p {
+    color: var(--muted-foreground);
+    max-width: 70ch;
+    margin-top: 6px;
+    font-size: 0.95rem;
+  }
+
+  h3 {
+    font-family: var(--font-display);
+    font-size: 1.15rem;
+    font-weight: 500;
+    margin-bottom: 6px;
+    text-wrap: balance;
+  }
+
+  p { max-width: 68ch; overflow-wrap: break-word; }
+  .section-intro { margin-bottom: 24px; color: var(--muted-foreground); max-width: 70ch; }
+
+  /* ---------- Cards & grids ---------- */
+  .two-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+  }
+  .three-col {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+  }
+  @media (max-width: 860px) {
+    .three-col { grid-template-columns: 1fr; }
+    .two-col { grid-template-columns: 1fr; }
+    header h1 { font-size: 2rem; }
+    .container { padding: 40px 18px; }
+    section { margin-top: 64px; }
+  }
+
+  .ve-card {
+    background: var(--card);
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius);
+    padding: 22px 24px;
+    min-width: 0;
+  }
+  .ve-card--hero {
+    background: color-mix(in oklab, var(--primary) 5%, var(--card));
+    border-color: var(--primary);
+  }
+  .ve-card--recessed {
+    background: var(--muted);
+    border-color: transparent;
+  }
+  .ve-card p { font-size: 0.92rem; color: var(--muted-foreground); margin-top: 6px; }
+  .ve-card .card-tag {
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--primary);
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 600;
+  }
+
+  /* ---------- Diagrams ---------- */
+  .diagram-panel {
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius);
+    padding: 24px;
+    margin: 24px 0;
+    background: var(--card);
+    overflow-x: auto;
+  }
+  .diagram-panel svg { width: 100%; height: auto; display: block; min-width: 560px; }
+  figcaption {
+    font-family: var(--font-mono);
+    font-size: 0.74rem;
+    color: var(--muted-foreground);
+    display: block;
+    margin-top: 14px;
+    text-align: center;
+    line-height: 1.5;
+  }
+
+  /* ---------- KPI strip ---------- */
+  .kpi-strip {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 16px;
+    margin: 28px 0;
+  }
+  .kpi-card {
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px 16px;
+    text-align: center;
+    background: var(--card);
+  }
+  .kpi-value {
+    font-family: var(--font-display);
+    font-size: 1.9rem;
+    font-weight: 500;
+    display: block;
+    color: var(--foreground);
+    font-variant-numeric: tabular-nums;
+  }
+  .kpi-label {
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--muted-foreground);
+    margin-top: 6px;
+    display: block;
+    line-height: 1.45;
+  }
+
+  /* ---------- Pipeline (hunt story) ---------- */
+  ol.pipeline {
+    list-style: none;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 18px;
+    counter-reset: step;
+  }
+  @media (max-width: 860px) { ol.pipeline { grid-template-columns: 1fr; } }
+  ol.pipeline > li {
+    background: var(--card);
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px 20px 18px 52px;
+    position: relative;
+    min-width: 0;
+  }
+  ol.pipeline > li::before {
+    counter-increment: step;
+    content: counter(step);
+    position: absolute;
+    left: 16px; top: 18px;
+    width: 24px; height: 24px;
+    border-radius: 50%;
+    background: color-mix(in oklab, var(--primary) 14%, transparent);
+    color: var(--primary);
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  ol.pipeline h3 { font-size: 1.02rem; }
+  ol.pipeline p { font-size: 0.88rem; color: var(--muted-foreground); margin-top: 4px; }
+
+  /* ---------- Callout ---------- */
+  .callout {
+    border-left: 3px solid var(--primary);
+    padding: 16px 22px;
+    margin: 20px 0;
+    background: var(--card);
+    border-radius: 0 var(--radius) var(--radius) 0;
+  }
+  .callout h3 { font-size: 1.05rem; margin-bottom: 4px; }
+  .callout p { font-size: 0.92rem; color: var(--muted-foreground); }
+  .callout.proof { border-left-color: var(--success); }
+  .callout .decide-with {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    color: var(--primary);
+    font-weight: 500;
+    display: block;
+    margin-top: 8px;
+  }
+
+  /* ---------- Badges ---------- */
+  .badge {
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    font-weight: 600;
+    padding: 2px 9px;
+    border-radius: calc(var(--radius) - 4px);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+  }
+  .badge.high {
+    background: color-mix(in oklab, var(--destructive) 15%, transparent);
+    color: var(--destructive);
+  }
+  .badge.med {
+    background: color-mix(in oklab, var(--warning) 18%, transparent);
+    color: var(--warning);
+  }
+  .badge.low {
+    background: color-mix(in oklab, var(--success) 15%, transparent);
+    color: var(--success);
+  }
+  .badge.effort {
+    background: var(--muted);
+    color: var(--muted-foreground);
+  }
+  .badge-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+
+  /* ---------- Change cards (part 2) ---------- */
+  .change-list { display: grid; gap: 22px; margin-top: 28px; }
+  .change-card {
+    background: var(--card);
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius);
+    padding: 24px 26px;
+    min-width: 0;
+  }
+  .change-card > header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 12px;
+    margin-bottom: 14px;
+  }
+  .change-num {
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--primary);
+    flex-shrink: 0;
+  }
+  .change-card h3 { margin-bottom: 0; flex: 1 1 320px; min-width: 0; font-size: 1.18rem; }
+  .change-body {
+    display: grid;
+    grid-template-columns: 1.25fr 1fr;
+    gap: 22px;
+  }
+  @media (max-width: 860px) { .change-body { grid-template-columns: 1fr; } }
+  .change-body h4 {
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted-foreground);
+    margin-bottom: 6px;
+  }
+  .change-body p { font-size: 0.92rem; line-height: 1.6; }
+  .tradeoff-box {
+    background: var(--muted);
+    border-radius: calc(var(--radius) - 2px);
+    padding: 14px 18px;
+  }
+  .tradeoff-box h4 { color: var(--accent); }
+  .tradeoff-box p { color: var(--foreground); }
+  .sources {
+    list-style: none;
+    display: flex; flex-wrap: wrap; gap: 6px 10px;
+    margin-top: 10px;
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    line-height: 1.5;
+    color: var(--muted-foreground);
+    max-width: none;
+  }
+  .sources li::before { content: "→ "; color: var(--border); }
+
+  /* ---------- Lists & misc ---------- */
+  ul.plain { list-style: none; display: grid; gap: 10px; margin-top: 12px; max-width: 68ch; }
+  ul.plain li { padding-left: 22px; position: relative; font-size: 0.92rem; color: var(--muted-foreground); }
+  ul.plain li::before {
+    content: "";
+    position: absolute; left: 4px; top: 0.62em;
+    width: 7px; height: 7px; border-radius: 2px;
+    background: var(--primary);
+    opacity: 0.55;
+  }
+  ul.plain strong { color: var(--foreground); font-weight: 600; }
+
+  .muted { color: var(--muted-foreground); }
+  .small { font-size: 0.85rem; }
+
+  footer {
+    margin-top: 96px;
+    padding-top: 24px;
+    border-top: 1.5px solid var(--border);
+    font-family: var(--font-mono);
+    font-size: 0.74rem;
+    color: var(--muted-foreground);
+    line-height: 1.6;
+  }
+
+  /* ---------- Print ---------- */
+  @media print {
+    :root {
+      --background: #fff; --foreground: #111; --card: #fff; --muted: #f2f2f2;
+      --muted-foreground: #444; --border: #bbb; --primary: #4b2fd6; --accent: #8a4b12;
+    }
+    body { font-size: 11pt; }
+    .container { padding: 0; max-width: none; }
+    .toc { display: none; }
+    section, .change-card, .ve-card, .kpi-card, .diagram-panel { break-inside: avoid; }
+    .part-banner { margin-top: 32px; }
+    a { color: inherit; text-decoration: none; }
+    a[href^="http"]::after {
+      content: " (" attr(href) ")";
+      font-family: var(--font-mono);
+      font-size: 0.72em;
+      color: #555;
+      word-break: break-all;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+  }
+</style>
+</head>
+<body>
+<a class="skip-link" href="#conteudo">Saltar para o conteúdo</a>
+<div class="container">
+
+  <!-- ============ HERO ============ -->
+  <header>
+    <span class="eyebrow">Explicação conceptual · Projeto dwarf-fortress-agent-skill</span>
+    <h1>System One Dwarf — um agente que joga Dwarf Fortress sozinho</h1>
+    <p class="lead">
+      O agente <strong>vê</strong> o jogo, <strong>decide</strong> o que fazer, <strong>age</strong>
+      com teclado e rato, <strong>aprende</strong> padrões para nunca repetir erros e
+      <strong>pergunta-lhe</strong> quando não tem a certeza. Tudo isto acontece dentro de um ciclo
+      curto que se repete milhares de vezes por sessão — e quem manda no fim é o humano.
+    </p>
+    <div class="prompt-box">
+      <span class="prompt-label">Em uma frase</span>
+      <p>
+        Uma equipa de três — um decisor rápido (Jev), um escritor que planeia e redige (DeepSeek) e
+        código que fala com o jogo (DFHack) — conduz um aventureiro no Dwarf Fortress, com um diário
+        de memória a seu lado e um painel web onde o utilizador supervisa, aprova e define missões.
+      </p>
+    </div>
+    <ul class="toc" aria-label="Índice">
+      <li><a href="#papeis">01 · Os três papéis</a></li>
+      <li><a href="#ciclo">02 · O ciclo</a></li>
+      <li><a href="#memoria">03 · A memória</a></li>
+      <li><a href="#caca">04 · Como ele caça</a></li>
+      <li><a href="#numeros">05 · Os números</a></li>
+      <li><a href="#dashboard">06 · Tudo pelo site</a></li>
+      <li><a href="#mudancas">07 · O que deve mudar</a></li>
+    </ul>
+  </header>
+
+  <main id="conteudo">
+
+  <!-- ============ PARTE 1 ============ -->
+  <div class="part-banner">
+    <h2>Parte 1 · O que é — e como funciona</h2>
+    <p>Leitura conceptual, sem jargão de engenharia. Cada secção deve fazer sentido em 30 segundos.</p>
+  </div>
+
+  <!-- 01 — Papéis -->
+  <section id="papeis">
+    <div class="section-header">
+      <span class="section-number">01</span>
+      <h2>Os três papéis — e o humano no topo</h2>
+    </div>
+    <p class="section-intro">
+      Nada disto é um único "cérebro". É uma divisão de trabalho clara: cada papel faz aquilo em que
+      é bom e nada mais. O desenho em baixo mostra quem fala com quem.
+    </p>
+
+    <figure class="diagram-panel" role="group" aria-label="Diagrama dos três papéis do agente com o humano no topo">
+      <svg viewBox="0 0 920 500" xmlns="http://www.w3.org/2000/svg" role="img"
+           aria-label="O humano define missões e aprova ações; o Escritor passa planos ao Decisor; o Decisor envia ações tipadas ao Executor; o Executor devolve estado validado ao Decisor.">
+        <title>Os três papéis do System One Dwarf</title>
+        <desc>Fluxo entre Escritor, Decisor e Executor, com o humano a supervisionar e a responder a perguntas.</desc>
+        <style>
+          .box      { fill: var(--card); stroke: var(--border); stroke-width: 1.5; }
+          .box-hi   { fill: color-mix(in oklab, var(--primary) 8%, transparent); stroke: var(--primary); stroke-width: 1.5; }
+          .box-you  { fill: color-mix(in oklab, var(--accent) 10%, transparent); stroke: var(--accent); stroke-width: 1.5; }
+          .t-title  { font-family: var(--font-sans); font-size: 15px; font-weight: 600; fill: var(--foreground); }
+          .t-sub    { font-family: var(--font-mono); font-size: 11px; fill: var(--muted-foreground); }
+          .t-edge   { font-family: var(--font-mono); font-size: 10.5px; fill: var(--muted-foreground); }
+          .conn     { stroke: var(--muted-foreground); stroke-width: 1.5; fill: none; }
+          .conn-d   { stroke: var(--primary); stroke-width: 1.5; fill: none; stroke-dasharray: 6 5; }
+        </style>
+        <defs>
+          <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="var(--muted-foreground)"/>
+          </marker>
+          <marker id="ar-p" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="var(--primary)"/>
+          </marker>
+          <marker id="ar-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="var(--accent)"/>
+          </marker>
+        </defs>
+
+        <!-- Você -->
+        <g transform="translate(320,20)">
+          <rect width="280" height="86" rx="12" class="box-you"/>
+          <text x="140" y="34" text-anchor="middle" class="t-title">👤 Você</text>
+          <text x="140" y="56" text-anchor="middle" class="t-sub">supervisa pelo painel web:</text>
+          <text x="140" y="72" text-anchor="middle" class="t-sub">aprova · responde · define missões</text>
+        </g>
+
+        <!-- Escritor -->
+        <g transform="translate(30,210)">
+          <rect width="250" height="130" rx="12" class="box"/>
+          <text x="125" y="36" text-anchor="middle" class="t-title">✍️ O Escritor</text>
+          <text x="125" y="58" text-anchor="middle" class="t-sub">DeepSeek · o único que</text>
+          <text x="125" y="74" text-anchor="middle" class="t-sub">escreve texto:</text>
+          <text x="125" y="94" text-anchor="middle" class="t-sub">planeia a caça · escreve</text>
+          <text x="125" y="110" text-anchor="middle" class="t-sub">o diário · pergunta em PT</text>
+        </g>
+
+        <!-- Decisor -->
+        <g transform="translate(335,210)">
+          <rect width="250" height="130" rx="12" class="box-hi"/>
+          <text x="125" y="36" text-anchor="middle" class="t-title">🧠 O Decisor (Jev)</text>
+          <text x="125" y="58" text-anchor="middle" class="t-sub">decisões tipadas em</text>
+          <text x="125" y="74" text-anchor="middle" class="t-sub">milissegundos:</text>
+          <text x="125" y="94" text-anchor="middle" class="t-sub">que conhecimento usar ·</text>
+          <text x="125" y="110" text-anchor="middle" class="t-sub">o que fazer · quando perguntar</text>
+        </g>
+
+        <!-- Executor -->
+        <g transform="translate(640,210)">
+          <rect width="250" height="130" rx="12" class="box"/>
+          <text x="125" y="36" text-anchor="middle" class="t-title">⚙️ O Executor</text>
+          <text x="125" y="58" text-anchor="middle" class="t-sub">código · fala com o jogo:</text>
+          <text x="125" y="74" text-anchor="middle" class="t-sub">teclas e rato via DFHack ·</text>
+          <text x="125" y="94" text-anchor="middle" class="t-sub">cálculos exatos ·</text>
+          <text x="125" y="110" text-anchor="middle" class="t-sub">verifica se resultou</text>
+        </g>
+
+        <!-- Arrows: Você <-> Decisor -->
+        <path d="M560,106 C560,150 500,150 490,204" class="conn" marker-end="url(#ar)"/>
+        <text x="568" y="150" class="t-edge">aprovações · missões</text>
+        <path d="M400,204 C390,150 360,150 362,112" class="conn-d" marker-end="url(#ar-p)"/>
+        <text x="300" y="150" class="t-edge">perguntas em PT (quando tem dúvidas)</text>
+
+        <!-- Escritor -> Decisor -->
+        <line x1="282" y1="275" x2="329" y2="275" class="conn" marker-end="url(#ar)"/>
+        <text x="305" y="262" text-anchor="middle" class="t-edge">plano</text>
+
+        <!-- Decisor -> Executor -->
+        <line x1="587" y1="275" x2="634" y2="275" class="conn" marker-end="url(#ar)"/>
+        <text x="610" y="262" text-anchor="middle" class="t-edge">ação</text>
+
+        <!-- Executor -> Decisor (dashed, validated state) -->
+        <path d="M765,342 C765,410 462,412 462,346" class="conn-d" marker-end="url(#ar-p)"/>
+        <text x="612" y="402" text-anchor="middle" class="t-edge">estado do jogo + verificação do resultado</text>
+
+        <!-- Executor -> jogo label -->
+        <text x="765" y="470" text-anchor="middle" class="t-sub">jogo: Dwarf Fortress 53.16 + DFHack</text>
+      </svg>
+      <figcaption>
+        Figura 1 — o Escritor prepara e redige, o Decisor escolhe em milissegundos, o Executor toca
+        no jogo e devolve provas. O humano supervisa e responde às perguntas.
+      </figcaption>
+    </figure>
+
+    <div class="three-col">
+      <div class="ve-card">
+        <span class="card-tag">Decidir rápido</span>
+        <h3>🧠 O Decisor (Jev)</h3>
+        <p>
+          É o "pensamento de sistema 1": não escreve frases, escolhe opções tipadas em milissegundos
+          e diz com que confiança. Acima de 0,90 age sozinho; entre 0,50 e 0,89 pede aprovação;
+          abaixo disso abstém-se e pede ajuda.
+        </p>
+      </div>
+      <div class="ve-card">
+        <span class="card-tag">Planear e redigir</span>
+        <h3>✍️ O Escritor (DeepSeek)</h3>
+        <p>
+          Escreve tudo o que é linguagem: o plano de caça (para onde ir, onde há animais), as
+          perguntas ao humano em português, a tradução e a narrativa do diário. Pensa devagar e a
+          fundo — mas só quando é preciso.
+        </p>
+      </div>
+      <div class="ve-card">
+        <span class="card-tag">Tocar no jogo</span>
+        <h3>⚙️ O Executor (código)</h3>
+        <p>
+          O único que mexe no Dwarf Fortress: envia teclas e cliques pelo DFHack, lê o ecrã e o
+          estado, calcula coisas exatas (posições, rotas, comparações) e prova que a ação resultou
+          antes de avançar.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 02 — Ciclo -->
+  <section id="ciclo">
+    <div class="section-header">
+      <span class="section-number">02</span>
+      <h2>O ciclo — seis passos que se repetem</h2>
+    </div>
+    <p class="section-intro">
+      Cada passo é curto e verificável. O ciclo nunca fica preso: se o aventureiro parar de evoluir,
+      o agente deteta a estagnação, explora por conta própria e faz novo plano — sem esperar por
+      ninguém.
+    </p>
+
+    <figure class="diagram-panel" role="group" aria-label="Diagrama do ciclo de decisão em seis passos">
+      <svg viewBox="0 0 860 580" xmlns="http://www.w3.org/2000/svg" role="img"
+           aria-label="Ciclo: ver o mundo, puxar o que sabe, decidir com o humano se preciso, agir no jogo, validar o resultado, escrever na memória e repetir.">
+        <title>O ciclo de decisão do System One Dwarf</title>
+        <desc>Seis passos em anel, com um centro que reforça que o ciclo nunca fica preso.</desc>
+        <style>
+          .ring     { stroke: var(--border); stroke-width: 14; fill: none; opacity: 0.9; }
+          .ring-arrow { fill: var(--muted-foreground); opacity: 0.85; }
+          .cbox     { fill: var(--card); stroke: var(--border); stroke-width: 1.5; }
+          .cbox-hi  { fill: color-mix(in oklab, var(--primary) 8%, transparent); stroke: var(--primary); stroke-width: 1.5; }
+          .ct-title { font-family: var(--font-sans); font-size: 15px; font-weight: 600; fill: var(--foreground); }
+          .ct-sub   { font-family: var(--font-mono); font-size: 10.5px; fill: var(--muted-foreground); }
+          .ct-num   { font-family: var(--font-mono); font-size: 11px; font-weight: 600; fill: var(--primary); }
+          .center-t { font-family: var(--font-display); font-size: 19px; font-weight: 500; fill: var(--foreground); }
+          .center-s { font-family: var(--font-mono); font-size: 11px; fill: var(--muted-foreground); }
+        </style>
+
+        <!-- anel -->
+        <circle cx="430" cy="285" r="215" class="ring"/>
+
+        <!-- setas tangenciais (sentido horário) -->
+        <g class="ring-arrow">
+          <path d="M-8,-8 L8,0 L-8,8 Z" transform="translate(537.5,177.5) rotate(30)"/>
+          <path d="M-8,-8 L8,0 L-8,8 Z" transform="translate(537.5,392.5) rotate(90)"/>
+          <path d="M-8,-8 L8,0 L-8,8 Z" transform="translate(430,500) rotate(150)"/>
+          <path d="M-8,-8 L8,0 L-8,8 Z" transform="translate(322.5,392.5) rotate(210)"/>
+          <path d="M-8,-8 L8,0 L-8,8 Z" transform="translate(322.5,177.5) rotate(270)"/>
+          <path d="M-8,-8 L8,0 L-8,8 Z" transform="translate(430,70) rotate(330)"/>
+        </g>
+
+        <!-- centro -->
+        <circle cx="430" cy="285" r="104" fill="var(--muted)" stroke="var(--border)" stroke-width="1.5"/>
+        <text x="430" y="272" text-anchor="middle" class="center-t">nunca fica preso</text>
+        <text x="430" y="296" text-anchor="middle" class="center-s">3 passos sem progresso →</text>
+        <text x="430" y="312" text-anchor="middle" class="center-s">explora; 2.ª vez → re-planeja</text>
+
+        <!-- passo 1 -->
+        <g transform="translate(346,35)">
+          <rect width="168" height="70" rx="10" class="cbox-hi"/>
+          <text x="84" y="26" text-anchor="middle" class="ct-num">1</text>
+          <text x="84" y="46" text-anchor="middle" class="ct-title">👀 Ver o mundo</text>
+          <text x="84" y="62" text-anchor="middle" class="ct-sub">ecrã + estado do jogo</text>
+        </g>
+
+        <!-- passo 2 -->
+        <g transform="translate(532,142)">
+          <rect width="168" height="70" rx="10" class="cbox"/>
+          <text x="84" y="26" text-anchor="middle" class="ct-num">2</text>
+          <text x="84" y="46" text-anchor="middle" class="ct-title">📚 Puxar o que sabe</text>
+          <text x="84" y="62" text-anchor="middle" class="ct-sub">padrões + diário + wiki</text>
+        </g>
+
+        <!-- passo 3 -->
+        <g transform="translate(532,357)">
+          <rect width="168" height="70" rx="10" class="cbox-hi"/>
+          <text x="84" y="26" text-anchor="middle" class="ct-num">3</text>
+          <text x="84" y="46" text-anchor="middle" class="ct-title">🤔 Decidir</text>
+          <text x="84" y="62" text-anchor="middle" class="ct-sub">com o humano se preciso</text>
+        </g>
+
+        <!-- passo 4 -->
+        <g transform="translate(346,465)">
+          <rect width="168" height="70" rx="10" class="cbox"/>
+          <text x="84" y="26" text-anchor="middle" class="ct-num">4</text>
+          <text x="84" y="46" text-anchor="middle" class="ct-title">⚔️ Agir no jogo</text>
+          <text x="84" y="62" text-anchor="middle" class="ct-sub">teclas e rato via DFHack</text>
+        </g>
+
+        <!-- passo 5 -->
+        <g transform="translate(160,357)">
+          <rect width="168" height="70" rx="10" class="cbox"/>
+          <text x="84" y="26" text-anchor="middle" class="ct-num">5</text>
+          <text x="84" y="46" text-anchor="middle" class="ct-title">✅ Validar</text>
+          <text x="84" y="62" text-anchor="middle" class="ct-sub">mudou mesmo o estado?</text>
+        </g>
+
+        <!-- passo 6 -->
+        <g transform="translate(160,142)">
+          <rect width="168" height="70" rx="10" class="cbox"/>
+          <text x="84" y="26" text-anchor="middle" class="ct-num">6</text>
+          <text x="84" y="46" text-anchor="middle" class="ct-title">📝 Escrever na memória</text>
+          <text x="84" y="62" text-anchor="middle" class="ct-sub">episódio + padrão novo</text>
+        </g>
+      </svg>
+      <figcaption>
+        Figura 2 — o ciclo repete-se até a missão terminar. A validação protege contra ações que
+        "parecem" ter funcionado; a memória garante que a lição fica guardada.
+      </figcaption>
+    </figure>
+  </section>
+
+  <!-- 03 — Memória -->
+  <section id="memoria">
+    <div class="section-header">
+      <span class="section-number">03</span>
+      <h2>A memória: o diário e os padrões</h2>
+    </div>
+    <p class="section-intro">
+      A regra é simples: <strong>aprende uma vez, nunca repensa</strong>. O que é verdade fica na
+      referência; o que aconteceu fica no diário; o que funcionou fica no caderno de padrões — com
+      data, prova e limites.
+    </p>
+
+    <div class="three-col">
+      <div class="ve-card ve-card--hero">
+        <span class="card-tag">Por campanha</span>
+        <h3>📖 O diário</h3>
+        <p>
+          Episódios datados (o que aconteceu, o que foi decidido, porquê) mais uma narrativa
+          contínua da campanha. Na missão real foram 13 episódios — o suficiente para responder
+          "o que se passou ontem?".
+        </p>
+      </div>
+      <div class="ve-card">
+        <span class="card-tag">Referência partilhada</span>
+        <h3>📚 A wiki grande</h3>
+        <p>
+          <strong>30 129 registos</strong> de conhecimento do Dwarf Fortress (skills, materiais,
+          regras). O agente nunca lê tudo: recebe só o que é relevante para o momento, com a fonte
+          indicada — o que vem da wiki cita-se, nunca se obedece cegamente.
+        </p>
+      </div>
+      <div class="ve-card">
+        <span class="card-tag">Prova ao vivo</span>
+        <h3>🔧 O caderno de padrões</h3>
+        <p>
+          <strong>21 padrões</strong> de ecrãs e teclas comprovados em sessões reais — do primeiro
+          menu até à cadeia completa de combate. Cada um guarda a sequência exata e quando usar;
+          é por isso que a navegação deixa de ser redescoberta.
+        </p>
+      </div>
+    </div>
+
+    <div class="callout">
+      <h3>Porque importa separar em três</h3>
+      <p>
+        Misturar tudo num só "contexto" esquece o essencial e envelhece mal. Separado — episódico
+        (quando/porquê), semântico (o que é verdade) e procedimental (como se faz) — o agente
+        recupera só o que precisa e mantém as sessões longas viáveis.
+      </p>
+    </div>
+  </section>
+
+  <!-- 04 — Caça -->
+  <section id="caca">
+    <div class="section-header">
+      <span class="section-number">04</span>
+      <h2>Como ele caça — a missão que correu de verdade</h2>
+    </div>
+    <p class="section-intro">
+      A missão foi concreta: <strong>"encontrar um animal e abatê-lo"</strong>. Eis o que aconteceu
+      de facto, passo a passo, na corrida <code>caca-2</code>.
+    </p>
+
+    <ol class="pipeline">
+      <li>
+        <h3>O planner traça a rota</h3>
+        <p>O Escritor transforma o objetivo num plano: onde estamos → zonas prováveis de animais → rota → regra de oportunismo.</p>
+      </li>
+      <li>
+        <h3>O agente navega</h3>
+        <p>O Decisor escolhe entre os padrões já aprendidos; se não tiver confiança, um caminho de reserva determinístico garante progresso.</p>
+      </li>
+      <li>
+        <h3>Vê um animal — oportunidade</h3>
+        <p>Um animal visível a meio do caminho entra já como candidato imediato: planos não são escritura, são direção.</p>
+      </li>
+      <li>
+        <h3>A cadeia de combate</h3>
+        <p>Menu de ataque → escolher alvo → confirmar conflito → Strike → mira (pescoço/cabeça) → golpe → Done. Uma sequência aprendida, não improvisada.</p>
+      </li>
+      <li>
+        <h3>O resultado é validado</h3>
+        <p>Quatro sinais independentes confirmam a morte: mensagem no log do jogo, contagem de unidades antes→depois, registo de kills e o ecrã.</p>
+      </li>
+      <li>
+        <h3>O diário regista</h3>
+        <p>Episódio escrito com o que aconteceu e o que foi aprendido — e o padrão de combate fica guardado para as próximas vezes.</p>
+      </li>
+    </ol>
+
+    <div class="callout proof">
+      <h3>Prova: a mula foi abatida ao vivo</h3>
+      <p>
+        Após estocadas no corpo e no pescoço, o golpe final derrubou a presa —
+        "The stray mule has been struck down." registado no log do jogo, auditável no
+        <code>scripts/e2e/logs/mission-hunt.jsonl</code>.
+        <span class="decide-with">Anti-congelamento: 3 passos sem progresso → exploração forçada · 200 eventos detetados ao vivo</span>
+      </p>
+    </div>
+  </section>
+
+  <!-- 05 — Números -->
+  <section id="numeros">
+    <div class="section-header">
+      <span class="section-number">05</span>
+      <h2>Os números</h2>
+    </div>
+    <div class="kpi-strip">
+      <div class="kpi-card">
+        <span class="kpi-value">1 175</span>
+        <span class="kpi-label">testes verdes na suíte</span>
+      </div>
+      <div class="kpi-card">
+        <span class="kpi-value">1 980</span>
+        <span class="kpi-label">decisões numa missão</span>
+      </div>
+      <div class="kpi-card">
+        <span class="kpi-value">21</span>
+        <span class="kpi-label">padrões aprendidos</span>
+      </div>
+      <div class="kpi-card">
+        <span class="kpi-value">100/100</span>
+        <span class="kpi-label">UX · auditoria v4</span>
+      </div>
+      <div class="kpi-card">
+        <span class="kpi-value">≈ $0.30</span>
+        <span class="kpi-label">por sessão leve</span>
+      </div>
+      <div class="kpi-card">
+        <span class="kpi-value">30 129</span>
+        <span class="kpi-label">registos de conhecimento</span>
+      </div>
+    </div>
+    <p class="muted small">
+      Números verificados nos artefactos do projeto: suíte de testes, corrida <code>caca-2</code>
+      (21 padrões · 1 980 decisões JEV), auditorias de UX (v1 40/100 → v4 100/100) e a base de
+      conhecimento partilhada.
+    </p>
+  </section>
+
+  <!-- 06 — Dashboard -->
+  <section id="dashboard">
+    <div class="section-header">
+      <span class="section-number">06</span>
+      <h2>Tudo pelo site — o painel web</h2>
+    </div>
+    <p class="section-intro">
+      Não é preciso tocar na linha de comandos: o controlo do agente vive num painel web, com o
+      jogo sempre visível ao lado das decisões.
+    </p>
+    <div class="two-col">
+      <div class="ve-card">
+        <span class="card-tag">Começar e conduzir</span>
+        <h3>Criar aventura · definir missão</h3>
+        <ul class="plain">
+          <li><strong>Criar aventura</strong> — assistente em 4 passos: mundo → personagem → progresso → pronto.</li>
+          <li><strong>Definir missão</strong> — o objetivo do agente em linguagem natural ("encontrar um animal e abatê-lo").</li>
+          <li><strong>Ligar e desligar</strong> — piloto automático à distância, com paragem imediata sempre disponível.</li>
+        </ul>
+      </div>
+      <div class="ve-card">
+        <span class="card-tag">Supervisar</span>
+        <h3>Aprovar · ver · auditar</h3>
+        <ul class="plain">
+          <li><strong>Aprovar ações</strong> — quando o agente não tem confiança, a decisão vem ter consigo e só segue depois de aprovada.</li>
+          <li><strong>Ver memória e gastos</strong> — episódios do diário, decisões tomadas e custo por sessão.</li>
+          <li><strong>Ver o ecrã e as perguntas</strong> — o jogo ao vivo, o que o agente pergunta e porquê.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ PARTE 2 ============ -->
+  <div class="part-banner" id="mudancas">
+    <h2>Parte 2 · O que deve mudar — e os tradeoffs</h2>
+    <p>
+      Doze mudanças concretas, cada uma com o porquê (e as fontes que o suportam), o preço a pagar
+      e a prioridade. Nenhuma é de graça: o tradeoff é a parte que se lê primeiro.
+    </p>
+  </div>
+
+  <section>
+    <div class="section-header">
+      <span class="section-number">07</span>
+      <h2>As 12 mudanças</h2>
+    </div>
+
+    <div class="badge-row" style="margin-bottom:8px">
+      <span class="badge high">Alta · 5</span>
+      <span class="badge med">Média · 6</span>
+      <span class="badge low">Baixa · 1</span>
+      <span class="muted small">Prioridade · esforço: <span class="badge effort">S</span> <span class="badge effort">M</span> <span class="badge effort">L</span></span>
+    </div>
+
+    <div class="change-list">
+
+      <!-- 1 -->
+      <article class="change-card" id="m1">
+        <header>
+          <span class="change-num">01</span>
+          <h3>Guardar os diálogos para memória conversacional</h3>
+          <div class="badge-row">
+            <span class="badge high">Prioridade alta</span>
+            <span class="badge effort">Esforço M</span>
+          </div>
+        </header>
+        <div class="change-body">
+          <div>
+            <h4>Porquê</h4>
+            <p>
+              Lacuna confirmada: o agente não guarda as conversas com o humano, então cada sessão
+              começa sem saber o que foi dito antes. A solução conhecida é transcrever cada mensagem
+              (quem falou, quando, vetor de significado, importância) e recuperar no início de cada
+              conversa por recência + importância + similaridade, com espaço próprio por interlocutor
+              e um cartão de perfil — para responder "da última vez falámos de X".
+            </p>
+            <ul class="sources">
+              <li><a href="https://github.com/letta-ai/letta">Letta (MemGPT)</a></li>
+              <li><a href="https://github.com/mem0ai/mem0">Mem0</a></li>
+              <li><a href="https://github.com/microsoft/agent-framework">Microsoft Agent Framework</a></li>
+              <li><a href="https://arxiv.org/abs/2406.00057">arXiv 2406.00057</a></li>
+            </ul>
+          </div>
+          <div class="tradeoff-box">
+            <h4>Tradeoff</h4>
+            <p>
+              Mais armazenamento, dados pessoais (PII) no disco e custo de extração por mensagem
+              <strong>versus</strong> personalização e continuidade reais entre sessões.
+            </p>
+          </div>
+        </div>
+      </article>
+
+      <!-- 2 -->
+      <article class="change-card" id="m2">
+        <header>
+          <span class="change-num">02</span>
+          <h3>Skills de combate nas decisões de ataque e fuga</h3>
+          <div class="badge-row">
+            <span class="badge high">Prioridade alta</span>
+            <span class="badge effort">Esforço M</span>
+          </div>
+        </header>
+        <div class="change-body">
+          <div>
+            <h4>Porquê</h4>
+            <p>
+              Lacuna confirmada: hoje as decisões de combate ignoram a capacidade real do aventureiro.
+              Um retrato de "prontidão de combate" (~10 números: skill efetiva da arma via
+              <code>getEffectiveSkill</code>, Fighter/Dodger/Shield/Armor, atributos, dor e exaustão)
+              permite decidir com vantagem de skill, compatibilidade arma↔armadura, mira em
+              cabeça/pescoço e um limiar claro de fuga (HP &lt; 60%).
+            </p>
+            <ul class="sources">
+              <li><a href="https://dwarffortresswiki.org/index.php/Combat">Wiki DF · Combat</a></li>
+              <li><a href="https://dwarffortresswiki.org/index.php/Material">Wiki DF · Material</a></li>
+              <li><a href="https://arxiv.org/abs/2402.01118">PokéLLMon</a></li>
+              <li><a href="https://arxiv.org/abs/2503.04094">PokéChamp</a></li>
+              <li><a href="https://arxiv.org/abs/2203.11889">NetHack Challenge</a></li>
+            </ul>
+          </div>
+          <div class="tradeoff-box">
+            <h4>Tradeoff</h4>
+            <p>
+              Estado maior para o decisor e parsing da saída Lua (pode quebrar com atualizações do
+              DFHack) <strong>versus</strong> sobrevivência e kills eficazes.
+            </p>
+          </div>
+        </div>
+      </article>
+
+      <!-- 3 -->
+      <article class="change-card" id="m3">
+        <header>
+          <span class="change-num">03</span>
+          <h3>Escalada de evidência antes de pedir ajuda</h3>
+          <div class="badge-row">
+            <span class="badge high">Prioridade alta</span>
+            <span class="badge effort">Esforço S</span>
+          </div>
+        </header>
+        <div class="change-body">
+          <div>
+            <h4>Porquê</h4>
+            <p>
+              Com confiança baixa, o agente pergunta de imediato. Deve, em vez disso, colher mais
+              estado (consultas DFHack) e re-decidir <strong>uma</strong> vez antes de recorrer ao
+              humano. É a ideia de predição seletiva: aumentar a cobertura sem baixar o piso de
+              risco — as perguntas ao humano ficam para as dúvidas de verdade.
+            </p>
+            <ul class="sources">
+              <li><a href="https://aclanthology.org/2024.findings-acl.767/">ReCoVERR (selective prediction)</a></li>
+            </ul>
+          </div>
+          <div class="tradeoff-box">
+            <h4>Tradeoff</h4>
+            <p>
+              +1 chamada barata ao Jev por passo incerto <strong>versus</strong> muito menos
+              perguntas ao humano e mais autonomia.
+            </p>
+          </div>
+        </div>
+      </article>
+
+      <!-- 4 -->
+      <article class="change-card" id="m4">
+        <header>
+          <span class="change-num">04</span>
+          <h3>Movimento como macro-ação</h3>
+          <div class="badge-row">
+            <span class="badge high">Prioridade alta</span>
+            <span class="badge effort">Esforço M</span>
+          </div>
+        </header>
+        <div class="change-body">
+          <div>
+            <h4>Porquê</h4>
+            <p>
+              Na missão real foram gastas 415 decisões só a micro-movimento (349 delas em abstensão).
+              O Decisor deve decidir o <strong>destino</strong> e a urgência; o código trata do
+              caminho (pathing) passo a passo. É o padrão dos agentes de jogos: a política escolhe o
+              objetivo de alto nível, a mecânica executa.
+            </p>
+            <ul class="sources">
+              <li><a href="https://arxiv.org/abs/2305.16291">Voyager</a></li>
+              <li><a href="https://arxiv.org/abs/2406.18665">RouteLLM</a></li>
+            </ul>
+          </div>
+          <div class="tradeoff-box">
+            <h4>Tradeoff</h4>
+            <p>
+              Menos controlo granular sobre cada passo <strong>versus</strong> muito menos
+              indecisão, custo e tempo de sessão.
+            </p>
+          </div>
+        </div>
+      </article>
+
+      <!-- 5 -->
+      <article class="change-card" id="m5">
+        <header>
+          <span class="change-num">05</span>
+          <h3>Shuffle + voto nas opções de decisão</h3>
+          <div class="badge-row">
+            <span class="badge med">Prioridade média</span>
+            <span class="badge effort">Esforço S</span>
+          </div>
+        </header>
+        <div class="change-body">
+          <div>
+            <h4>Porquê</h4>
+            <p>
+              Modelos tendem a escolher a primeira opção por viés de posição. Nas decisões
+              críticas, correr 2–3 permutações da lista de opções e votar o resultado torna a
+              escolha insensível à ordem — e mede a estabilidade da decisão no mesmo passo.
+            </p>
+            <ul class="sources">
+              <li><a href="https://arxiv.org/abs/2309.03882">Robustness MCQ</a></li>
+              <li><a href="https://arxiv.org/abs/2607.20864">Diagnóstico por permutação (AAAI'26)</a></li>
+            </ul>
+          </div>
+          <div class="tradeoff-box">
+            <h4>Tradeoff</h4>
+            <p>
+              2–3× chamadas Jev nas decisões críticas (custo ínfimo — Jev ≈ $0.042/M tokens)
+              <strong>versus</strong> decisões imparciais e auditáveis.
+            </p>
+          </div>
+        </div>
+      </article>
+
+      <!-- 6 -->
+      <article class="change-card" id="m6">
+        <header>
+          <span class="change-num">06</span>
+          <h3>Calibrar limiares por risco</h3>
+          <div class="badge-row">
+            <span class="badge med">Prioridade média</span>
+            <span class="badge effort">Esforço M</span>
+          </div>
+        </header>
+        <div class="change-body">
+          <div>
+            <h4>Porquê</h4>
+            <p>
+              Os limiares de confiança (auto · humano · abstensão) valem igual para todas as ações,
+              mas pedir aprovação para "olhar para o lado" não é o mesmo que pedir para atacar.
+              Com curvas risco-cobertura sobre os 66 cenários de avaliação + dados reais, cada classe
+              de ação ganha o seu limiar. A ordem importa: primeiro calibrar o limiar, depois mexer
+              no prompt.
+            </p>
+            <ul class="sources">
+              <li><a href="https://arxiv.org/abs/2406.18665">RouteLLM · calibração</a></li>
+              <li><span>fiabilidade por classe (reliability diagrams)</span></li>
+            </ul>
+          </div>
+          <div class="tradeoff-box">
+            <h4>Tradeoff</h4>
+            <p>
+              Trabalho de calibragem e manutenção dos limiares <strong>versus</strong> cobertura
+              automática real e mensurável em vez de sensações.
+            </p>
+          </div>
+        </div>
+      </article>
+
+      <!-- 7 -->
+      <article class="change-card" id="m7">
+        <header>
+          <span class="change-num">07</span>
+          <h3>Estado com histórico recente e anti-repetição</h3>
+          <div class="badge-row">
+            <span class="badge high">Prioridade alta</span>
+            <span class="badge effort">Esforço S</span>
+          </div>
+        </header>
+        <div class="change-body">
+          <div>
+            <h4>Porquê</h4>
+            <p>
+              O agente repete ações que já falharam porque o estado só mostra o presente. Duas
+              peças resolvem: um bloco "últimas decisões + resultado" e "falhados — não repetir", e
+              um detetor de ações repetidas (janela de 3–5). A ordem do contexto também conta —
+              curva em U: o crítico no início e no fim.
+            </p>
+            <ul class="sources">
+              <li><a href="https://research.trychroma.com/context-rot">Chroma · context rot</a></li>
+              <li><a href="https://arxiv.org/abs/2307.03172">Liu et al. (TACL'24)</a></li>
+              <li><a href="https://arxiv.org/abs/2304.03442">Generative Agents</a></li>
+            </ul>
+          </div>
+          <div class="tradeoff-box">
+            <h4>Tradeoff</h4>
+            <p>
+              Mais tokens no estado (mantendo o orçamento ~2K) <strong>versus</strong> fim dos
+              laços de repetição e erros reaproveitados.
+            </p>
+          </div>
+        </div>
+      </article>
+
+      <!-- 8 -->
+      <article class="change-card" id="m8">
+        <header>
+          <span class="change-num">08</span>
+          <h3>Eventos como diário de bordo</h3>
+          <div class="badge-row">
+            <span class="badge med">Prioridade média</span>
+            <span class="badge effort">Esforço M</span>
+          </div>
+        </header>
+        <div class="change-body">
+          <div>
+            <h4>Porquê</h4>
+            <p>
+              O diário episódico ganha estrutura de registo de bordo: <em>append-only</em> (nunca se
+              apaga, só se acrescenta), com o que mudou em cada evento, uma etiqueta de importância e
+              recuperação por recência + importância + relevância. Reflexões periódicas resumem o que
+              importa reter.
+            </p>
+            <ul class="sources">
+              <li><a href="https://arxiv.org/abs/2304.03442">Generative Agents</a></li>
+              <li><a href="https://martinfowler.com/eaaDev/EventSourcing.html">Event sourcing</a></li>
+            </ul>
+          </div>
+          <div class="tradeoff-box">
+            <h4>Tradeoff</h4>
+            <p>
+              Custo de avaliação (scoring) na escrita e mais complexidade <strong>versus</strong>
+              memória que se consulta e se aproveita de verdade.
+            </p>
+          </div>
+        </div>
+      </article>
+
+      <!-- 9 -->
+      <article class="change-card" id="m9">
+        <header>
+          <span class="change-num">09</span>
+          <h3>Ciclo gerar → testar → criticar nos planos</h3>
+          <div class="badge-row">
+            <span class="badge med">Prioridade média</span>
+            <span class="badge effort">Esforço M</span>
+          </div>
+        </header>
+        <div class="change-body">
+          <div>
+            <h4>Porquê</h4>
+            <p>
+              Quando um plano falha, hoje há pouco mais do que tentar outra vez. O padrão
+              LLM-Modulo: re-gerar o plano com o feedback de críticos, onde as condições de sucesso
+              são verificadas <strong>em código</strong> (não pelo modelo que as escreveu), com um
+              limite de tentativas para nunca laçar para sempre.
+            </p>
+            <ul class="sources">
+              <li><a href="https://arxiv.org/abs/2402.01817">LLM-Modulo (ICML'24)</a></li>
+            </ul>
+          </div>
+          <div class="tradeoff-box">
+            <h4>Tradeoff</h4>
+            <p>
+              Mais chamadas LLM quando as coisas correm mal <strong>versus</strong> planos robustos
+              e verificáveis, sem dependência da "boa vontade" do modelo.
+            </p>
+          </div>
+        </div>
+      </article>
+
+      <!-- 10 -->
+      <article class="change-card" id="m10">
+        <header>
+          <span class="change-num">10</span>
+          <h3>Planos com schema fixo, waypoints e esforço dinâmico</h3>
+          <div class="badge-row">
+            <span class="badge med">Prioridade média</span>
+            <span class="badge effort">Esforço M</span>
+          </div>
+        </header>
+        <div class="change-body">
+          <div>
+            <h4>Porquê</h4>
+            <p>
+              O plano que passa do Escritor para o Decisor deve ter campos fixos e granularidade de
+              <em>waypoints</em> (para onde ir), não de teclas. E o esforço de raciocínio deve ser
+              dinâmico: médio por omissão, máximo só em decisões raras ou com muitos ramos —
+              planeamento hierárquico em vez de pensar o mesmo para tudo.
+            </p>
+            <ul class="sources">
+              <li><a href="https://aclanthology.org/2026.findings-acl.77/">AdaPlan-H (planeamento hierárquico)</a></li>
+              <li><a href="https://platform.openai.com/docs/guides/reasoning">Guias de reasoning effort</a></li>
+            </ul>
+          </div>
+          <div class="tradeoff-box">
+            <h4>Tradeoff</h4>
+            <p>
+              Rigidez do schema (menos liberdade de expressão) <strong>versus</strong>
+              confiabilidade e estabilidade do handoff entre modelos.
+            </p>
+          </div>
+        </div>
+      </article>
+
+      <!-- 11 -->
+      <article class="change-card" id="m11">
+        <header>
+          <span class="change-num">11</span>
+          <h3>Treinar antes de caçar</h3>
+          <div class="badge-row">
+            <span class="badge low">Prioridade baixa</span>
+            <span class="badge effort">Esforço S</span>
+          </div>
+        </header>
+        <div class="change-body">
+          <div>
+            <h4>Porquê</h4>
+            <p>
+              A própria wiki do jogo diz: sparring para treino só é recomendado a partir de
+              <em>Proficient</em>. Se a skill da arma do aventureiro estiver abaixo disso, o agente
+              deve preferir alvos de baixo risco ou sessões de treino antes de avançar para a caça —
+              medir antes de arriscar.
+            </p>
+            <ul class="sources">
+              <li><a href="https://dwarffortresswiki.org/index.php/Combat">Wiki DF · Combat (sparring)</a></li>
+            </ul>
+          </div>
+          <div class="tradeoff-box">
+            <h4>Tradeoff</h4>
+            <p>
+              Mais tempo de sessão até à primeira caça <strong>versus</strong> taxa de sucesso e
+              sobrevivência do aventureiro.
+            </p>
+          </div>
+        </div>
+      </article>
+
+      <!-- 12 -->
+      <article class="change-card" id="m12">
+        <header>
+          <span class="change-num">12</span>
+          <h3>Regressão de prompts com golden set</h3>
+          <div class="badge-row">
+            <span class="badge med">Prioridade média</span>
+            <span class="badge effort">Esforço M</span>
+          </div>
+        </header>
+        <div class="change-body">
+          <div>
+            <h4>Porquê</h4>
+            <p>
+              Os prompts mudam e os modelos mudam sem aviso — e ninguém repara até a missão falhar.
+              Um conjunto dourado de 50–200 casos representativos, versionado e corrigido em CI,
+              apanha regressões. Um <em>hold-out</em> de ~20 casos que nunca se toca protege contra
+              "ensinar ao teste" (overfit).
+            </p>
+            <ul class="sources">
+              <li><span>golden sets em ferramentas de regressão de prompts</span></li>
+              <li><span>anti-overfit com hold-out</span></li>
+            </ul>
+          </div>
+          <div class="tradeoff-box">
+            <h4>Tradeoff</h4>
+            <p>
+              Overhead de processo (manter casos e CI) <strong>versus</strong> proteção contra
+              deriva silenciosa de prompts e modelos.
+            </p>
+          </div>
+        </div>
+      </article>
+
+    </div>
+
+    <div class="callout">
+      <h3>Como ler esta lista</h3>
+      <p>
+        As cinco prioridades altas (01, 02, 03, 04, 07) são as que mudam o comportamento visível do
+        agente: memória de conversas, combate informado, menos perguntas, menos indecisão e fim dos
+        laços. As restantes tornam o sistema mais estável e barato de manter a médio prazo.
+      </p>
+    </div>
+  </section>
+
+  </main>
+
+  <footer>
+    <p>
+      System One Dwarf · dwarf-fortress-agent-skill · documento conceptual (PT) gerado a partir dos
+      artefactos verificados do projeto: <code>PROBLEMAS-E-SOLUCOES.md</code>,
+      <code>docs/arquitetura.md</code>, <code>docs/conhecimento.md</code>,
+      <code>docs/padroes-navegacao.json</code> e <code>scripts/e2e/logs/mission-hunt.jsonl</code>.
+    </p>
+  </footer>
+
+</div>
+</body>
+</html>
