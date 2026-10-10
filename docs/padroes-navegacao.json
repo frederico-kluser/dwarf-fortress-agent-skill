@@ -1,0 +1,2514 @@
+{
+ "version": 1,
+ "updated": "2026-10-09",
+ "description": "Fonte de verdade dos padrões de navegação COMPROVADOS do Dwarf Fortress 53.16 (não-Steam) para o agente. Cada padrão: marcadores do ecrã (regex sobre focus/screen_text do `act screen --json`) -> ação (DSL da ponte). Aprendido uma vez, reutilizado sempre; nunca re-derivado. Consumido por scripts/e2e/nav_jev.py (JEV escolhe entre candidatos compatíveis; fallback determinístico = fluxo provado do steps.json).",
+ "conventions": {
+  "screen": "`act screen --json` -> data.lines (72 linhas) + data.focus (lista). Clique sintético = centro do label em screen_text: x = índice do caractere, y = índice da linha.",
+  "click_dsl": "Usar `act batch \"click X,Y; sleep 600\"` (caminho do driver). NÃO usar `act click X,Y` (o lua quer `dfb-act click <x> <y>` separados e o comando único falha com exit 13).",
+  "keys_dsl": "`act batch \"key NOME; sleep 500\"` com nomes de df.interface_key (ex.: LEAVESCREEN, A_MOVE_N, SELECT)."
+ },
+ "bridge_feedback": {
+  "exit_codes": {
+   "0": "EXIT_OK — comando executado",
+   "10": "EXIT_NO_DF — jogo/DFHack não encontrado no df-path",
+   "11": "EXIT_NO_GAMELOG — gamelog inacessível",
+   "12": "EXIT_UNREACHABLE — RPC do DFHack em baixo",
+   "13": "EXIT_CMD_FAILED — comando falhou NO jogo (ex.: 'sem aventureiro' antes de criar personagem; DSL fora do mapa de aventura quando um menu modal está aberto)"
+  },
+  "warnings": [
+   "snapshot exit 13 + 'sem aventureiro' ANTES de criar personagem é esperado, não é falha do ambiente",
+   "batch com `move ok:false` e pos_after igual = tile bloqueado (parede) OU menu modal aberto; ver `focus` do registo do journal",
+   "journal JSONL em ~/.local/state/df-bridge/journal/<ts>.jsonl: um registo por operação (op/ok/pos_after/focus/threats) + resumo final — é o feedback de execução fiável",
+   "`act screen` sem --json imprime só linhas + focus; com --json vem em data",
+   "erros do ecrã nunca viram texto vazio em silêncio: o driver marca '<bridge error: …>'"
+  ]
+ },
+ "navigation_mechanics": {
+  "goto": "goto X,Y = BFS (dfb-nav.lua) até à tile; move DIR times=N = passos um a um. Movimento no mapa de aventura avança o tempo (todas as criaturas movem-se em simultâneo).",
+  "movement_keys": [
+   "A_MOVE_N",
+   "A_MOVE_S",
+   "A_MOVE_E",
+   "A_MOVE_W",
+   "A_MOVE_NE",
+   "A_MOVE_NW",
+   "A_MOVE_SE",
+   "A_MOVE_SW",
+   "A_MOVE_UP",
+   "A_MOVE_DOWN"
+  ],
+  "walls": "direções podem estar bloqueadas por paredes (spawn dentro de edifício: Pokerworshipped, z=132 — E bloqueado, N/S/W livres); sondar ou goto em volta",
+  "title_menu": "SELECT não responde no título — usar cliques sintéticos nos labels do screen_text",
+  "leavescreen": "key LEAVESCREEN fecha menus modais (equivalente ESC); hint do próprio dfb-act.lua",
+  "z_levels": "goto X,Y (dfb-nav BFS) é PLANAR (z não muda); A_MOVE_UP/DOWN só funcionam em rampas/escadas; presas fogem entre z ('+1z'/'-1z' na direção) e o goto não as segue — perseguir no MESMO z",
+  "units_direction_z": "direção SEM sufixo '±Nz' = mesma z (alvo alcançável pelo goto planar)",
+  "state_units_wide": "df_bridge.py state units --radius N --json = varredura ampla de unidades (pos x,y,z, race) — units_nearby do snapshot cobre só raio 25",
+  "delay_units": "o --delay do act batch é em SEGUNDOS (0.4); o 'sleep N' do DSL é em MILISSEGUNDOS (600)"
+ },
+ "combat": {
+  "bump_attack": "aproximar com `goto X,Y` até à adjacência e `move <dir> times=1` para dentro do tile (bump-attack) — MAS só funciona contra HOSTIS; criaturas NEUTRAS/tame ignoram o bump (passar para o tile não ataca) — para essas usar a cadeia A_ATTACK (combat.attack_menu_chain)",
+  "explicit_key": "A_ATTACK (345) existe em df.interface_key mas o bump é o mecanismo COMPROVADO.",
+  "kill_verification": [
+   "gamelog: linha de morte ('dies', 'has been killed', …)",
+   "units_nearby/threats antes→depois (criatura ausente ou cadáver)",
+   "adventurer.kills incrementa",
+   "screen_text com linhas de combate"
+  ],
+  "safety": "nunca atacar unidades sapientes (kind=='sapient' ou nome/raça com human/dwarf/elf/goblin/…) sem aprovação humana explícita",
+  "attack_menu_chain": {
+   "proven": "2026-10-09 campanha caca-2 (corrida de caça)",
+   "trigger": "key A_ATTACK (df.interface_key A_ATTACK=345) com a presa adjacente",
+   "chain": [
+    "overlay de ajuda (primeira vez): click 'Okay'",
+    "'Who will you attack?' → click na linha do alvo (hotkeys a/b/…; ex. 'a The stray mule')",
+    "'Really start a conflict with …?' → click 'Confirm' (Alt+y)",
+    "planner: 'a Strike' (ou 'b Dodge (Adequate)') → click 'a Strike'",
+    "'What do you want to aim for?' → a upper body / b lower body / c neck / d head / pernas e cascos",
+    "'Attack <parte>:' → a stab/iron spear (equipado) | b bash/shaft/iron spear | c strike/copper buckler | d/e punch/hands",
+    "modificadores: u Quick / v Heavy / w Wild / x Precise / z Multi-attack ('No charge attack: you are on the ground' quando caído)",
+    "click 'Done' → o golpe executa; o gamelog confirma ('You stab the stray mule …')"
+   ],
+   "lethal_aims": {
+    "c neck": "→ 'tearing the upper spine's nervous tissue' + 'The stray mule falls over' (paralisado)",
+    "d head": "→ 'fracturing the skull and tearing the brain' + 'knocked unconscious' + 'has been struck down' (MORTE)"
+   },
+   "notes": "PROVA DE MORTE: 'The stray mule has been struck down.' após estocada na cabeça (3 estocadas no corpo antes: pulmão rasgado, costelas partidas)."
+  },
+  "weapon_lodged": "'The iron spear has lodged firmly in the wound!' → 'You maintain possession of the iron spear.' (arranque do golpe seguinte; o menu de tipo pode deixar de ter 'stab')"
+ },
+ "overlays": {
+  "tutorial_help": {
+   "focus": [
+    "dungeonmode/Help"
+   ],
+   "blocks_movement": true,
+   "notes": "FROZEN ROOT CAUSE: o viewscreen dungeonmode/Help ENGOLE TODO o simulateInput (teclas reportam ok:true mas nada acontece; tick congela). NÃO é cosmético. Fechar: clicar Next/Okay por todas as páginas; páginas interativas ('Movement (2 of 3)', 'Click the help button') não têm botão — clicar o botão Help no topo direito (click 180,1 numa janela de 182 colunas) abre o browser de ajuda (dungeonmode/Options) e conclui o tutorial; depois key LEAVESCREEN até focus=dungeonmode/Default. Só então as teclas movem."
+  },
+  "esc_game_menu": {
+   "focus": [
+    "dungeonmode/Options"
+   ],
+   "blocks_movement": true,
+   "notes": "menu de jogo ('Dwarf Fortress Adventure': Save and return to title menu / Save and continue playing / Retire / Quit without saving / Settings / Return to game) Ecrã de guias (Interactive tutorial / Information and guides) partilham o focus dungeonmode/Options e BLOQUEIAM o movimento. Fechar: key LEAVESCREEN (ou botão 'Return to game' no menu de jogo)."
+  },
+  "attack_help": {
+   "focus": [
+    "dungeonmode/Help/dungeonmode/Attack"
+   ],
+   "blocks_movement": true,
+   "notes": "Overlay de ajuda do menu de ataque (explicação 'Strike' + botão Okay + 'Don't show again'): engole o input como o tutorial. Clicar Okay antes de usar o menu de ataque. Aparece na PRIMEIRA vez que A_ATTACK é usado."
+  }
+ },
+ "flows": {
+  "title_to_ingame": [
+   {
+    "step": "title_to_create_world",
+    "markers": [
+     "focus:new_region",
+     "Create new world"
+    ],
+    "action": "click \"Create new world\""
+   },
+   {
+    "step": "dismiss_welcome",
+    "markers": [
+     "not:Welcome",
+     "not:Okay"
+    ],
+    "action": "click \"Okay\""
+   },
+   {
+    "step": "create_world_defaults",
+    "markers": [
+     "focus:new_region"
+    ],
+    "action": "click \"Create world\""
+   },
+   {
+    "step": "poll_worldgen",
+    "markers": [
+     "screen:Play now"
+    ],
+    "action": "poll (aguardar worldgen; marcador 'Loading object files' = a decorrer)"
+   },
+   {
+    "step": "play_now",
+    "markers": [
+     "Play now"
+    ],
+    "action": "click \"Play now\""
+   },
+   {
+    "step": "poll_export",
+    "markers": [
+     "focus:choose_game_type"
+    ],
+    "action": "poll (marcador 'Saving world / Offloading units' = exportação; pode ser instantânea)"
+   },
+   {
+    "step": "choose_adventurer",
+    "markers": [
+     "focus:choose_game_type",
+     "Aventura|Adventurer"
+    ],
+    "action": "click_re Aventura|Adventurer",
+    "outcome": [
+     "focus:update_region ('Passing a few weeks')",
+     "focus:setupadventure direto (update instantâneo/ausente)"
+    ]
+   },
+   {
+    "step": "destiny_to_onward",
+    "markers": [
+     "Onward to character creation"
+    ],
+    "action": "click \"Onward to character creation\"",
+    "outcome": "Create Your Character (race)"
+   },
+   {
+    "step": "select_race",
+    "markers": [
+     "Create Your Character",
+     "Select [a-z]+"
+    ],
+    "action": "1º click_re na linha da raça (ex.: \\bHuman\\b) para destacar; 2º click_re Select [a-z]+ no botão inferior (posição estável; o label espelha a raça destacada)",
+    "notes": "a raça destacada por omissão é a PRIMEIRA da lista (Dwarf); o botão diz 'Select dwarf' até a linha 'Human' ser clicada"
+   },
+   {
+    "step": "select_origin",
+    "markers": [
+     "Select [A-Z]"
+    ],
+    "action": "click_re Select [A-Z] (botão 'Select <lugar>', ex.: 'Select Hodomon')",
+    "outcome": "separador Name + Background"
+   },
+   {
+    "step": "accept_background",
+    "markers": [
+     "Accept background"
+    ],
+    "action": "click \"Accept background\""
+   },
+   {
+    "step": "accept_skills",
+    "markers": [
+     "Accept attributes and skills"
+    ],
+    "action": "click \"Accept attributes and skills\""
+   },
+   {
+    "step": "accept_appearance",
+    "markers": [
+     "Accept appearance"
+    ],
+    "action": "click \"Accept appearance\""
+   },
+   {
+    "step": "accept_personality",
+    "markers": [
+     "Accept personality"
+    ],
+    "action": "click \"Accept personality\""
+   },
+   {
+    "step": "accept_equipment",
+    "markers": [
+     "Accept equipment"
+    ],
+    "action": "click \"Accept equipment\""
+   },
+   {
+    "step": "ready_to_adventure",
+    "markers": [
+     "Ready to adventure"
+    ],
+    "action": "click \"Ready to adventure!\""
+   },
+   {
+    "step": "go_launch",
+    "markers": [
+     "Go!"
+    ],
+    "action": "click \"Go!\"",
+    "outcome": "focus:dungeonmode (in-game + tutorial)"
+   },
+   {
+    "step": "tutorial_pages",
+    "markers": [
+     "Okay|Next"
+    ],
+    "action": "click Okay/Next até esgotar; páginas interativas clicam no que indicam; conclusão: click no [?] do topo direito",
+    "outcome": "focus:dungeonmode/Default"
+   }
+  ]
+ },
+ "patterns": [
+  {
+   "id": "p-title-create-world",
+   "focus": [
+    "new_region"
+   ],
+   "text_markers": [
+    "Create new world"
+   ],
+   "action": "click \"Create new world\"",
+   "proven": "2026-10-09 world campanha-caca",
+   "notes": "SELECT não responde no título — clique sintético"
+  },
+  {
+   "id": "p-dismiss-welcome",
+   "focus": [
+    "new_region"
+   ],
+   "text_markers": [
+    "Okay"
+   ],
+   "action": "click \"Okay\"",
+   "proven": "2026-10-09 world campanha-caca",
+   "notes": "overlay 'Welcome to Dwarf Fortress'; expect not:Welcome/not:Okay"
+  },
+  {
+   "id": "p-create-world-defaults",
+   "focus": [
+    "new_region"
+   ],
+   "text_markers": [
+    "Create world"
+   ],
+   "action": "click \"Create world\"",
+   "outcome_markers": [
+    "Loading object files"
+   ],
+   "proven": "2026-10-09 world campanha-caca"
+  },
+  {
+   "id": "p-poll-worldgen",
+   "focus": [
+    "new_region"
+   ],
+   "text_markers": [
+    "Play now"
+   ],
+   "action": "poll",
+   "proven": "2026-10-09 world campanha-caca",
+   "notes": "'Loading object files' = ainda a gerar; nunca avançar sobre o loading"
+  },
+  {
+   "id": "p-play-now",
+   "focus": [
+    "new_region"
+   ],
+   "text_markers": [
+    "Play now"
+   ],
+   "action": "click \"Play now\"",
+   "outcome_markers": [
+    "Saving world",
+    "choose_game_type"
+   ],
+   "proven": "2026-10-09 world campanha-caca"
+  },
+  {
+   "id": "p-choose-adventurer-pt-en",
+   "focus": [
+    "choose_game_type"
+   ],
+   "text_markers": [
+    "Aventura",
+    "Adventurer"
+   ],
+   "action": "click_re Aventura|Adventurer",
+   "outcome_markers": [
+    "Adventurer, choose your destiny",
+    "Passing a few weeks"
+   ],
+   "proven": "2026-10-09 fix do steps.json (UI PT: 'Aventura'; update do mundo pode ser instantâneo)",
+   "notes": "expect do passo tem de aceitar update_region OU setupadventure"
+  },
+  {
+   "id": "p-destiny-onward",
+   "focus": [
+    "setupadventure"
+   ],
+   "text_markers": [
+    "Onward to character creation"
+   ],
+   "action": "click \"Onward to character creation\"",
+   "proven": "2026-10-09 campanha-caca"
+  },
+  {
+   "id": "p-select-race-row-then-confirm",
+   "focus": [
+    "setupadventure"
+   ],
+   "text_markers": [
+    "Create Your Character",
+    "Select [a-z]+"
+   ],
+   "action": "click_re \\bHuman\\b; click_re Select [a-z]+",
+   "proven": "2026-10-09 campanha-caca (Kadi Gulgudesprá)",
+   "notes": "DESTAQUE vem da PRIMEIRA linha (Dwarf -> botão 'Select dwarf'); clicar a linha da raça muda o label do botão (posição estável)"
+  },
+  {
+   "id": "p-select-origin-place",
+   "focus": [
+    "setupadventure"
+   ],
+   "text_markers": [
+    "Select [A-Z]"
+   ],
+   "action": "click_re Select [A-Z]",
+   "proven": "2026-10-09 campanha-caca ('Select Hodomon')"
+  },
+  {
+   "id": "p-accept-tab",
+   "focus": [
+    "setupadventure"
+   ],
+   "text_markers": [
+    "Accept (background|attributes and skills|appearance|personality|equipment)"
+   ],
+   "action": "click \"Accept <tab>\"",
+   "proven": "2026-10-09 campanha-caca",
+   "notes": "ordem: background -> skills -> appearance -> personality -> equipment -> Mount and pets"
+  },
+  {
+   "id": "p-ready-and-go",
+   "focus": [
+    "setupadventure"
+   ],
+   "text_markers": [
+    "Ready to adventure",
+    "Go!"
+   ],
+   "action": "click \"Ready to adventure!\"; depois click \"Go!\"",
+   "outcome_markers": [
+    "dungeonmode"
+   ],
+   "proven": "2026-10-09 campanha-caca"
+  },
+  {
+   "id": "p-tutorial-next",
+   "focus": [
+    "dungeonmode/Help"
+   ],
+   "text_markers": [
+    "Okay|Next"
+   ],
+   "action": "click \"Okay\"/\"Next\"",
+   "proven": "2026-10-09 campanha-caca",
+   "notes": "NÃO bloqueia o DSL; clicar só os botões do painel (cliques fora abriram menus)"
+  },
+  {
+   "id": "p-tutorial-finish-help-button",
+   "focus": [
+    "dungeonmode/Help"
+   ],
+   "text_markers": [
+    "Click the help button"
+   ],
+   "action": "click (180,1) — botão [?] do topo direito",
+   "proven": "2026-10-09 campanha-caca",
+   "notes": "conclui o tutorial e abre o ecrã de guias (focus dungeonmode/Options)"
+  },
+  {
+   "id": "p-close-modal-leavescreen",
+   "focus": [
+    "dungeonmode/Options"
+   ],
+   "text_markers": [],
+   "action": "key LEAVESCREEN",
+   "proven": "2026-10-09 campanha-caca",
+   "notes": "fecha o ecrã de guias/menu de jogo; devolve focus dungeonmode/Default e DESBLOQUEIA o movimento"
+  },
+  {
+   "id": "p-return-to-game",
+   "focus": [
+    "dungeonmode/Options"
+   ],
+   "text_markers": [
+    "Return to game"
+   ],
+   "action": "click \"Return to game\"",
+   "proven": "2026-10-09 campanha-caca",
+   "notes": "fecha o menu de jogo ('Dwarf Fortress Adventure') sem salvar/sair"
+  },
+  {
+   "id": "p-move-or-goto",
+   "focus": [
+    "dungeonmode"
+   ],
+   "text_markers": [],
+   "action": "move <dir> times=N | goto X,Y",
+   "proven": "2026-10-09 campanha-caca",
+   "notes": "parede numa direção = mover em outra (spawn: E bloqueado)"
+  },
+  {
+   "id": "p-select-race-row-then-button",
+   "focus": [
+    "setupadventure"
+   ],
+   "text_markers": [
+    "Create Your Character"
+   ],
+   "action": "click_re \\bHuman\\b ; click \"Select human\"",
+   "outcome_markers": [
+    "From "
+   ],
+   "proven": "2026-10-09 campanha caca-2 (corrida de caça)",
+   "notes": "DOIS cliques: a linha realça-se e o botão passa a 'Select <raça>' (com Dwarf realçado o botão diz 'Select dwarf' — nunca haveria 'Select human' para clicar direto)"
+  },
+  {
+   "id": "p-select-origin",
+   "focus": [
+    "setupadventure"
+   ],
+   "text_markers": [
+    "From "
+   ],
+   "action": "click_re Select [A-Z]",
+   "outcome_markers": [
+    "Accept background"
+   ],
+   "proven": "2026-10-09 campanha caca-2 (corrida de caça)",
+   "notes": "botão 'Select <Lugar>' (o lugar é highlighted por omissão)"
+  },
+  {
+   "id": "p-accept-chain",
+   "focus": [
+    "setupadventure"
+   ],
+   "text_markers": [
+    "Accept"
+   ],
+   "action": "click \"Accept background\" → \"Accept attributes and skills\" → \"Accept appearance\" → \"Accept personality\" → \"Accept equipment\" → \"Ready to adventure!\" → \"Go!\"",
+   "outcome_markers": [
+    "Adventure awaits"
+   ],
+   "proven": "2026-10-09 campanha caca-2 (corrida de caça)",
+   "notes": "labels EXATOS do DF 53.16; cada clique avança de tab; o último ecrã mostra 'Adventure awaits' + botão 'Go!' (regex \\bGo!\\b NUNCA casa — '!' não é char de palavra; usar literal)"
+  },
+  {
+   "id": "p-attack-menu-kill",
+   "focus": [
+    "dungeonmode/Attack"
+   ],
+   "text_markers": [
+    "Who will you attack"
+   ],
+   "action": "cadeia A_ATTACK (ver combat.attack_menu_chain)",
+   "outcome_markers": [
+    "struck down"
+   ],
+   "proven": "2026-10-09 campanha caca-2 (corrida de caça)",
+   "notes": "mecânica de morte COMPROVADA (mula abatida)"
+  },
+  {
+   "id": "p-help-buttons-close",
+   "focus": [
+    "dungeonmode/Help",
+    "dungeonmode/Attack"
+   ],
+   "text_markers": [
+    "Okay",
+    "Next"
+   ],
+   "action": "click 'Next'/'Okay'; páginas interativas → click 180,1 (botão Help topo direito) → key LEAVESCREEN",
+   "outcome_markers": [
+    "dungeonmode/Default"
+   ],
+   "proven": "2026-10-09 campanha caca-2 (corrida de caça)",
+   "notes": "todos os overlays de ajuda do DF 53.16 seguem o mesmo padrão de fecho"
+  }
+ ],
+ "stats": {
+  "patterns": 21,
+  "new_this_session": 21,
+  "stuck_events_logged": 200,
+  "jev_nav_decisions": 415,
+  "fallback_nav": 80,
+  "stats_note": "JEV-A=415 decisões (auto 12 / hitl 54 / abstain 349) sobre 1980 totais (JEV-R/M/D incluídos); fallback = ações libertadas por aprovação humana pergunta-a-pergunta + navegação por DSL quando o JEV abstinha."
+ },
+ "stuck_events": [
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'n'",
+   "ts": "2026-10-09T22:41:49",
+   "state_hash": "190a5f7718081e1b6effbd4c4dbea647dee81989",
+   "direction": "n",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "action_loop",
+   "escalation": "break_loop",
+   "detail": "action 'explore:n_stuck' repeated 3x with no progress — blocking it",
+   "ts": "2026-10-09T22:41:54",
+   "state_hash": "da9ad23bd7e2a05eadcde60c6907d03fd709de09",
+   "action_id": "explore:n_stuck",
+   "blocked_action_id": "explore:n_stuck",
+   "repeat": 3
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 4 validations — forcing an exploration move towards 'e'",
+   "ts": "2026-10-09T22:41:55",
+   "state_hash": "da9ad23bd7e2a05eadcde60c6907d03fd709de09",
+   "direction": "e",
+   "repeat": 4,
+   "stuck_round": 1
+  },
+  {
+   "kind": "action_loop",
+   "escalation": "break_loop",
+   "detail": "action 'explore:e_stuck' repeated 3x with no progress — blocking it",
+   "ts": "2026-10-09T22:42:00",
+   "state_hash": "ab829e182568119584b9662f7d5e4e93c548c029",
+   "action_id": "explore:e_stuck",
+   "blocked_action_id": "explore:e_stuck",
+   "repeat": 3
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 4 validations — forcing an exploration move towards 's'",
+   "ts": "2026-10-09T22:42:02",
+   "state_hash": "ab829e182568119584b9662f7d5e4e93c548c029",
+   "direction": "s",
+   "repeat": 4,
+   "stuck_round": 1
+  },
+  {
+   "kind": "action_loop",
+   "escalation": "break_loop",
+   "detail": "action 'hunt:search_prey' repeated 3x with no progress — blocking it",
+   "ts": "2026-10-09T22:42:24",
+   "state_hash": "0ac09aaf3fae7876648c97a807f35ea00db644ad",
+   "action_id": "hunt:search_prey",
+   "blocked_action_id": "hunt:search_prey",
+   "repeat": 3
+  },
+  {
+   "kind": "action_loop",
+   "escalation": "break_loop",
+   "detail": "action 'explore:shrubland_temperate' repeated 3x with no progress — blocking it",
+   "ts": "2026-10-09T22:42:36",
+   "state_hash": "60ea4da486020441b2bf33860ef4ffcdda35a09d",
+   "action_id": "explore:shrubland_temperate",
+   "blocked_action_id": "explore:shrubland_temperate",
+   "repeat": 3
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 4 validations — forcing an exploration move towards 'w'",
+   "ts": "2026-10-09T22:42:39",
+   "state_hash": "60ea4da486020441b2bf33860ef4ffcdda35a09d",
+   "direction": "w",
+   "repeat": 4,
+   "stuck_round": 1
+  },
+  {
+   "kind": "action_loop",
+   "escalation": "break_loop",
+   "detail": "action 'explore:w_stuck' repeated 3x with no progress — blocking it",
+   "ts": "2026-10-09T22:42:49",
+   "state_hash": "9cb5673b0cbd9205c6923db7de84f41d3a1d070e",
+   "action_id": "explore:w_stuck",
+   "blocked_action_id": "explore:w_stuck",
+   "repeat": 3
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 4 validations — forcing an exploration move towards 'ne'",
+   "ts": "2026-10-09T22:42:56",
+   "state_hash": "9cb5673b0cbd9205c6923db7de84f41d3a1d070e",
+   "direction": "ne",
+   "repeat": 4,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'nw'",
+   "ts": "2026-10-09T22:43:11",
+   "state_hash": "475f64762806a5e493a8f0d1e88b73a5686d5a71",
+   "direction": "nw",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'se'",
+   "ts": "2026-10-09T22:43:24",
+   "state_hash": "7d68e74ec18549c75001923aedd4226ed5c0f7da",
+   "direction": "se",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'sw'",
+   "ts": "2026-10-09T22:43:42",
+   "state_hash": "475f64762806a5e493a8f0d1e88b73a5686d5a71",
+   "direction": "sw",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'n'",
+   "ts": "2026-10-09T22:43:55",
+   "state_hash": "9cb5673b0cbd9205c6923db7de84f41d3a1d070e",
+   "direction": "n",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'e'",
+   "ts": "2026-10-09T22:44:11",
+   "state_hash": "25fd5d47d43aa0075d72251a8354329a225106c4",
+   "direction": "e",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 's'",
+   "ts": "2026-10-09T22:44:28",
+   "state_hash": "475f64762806a5e493a8f0d1e88b73a5686d5a71",
+   "direction": "s",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "action_loop",
+   "escalation": "break_loop",
+   "detail": "action 'explore:s_stuck' repeated 3x with no progress — blocking it",
+   "ts": "2026-10-09T22:44:36",
+   "state_hash": "60ea4da486020441b2bf33860ef4ffcdda35a09d",
+   "action_id": "explore:s_stuck",
+   "blocked_action_id": "explore:s_stuck",
+   "repeat": 3
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 4 validations — forcing an exploration move towards 'w'",
+   "ts": "2026-10-09T22:44:39",
+   "state_hash": "60ea4da486020441b2bf33860ef4ffcdda35a09d",
+   "direction": "w",
+   "repeat": 4,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'ne'",
+   "ts": "2026-10-09T22:44:56",
+   "state_hash": "9cb5673b0cbd9205c6923db7de84f41d3a1d070e",
+   "direction": "ne",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "action_loop",
+   "escalation": "break_loop",
+   "detail": "action 'explore:ne_stuck' repeated 3x with no progress — blocking it",
+   "ts": "2026-10-09T22:45:09",
+   "state_hash": "475f64762806a5e493a8f0d1e88b73a5686d5a71",
+   "action_id": "explore:ne_stuck",
+   "blocked_action_id": "explore:ne_stuck",
+   "repeat": 3
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 4 validations — forcing an exploration move towards 'nw'",
+   "ts": "2026-10-09T22:45:17",
+   "state_hash": "475f64762806a5e493a8f0d1e88b73a5686d5a71",
+   "direction": "nw",
+   "repeat": 4,
+   "stuck_round": 1
+  },
+  {
+   "kind": "action_loop",
+   "escalation": "break_loop",
+   "detail": "action 'explore:nw_stuck' repeated 3x with no progress — blocking it",
+   "ts": "2026-10-09T22:45:26",
+   "state_hash": "7d68e74ec18549c75001923aedd4226ed5c0f7da",
+   "action_id": "explore:nw_stuck",
+   "blocked_action_id": "explore:nw_stuck",
+   "repeat": 3
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 4 validations — forcing an exploration move towards 'se'",
+   "ts": "2026-10-09T22:45:29",
+   "state_hash": "7d68e74ec18549c75001923aedd4226ed5c0f7da",
+   "direction": "se",
+   "repeat": 4,
+   "stuck_round": 1
+  },
+  {
+   "kind": "action_loop",
+   "escalation": "break_loop",
+   "detail": "action 'explore:se_stuck' repeated 3x with no progress — blocking it",
+   "ts": "2026-10-09T22:45:44",
+   "state_hash": "475f64762806a5e493a8f0d1e88b73a5686d5a71",
+   "action_id": "explore:se_stuck",
+   "blocked_action_id": "explore:se_stuck",
+   "repeat": 3
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 4 validations — forcing an exploration move towards 'sw'",
+   "ts": "2026-10-09T22:45:48",
+   "state_hash": "475f64762806a5e493a8f0d1e88b73a5686d5a71",
+   "direction": "sw",
+   "repeat": 4,
+   "stuck_round": 1
+  },
+  {
+   "kind": "action_loop",
+   "escalation": "break_loop",
+   "detail": "action 'explore:sw_stuck' repeated 3x with no progress — blocking it",
+   "ts": "2026-10-09T22:45:57",
+   "state_hash": "9cb5673b0cbd9205c6923db7de84f41d3a1d070e",
+   "action_id": "explore:sw_stuck",
+   "blocked_action_id": "explore:sw_stuck",
+   "repeat": 3
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 4 validations — forcing an exploration move towards 'n'",
+   "ts": "2026-10-09T22:46:00",
+   "state_hash": "9cb5673b0cbd9205c6923db7de84f41d3a1d070e",
+   "direction": "n",
+   "repeat": 4,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'e'",
+   "ts": "2026-10-09T22:46:31",
+   "state_hash": "81df6662a7a8376f374e608acaa93e8711155cb1",
+   "direction": "e",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 's'",
+   "ts": "2026-10-09T22:46:40",
+   "state_hash": "b7edca6933a9ba80cc6ff57db679d51aa4ebbea9",
+   "direction": "s",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'w'",
+   "ts": "2026-10-09T22:46:48",
+   "state_hash": "7ed542fe891a8f611add8127bdd618f7f53dc030",
+   "direction": "w",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'ne'",
+   "ts": "2026-10-09T22:46:57",
+   "state_hash": "ee6063a334b86665292b4bc4a9a9c2414f61c5c3",
+   "direction": "ne",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'nw'",
+   "ts": "2026-10-09T22:47:05",
+   "state_hash": "b7edca6933a9ba80cc6ff57db679d51aa4ebbea9",
+   "direction": "nw",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'se'",
+   "ts": "2026-10-09T22:47:13",
+   "state_hash": "fead2d19d36cc11bf8257b38c668a90c8f59ad3d",
+   "direction": "se",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'sw'",
+   "ts": "2026-10-09T22:47:22",
+   "state_hash": "b7edca6933a9ba80cc6ff57db679d51aa4ebbea9",
+   "direction": "sw",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'n'",
+   "ts": "2026-10-09T22:47:31",
+   "state_hash": "ee6063a334b86665292b4bc4a9a9c2414f61c5c3",
+   "direction": "n",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'e'",
+   "ts": "2026-10-09T22:47:39",
+   "state_hash": "a678c914a8ae678df31ddf62b12253512d4e51a7",
+   "direction": "e",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 's'",
+   "ts": "2026-10-09T22:47:47",
+   "state_hash": "b7edca6933a9ba80cc6ff57db679d51aa4ebbea9",
+   "direction": "s",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'w'",
+   "ts": "2026-10-09T22:47:56",
+   "state_hash": "08e6ca152493d79950c7a685d054aa7a0ea27b98",
+   "direction": "w",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'ne'",
+   "ts": "2026-10-09T22:48:09",
+   "state_hash": "6f66ecc35f5fd08dc1dc213a295a7ecbac0317c3",
+   "direction": "ne",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'nw'",
+   "ts": "2026-10-09T22:48:28",
+   "state_hash": "af5eed8a5977729cfd6883cf32f665f7702cecee",
+   "direction": "nw",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'se'",
+   "ts": "2026-10-09T22:48:37",
+   "state_hash": "b9ac991037869b87b252be598fb20e88e1569113",
+   "direction": "se",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'sw'",
+   "ts": "2026-10-09T22:48:45",
+   "state_hash": "5e10cea78903fdf1ccce612b6e2da133bba25b92",
+   "direction": "sw",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'n'",
+   "ts": "2026-10-09T22:48:52",
+   "state_hash": "1a76d2d2170314d4ecb1535d98778f8aa85d9d31",
+   "direction": "n",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'e'",
+   "ts": "2026-10-09T22:49:01",
+   "state_hash": "ff926ebaa96ba3742b459a4ab85a74d1718ea3b7",
+   "direction": "e",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 's'",
+   "ts": "2026-10-09T22:49:11",
+   "state_hash": "5e10cea78903fdf1ccce612b6e2da133bba25b92",
+   "direction": "s",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'w'",
+   "ts": "2026-10-09T22:49:18",
+   "state_hash": "da5e2de59ef3a0af5bdce29a775bb15924cb3344",
+   "direction": "w",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'ne'",
+   "ts": "2026-10-09T22:49:27",
+   "state_hash": "1a76d2d2170314d4ecb1535d98778f8aa85d9d31",
+   "direction": "ne",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'nw'",
+   "ts": "2026-10-09T22:49:35",
+   "state_hash": "5e10cea78903fdf1ccce612b6e2da133bba25b92",
+   "direction": "nw",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'se'",
+   "ts": "2026-10-09T22:49:43",
+   "state_hash": "b9ac991037869b87b252be598fb20e88e1569113",
+   "direction": "se",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'sw'",
+   "ts": "2026-10-09T22:49:51",
+   "state_hash": "5e10cea78903fdf1ccce612b6e2da133bba25b92",
+   "direction": "sw",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'n'",
+   "ts": "2026-10-09T22:49:59",
+   "state_hash": "1a76d2d2170314d4ecb1535d98778f8aa85d9d31",
+   "direction": "n",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'e'",
+   "ts": "2026-10-09T22:50:08",
+   "state_hash": "f78cc430ffd0bbbca0cb90d759ac8ceeef193e3a",
+   "direction": "e",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 's'",
+   "ts": "2026-10-09T22:50:16",
+   "state_hash": "5e10cea78903fdf1ccce612b6e2da133bba25b92",
+   "direction": "s",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'w'",
+   "ts": "2026-10-09T22:50:24",
+   "state_hash": "da5e2de59ef3a0af5bdce29a775bb15924cb3344",
+   "direction": "w",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'ne'",
+   "ts": "2026-10-09T22:50:31",
+   "state_hash": "1a76d2d2170314d4ecb1535d98778f8aa85d9d31",
+   "direction": "ne",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'nw'",
+   "ts": "2026-10-09T22:50:40",
+   "state_hash": "5e10cea78903fdf1ccce612b6e2da133bba25b92",
+   "direction": "nw",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'se'",
+   "ts": "2026-10-09T22:50:52",
+   "state_hash": "7c706d64f4ff5fe21f12420aa96fa4f3a343fc24",
+   "direction": "se",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'sw'",
+   "ts": "2026-10-09T22:51:07",
+   "state_hash": "5e10cea78903fdf1ccce612b6e2da133bba25b92",
+   "direction": "sw",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'n'",
+   "ts": "2026-10-09T22:51:15",
+   "state_hash": "1a76d2d2170314d4ecb1535d98778f8aa85d9d31",
+   "direction": "n",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'e'",
+   "ts": "2026-10-09T22:51:23",
+   "state_hash": "f78cc430ffd0bbbca0cb90d759ac8ceeef193e3a",
+   "direction": "e",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 's'",
+   "ts": "2026-10-09T22:51:38",
+   "state_hash": "5e10cea78903fdf1ccce612b6e2da133bba25b92",
+   "direction": "s",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'w'",
+   "ts": "2026-10-09T22:51:46",
+   "state_hash": "b24a126b9fe008bfc963062f8263b586741faa42",
+   "direction": "w",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'ne'",
+   "ts": "2026-10-09T22:51:55",
+   "state_hash": "7621782d59de0676730cc0aa3e79da36b6989acc",
+   "direction": "ne",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'nw'",
+   "ts": "2026-10-09T22:52:10",
+   "state_hash": "af5eed8a5977729cfd6883cf32f665f7702cecee",
+   "direction": "nw",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'se'",
+   "ts": "2026-10-09T22:52:17",
+   "state_hash": "344b58a91cc4783b269b9bd343c5820abf1ff44a",
+   "direction": "se",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'sw'",
+   "ts": "2026-10-09T22:52:32",
+   "state_hash": "3ec95352dac1f75a0487616d638fda7bcfdbe208",
+   "direction": "sw",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'n'",
+   "ts": "2026-10-09T22:52:40",
+   "state_hash": "158b4ad9c9f28c47f431e052badf6b38893045c5",
+   "direction": "n",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'e'",
+   "ts": "2026-10-09T22:52:47",
+   "state_hash": "f78cc430ffd0bbbca0cb90d759ac8ceeef193e3a",
+   "direction": "e",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 's'",
+   "ts": "2026-10-09T22:53:04",
+   "state_hash": "5e10cea78903fdf1ccce612b6e2da133bba25b92",
+   "direction": "s",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'w'",
+   "ts": "2026-10-09T22:53:13",
+   "state_hash": "da5e2de59ef3a0af5bdce29a775bb15924cb3344",
+   "direction": "w",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'ne'",
+   "ts": "2026-10-09T22:53:21",
+   "state_hash": "7621782d59de0676730cc0aa3e79da36b6989acc",
+   "direction": "ne",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'nw'",
+   "ts": "2026-10-09T22:53:38",
+   "state_hash": "af5eed8a5977729cfd6883cf32f665f7702cecee",
+   "direction": "nw",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'se'",
+   "ts": "2026-10-09T22:54:01",
+   "state_hash": "9c0bfb6c679a25596a828ab734337381b43bd851",
+   "direction": "se",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'sw'",
+   "ts": "2026-10-09T22:54:12",
+   "state_hash": "aa419c55bc92f53aaa60493c6f45b3005dc99c3e",
+   "direction": "sw",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'n'",
+   "ts": "2026-10-09T22:54:20",
+   "state_hash": "df331e5fbb7e54e449cb00b2eebd8c2540c3af51",
+   "direction": "n",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'e'",
+   "ts": "2026-10-09T22:54:37",
+   "state_hash": "99ed8bb4807e02b57eebe17001621b95ef88404c",
+   "direction": "e",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 's'",
+   "ts": "2026-10-09T22:54:47",
+   "state_hash": "aa419c55bc92f53aaa60493c6f45b3005dc99c3e",
+   "direction": "s",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'w'",
+   "ts": "2026-10-09T22:54:59",
+   "state_hash": "a74cc416424f1b247bc294f947528796040767e3",
+   "direction": "w",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'ne'",
+   "ts": "2026-10-09T22:55:07",
+   "state_hash": "df331e5fbb7e54e449cb00b2eebd8c2540c3af51",
+   "direction": "ne",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'nw'",
+   "ts": "2026-10-09T22:55:17",
+   "state_hash": "aa419c55bc92f53aaa60493c6f45b3005dc99c3e",
+   "direction": "nw",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'se'",
+   "ts": "2026-10-09T22:55:25",
+   "state_hash": "9c78eb3df6378a45148e7c5ce584859e022deacb",
+   "direction": "se",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'sw'",
+   "ts": "2026-10-09T22:55:36",
+   "state_hash": "aa419c55bc92f53aaa60493c6f45b3005dc99c3e",
+   "direction": "sw",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'n'",
+   "ts": "2026-10-09T22:55:45",
+   "state_hash": "df331e5fbb7e54e449cb00b2eebd8c2540c3af51",
+   "direction": "n",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'e'",
+   "ts": "2026-10-09T22:56:05",
+   "state_hash": "99ed8bb4807e02b57eebe17001621b95ef88404c",
+   "direction": "e",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 's'",
+   "ts": "2026-10-09T22:56:17",
+   "state_hash": "aa419c55bc92f53aaa60493c6f45b3005dc99c3e",
+   "direction": "s",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'w'",
+   "ts": "2026-10-09T22:56:32",
+   "state_hash": "a74cc416424f1b247bc294f947528796040767e3",
+   "direction": "w",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'ne'",
+   "ts": "2026-10-09T22:56:40",
+   "state_hash": "df331e5fbb7e54e449cb00b2eebd8c2540c3af51",
+   "direction": "ne",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'nw'",
+   "ts": "2026-10-09T22:56:52",
+   "state_hash": "aa419c55bc92f53aaa60493c6f45b3005dc99c3e",
+   "direction": "nw",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'se'",
+   "ts": "2026-10-09T22:57:00",
+   "state_hash": "9c0bfb6c679a25596a828ab734337381b43bd851",
+   "direction": "se",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "replan",
+   "detail": "still stuck after forced exploration (round 2) — LLM re-plan",
+   "ts": "2026-10-09T22:57:08",
+   "state_hash": "9c0bfb6c679a25596a828ab734337381b43bd851",
+   "repeat": 3,
+   "stuck_round": 2
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'sw'",
+   "ts": "2026-10-09T22:57:19",
+   "state_hash": "9c0bfb6c679a25596a828ab734337381b43bd851",
+   "direction": "sw",
+   "repeat": 3,
+   "stuck_round": 3
+  },
+  {
+   "kind": "stuck",
+   "escalation": "replan",
+   "detail": "still stuck after forced exploration (round 4) — LLM re-plan",
+   "ts": "2026-10-09T22:57:28",
+   "state_hash": "9c0bfb6c679a25596a828ab734337381b43bd851",
+   "repeat": 3,
+   "stuck_round": 4
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'n'",
+   "ts": "2026-10-09T22:57:38",
+   "state_hash": "9c0bfb6c679a25596a828ab734337381b43bd851",
+   "direction": "n",
+   "repeat": 3,
+   "stuck_round": 5
+  },
+  {
+   "kind": "stuck",
+   "escalation": "replan",
+   "detail": "still stuck after forced exploration (round 6) — LLM re-plan",
+   "ts": "2026-10-09T22:57:46",
+   "state_hash": "9c0bfb6c679a25596a828ab734337381b43bd851",
+   "repeat": 3,
+   "stuck_round": 6
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'e'",
+   "ts": "2026-10-09T22:57:55",
+   "state_hash": "9c0bfb6c679a25596a828ab734337381b43bd851",
+   "direction": "e",
+   "repeat": 3,
+   "stuck_round": 7
+  },
+  {
+   "kind": "stuck",
+   "escalation": "replan",
+   "detail": "still stuck after forced exploration (round 8) — LLM re-plan",
+   "ts": "2026-10-09T22:58:03",
+   "state_hash": "9c0bfb6c679a25596a828ab734337381b43bd851",
+   "repeat": 3,
+   "stuck_round": 8
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 's'",
+   "ts": "2026-10-09T22:58:13",
+   "state_hash": "9c0bfb6c679a25596a828ab734337381b43bd851",
+   "direction": "s",
+   "repeat": 3,
+   "stuck_round": 9
+  },
+  {
+   "kind": "stuck",
+   "escalation": "replan",
+   "detail": "still stuck after forced exploration (round 10) — LLM re-plan",
+   "ts": "2026-10-09T22:58:23",
+   "state_hash": "9c0bfb6c679a25596a828ab734337381b43bd851",
+   "repeat": 3,
+   "stuck_round": 10
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'w'",
+   "ts": "2026-10-09T22:58:35",
+   "state_hash": "9c0bfb6c679a25596a828ab734337381b43bd851",
+   "direction": "w",
+   "repeat": 3,
+   "stuck_round": 11
+  },
+  {
+   "kind": "stuck",
+   "escalation": "replan",
+   "detail": "still stuck after forced exploration (round 12) — LLM re-plan",
+   "ts": "2026-10-09T22:58:44",
+   "state_hash": "9c0bfb6c679a25596a828ab734337381b43bd851",
+   "repeat": 3,
+   "stuck_round": 12
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'ne'",
+   "ts": "2026-10-09T22:58:53",
+   "state_hash": "9c0bfb6c679a25596a828ab734337381b43bd851",
+   "direction": "ne",
+   "repeat": 3,
+   "stuck_round": 13
+  },
+  {
+   "kind": "stuck",
+   "escalation": "replan",
+   "detail": "still stuck after forced exploration (round 14) — LLM re-plan",
+   "ts": "2026-10-09T22:59:02",
+   "state_hash": "9c0bfb6c679a25596a828ab734337381b43bd851",
+   "repeat": 3,
+   "stuck_round": 14
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'nw'",
+   "ts": "2026-10-09T22:59:14",
+   "state_hash": "9c0bfb6c679a25596a828ab734337381b43bd851",
+   "direction": "nw",
+   "repeat": 3,
+   "stuck_round": 15
+  },
+  {
+   "kind": "stuck",
+   "escalation": "replan",
+   "detail": "still stuck after forced exploration (round 16) — LLM re-plan",
+   "ts": "2026-10-09T22:59:22",
+   "state_hash": "9c0bfb6c679a25596a828ab734337381b43bd851",
+   "repeat": 3,
+   "stuck_round": 16
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'se'",
+   "ts": "2026-10-09T22:59:31",
+   "state_hash": "9c0bfb6c679a25596a828ab734337381b43bd851",
+   "direction": "se",
+   "repeat": 3,
+   "stuck_round": 17
+  },
+  {
+   "kind": "stuck",
+   "escalation": "replan",
+   "detail": "still stuck after forced exploration (round 18) — LLM re-plan",
+   "ts": "2026-10-09T22:59:39",
+   "state_hash": "9c0bfb6c679a25596a828ab734337381b43bd851",
+   "repeat": 3,
+   "stuck_round": 18
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'sw'",
+   "ts": "2026-10-09T22:59:49",
+   "state_hash": "9c0bfb6c679a25596a828ab734337381b43bd851",
+   "direction": "sw",
+   "repeat": 3,
+   "stuck_round": 19
+  },
+  {
+   "kind": "stuck",
+   "escalation": "replan",
+   "detail": "still stuck after forced exploration (round 20) — LLM re-plan",
+   "ts": "2026-10-09T22:59:57",
+   "state_hash": "9c0bfb6c679a25596a828ab734337381b43bd851",
+   "repeat": 3,
+   "stuck_round": 20
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'n'",
+   "ts": "2026-10-09T23:00:09",
+   "state_hash": "9c0bfb6c679a25596a828ab734337381b43bd851",
+   "direction": "n",
+   "repeat": 3,
+   "stuck_round": 21
+  },
+  {
+   "kind": "stuck",
+   "escalation": "replan",
+   "detail": "still stuck after forced exploration (round 22) — LLM re-plan",
+   "ts": "2026-10-09T23:00:17",
+   "state_hash": "9c0bfb6c679a25596a828ab734337381b43bd851",
+   "repeat": 3,
+   "stuck_round": 22
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'e'",
+   "ts": "2026-10-09T23:00:30",
+   "state_hash": "9c0bfb6c679a25596a828ab734337381b43bd851",
+   "direction": "e",
+   "repeat": 3,
+   "stuck_round": 23
+  },
+  {
+   "kind": "stuck",
+   "escalation": "replan",
+   "detail": "still stuck after forced exploration (round 24) — LLM re-plan",
+   "ts": "2026-10-09T23:00:38",
+   "state_hash": "9c0bfb6c679a25596a828ab734337381b43bd851",
+   "repeat": 3,
+   "stuck_round": 24
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 's'",
+   "ts": "2026-10-09T23:00:49",
+   "state_hash": "9c0bfb6c679a25596a828ab734337381b43bd851",
+   "direction": "s",
+   "repeat": 3,
+   "stuck_round": 25
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'w'",
+   "ts": "2026-10-09T23:01:05",
+   "state_hash": "99ed8bb4807e02b57eebe17001621b95ef88404c",
+   "direction": "w",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'ne'",
+   "ts": "2026-10-09T23:01:17",
+   "state_hash": "f4d5ed21da30bf700f35ab5efe31ed602caacd86",
+   "direction": "ne",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'nw'",
+   "ts": "2026-10-09T23:01:25",
+   "state_hash": "9c0bfb6c679a25596a828ab734337381b43bd851",
+   "direction": "nw",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'se'",
+   "ts": "2026-10-09T23:01:33",
+   "state_hash": "dfcc5455078c1c6f642bebf7000d6908cd2b883a",
+   "direction": "se",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'sw'",
+   "ts": "2026-10-09T23:01:46",
+   "state_hash": "22cb50bb6b84fdf2d1e38b69e4d04a9906ff43f5",
+   "direction": "sw",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "replan",
+   "detail": "still stuck after forced exploration (round 2) — LLM re-plan",
+   "ts": "2026-10-09T23:01:57",
+   "state_hash": "22cb50bb6b84fdf2d1e38b69e4d04a9906ff43f5",
+   "repeat": 3,
+   "stuck_round": 2
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'n'",
+   "ts": "2026-10-09T23:02:10",
+   "state_hash": "22cb50bb6b84fdf2d1e38b69e4d04a9906ff43f5",
+   "direction": "n",
+   "repeat": 3,
+   "stuck_round": 3
+  },
+  {
+   "kind": "stuck",
+   "escalation": "replan",
+   "detail": "still stuck after forced exploration (round 4) — LLM re-plan",
+   "ts": "2026-10-09T23:02:21",
+   "state_hash": "22cb50bb6b84fdf2d1e38b69e4d04a9906ff43f5",
+   "repeat": 3,
+   "stuck_round": 4
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'e'",
+   "ts": "2026-10-09T23:02:35",
+   "state_hash": "22cb50bb6b84fdf2d1e38b69e4d04a9906ff43f5",
+   "direction": "e",
+   "repeat": 3,
+   "stuck_round": 5
+  },
+  {
+   "kind": "stuck",
+   "escalation": "replan",
+   "detail": "still stuck after forced exploration (round 6) — LLM re-plan",
+   "ts": "2026-10-09T23:02:46",
+   "state_hash": "22cb50bb6b84fdf2d1e38b69e4d04a9906ff43f5",
+   "repeat": 3,
+   "stuck_round": 6
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 's'",
+   "ts": "2026-10-09T23:03:00",
+   "state_hash": "22cb50bb6b84fdf2d1e38b69e4d04a9906ff43f5",
+   "direction": "s",
+   "repeat": 3,
+   "stuck_round": 7
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'w'",
+   "ts": "2026-10-09T23:03:11",
+   "state_hash": "6db4416c9b210616b5e17e2e07afc526cd29714e",
+   "direction": "w",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'ne'",
+   "ts": "2026-10-09T23:03:22",
+   "state_hash": "d882fa61eb10beb3399837eddb5d765a132ca077",
+   "direction": "ne",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'nw'",
+   "ts": "2026-10-09T23:03:33",
+   "state_hash": "22cb50bb6b84fdf2d1e38b69e4d04a9906ff43f5",
+   "direction": "nw",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "replan",
+   "detail": "still stuck after forced exploration (round 2) — LLM re-plan",
+   "ts": "2026-10-09T23:03:43",
+   "state_hash": "22cb50bb6b84fdf2d1e38b69e4d04a9906ff43f5",
+   "repeat": 3,
+   "stuck_round": 2
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'se'",
+   "ts": "2026-10-09T23:04:15",
+   "state_hash": "71382d84c6b6a9c00661ecdf8d0e244d54624c6f",
+   "direction": "se",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'sw'",
+   "ts": "2026-10-09T23:04:25",
+   "state_hash": "a47f29925684bbbdb299fc54f58970ed57ea3fb0",
+   "direction": "sw",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'n'",
+   "ts": "2026-10-09T23:04:33",
+   "state_hash": "899d3183ccf0c19eb7024d45495a4b816f9292d6",
+   "direction": "n",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'e'",
+   "ts": "2026-10-09T23:04:45",
+   "state_hash": "6db4416c9b210616b5e17e2e07afc526cd29714e",
+   "direction": "e",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 's'",
+   "ts": "2026-10-09T23:04:56",
+   "state_hash": "a47f29925684bbbdb299fc54f58970ed57ea3fb0",
+   "direction": "s",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'w'",
+   "ts": "2026-10-09T23:05:05",
+   "state_hash": "a6bdea853a72c4ba9f756a35f3bf77c0ff7a0813",
+   "direction": "w",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'ne'",
+   "ts": "2026-10-09T23:05:20",
+   "state_hash": "2c6c2200c16e7ca9428e965d24454e4620cf9339",
+   "direction": "ne",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'nw'",
+   "ts": "2026-10-09T23:05:28",
+   "state_hash": "2dce3358a229647880d5648aef994fdf10d913f8",
+   "direction": "nw",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'se'",
+   "ts": "2026-10-09T23:05:42",
+   "state_hash": "ace3b7696465c31cf2f4baf09c2c3632949e0e10",
+   "direction": "se",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'sw'",
+   "ts": "2026-10-09T23:05:49",
+   "state_hash": "6a2471af0ff67c50514b3112052ab247bc971515",
+   "direction": "sw",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'n'",
+   "ts": "2026-10-09T23:05:57",
+   "state_hash": "2c6c2200c16e7ca9428e965d24454e4620cf9339",
+   "direction": "n",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'e'",
+   "ts": "2026-10-09T23:06:12",
+   "state_hash": "1953b277a426c792a0d09944fd4dbbc6d92a48c9",
+   "direction": "e",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 's'",
+   "ts": "2026-10-09T23:06:20",
+   "state_hash": "2dce3358a229647880d5648aef994fdf10d913f8",
+   "direction": "s",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'w'",
+   "ts": "2026-10-09T23:06:34",
+   "state_hash": "fb448cff57eee409ee7c123016c2810a6504e9d8",
+   "direction": "w",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'ne'",
+   "ts": "2026-10-09T23:06:42",
+   "state_hash": "4ab31c16b193f6e06d2c430cf6ff057d29c172f6",
+   "direction": "ne",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'nw'",
+   "ts": "2026-10-09T23:06:57",
+   "state_hash": "4aff36586448fad508636426a4d981abf9bad5f7",
+   "direction": "nw",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'se'",
+   "ts": "2026-10-09T23:07:09",
+   "state_hash": "e7f3d80bc2cdfe3707a606a841b8f945cd50e27e",
+   "direction": "se",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'sw'",
+   "ts": "2026-10-09T23:07:23",
+   "state_hash": "4aff36586448fad508636426a4d981abf9bad5f7",
+   "direction": "sw",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'n'",
+   "ts": "2026-10-09T23:07:31",
+   "state_hash": "b0f2a848a11bcde5a36c30cb63efecb43875afa8",
+   "direction": "n",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'e'",
+   "ts": "2026-10-09T23:07:40",
+   "state_hash": "3ff17a4b902e3d36435b507c06e37d0e58c074c8",
+   "direction": "e",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 's'",
+   "ts": "2026-10-09T23:07:51",
+   "state_hash": "ff1362bb50c29171997de34c91bb2e8e5bc5c0e9",
+   "direction": "s",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'w'",
+   "ts": "2026-10-09T23:08:35",
+   "state_hash": "57a745f5e62d2daeaa1ed193dcf0331ec607e1f2",
+   "direction": "w",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'ne'",
+   "ts": "2026-10-09T23:08:44",
+   "state_hash": "3ce2c33534cd6a47b744617d75b3161949287382",
+   "direction": "ne",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'nw'",
+   "ts": "2026-10-09T23:08:54",
+   "state_hash": "fead2d19d36cc11bf8257b38c668a90c8f59ad3d",
+   "direction": "nw",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'se'",
+   "ts": "2026-10-09T23:09:05",
+   "state_hash": "e55ca6699502d8396593def3b57b0e8aec1b5d27",
+   "direction": "se",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'sw'",
+   "ts": "2026-10-09T23:09:15",
+   "state_hash": "fead2d19d36cc11bf8257b38c668a90c8f59ad3d",
+   "direction": "sw",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'n'",
+   "ts": "2026-10-09T23:09:36",
+   "state_hash": "29699cb5c20aa7a7a2a337356567d527debd4709",
+   "direction": "n",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'e'",
+   "ts": "2026-10-09T23:09:44",
+   "state_hash": "15706c2c4ac34df2f583b099702039d95bba83db",
+   "direction": "e",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 's'",
+   "ts": "2026-10-09T23:09:55",
+   "state_hash": "fead2d19d36cc11bf8257b38c668a90c8f59ad3d",
+   "direction": "s",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'w'",
+   "ts": "2026-10-09T23:10:03",
+   "state_hash": "a678c914a8ae678df31ddf62b12253512d4e51a7",
+   "direction": "w",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'ne'",
+   "ts": "2026-10-09T23:10:11",
+   "state_hash": "29699cb5c20aa7a7a2a337356567d527debd4709",
+   "direction": "ne",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'nw'",
+   "ts": "2026-10-09T23:10:21",
+   "state_hash": "fead2d19d36cc11bf8257b38c668a90c8f59ad3d",
+   "direction": "nw",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'se'",
+   "ts": "2026-10-09T23:10:33",
+   "state_hash": "e55ca6699502d8396593def3b57b0e8aec1b5d27",
+   "direction": "se",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'sw'",
+   "ts": "2026-10-09T23:10:52",
+   "state_hash": "fead2d19d36cc11bf8257b38c668a90c8f59ad3d",
+   "direction": "sw",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'n'",
+   "ts": "2026-10-09T23:11:00",
+   "state_hash": "676cec387b7c817b38d74424e44e187de7fdffb9",
+   "direction": "n",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'e'",
+   "ts": "2026-10-09T23:11:07",
+   "state_hash": "3f724a5be973ae8bb1866fb0a13b3fe3526643b7",
+   "direction": "e",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 's'",
+   "ts": "2026-10-09T23:11:19",
+   "state_hash": "eb082418de1dc4a1c7a7deac747a7a906ab15342",
+   "direction": "s",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'w'",
+   "ts": "2026-10-09T23:11:26",
+   "state_hash": "81df6662a7a8376f374e608acaa93e8711155cb1",
+   "direction": "w",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'ne'",
+   "ts": "2026-10-09T23:11:34",
+   "state_hash": "676cec387b7c817b38d74424e44e187de7fdffb9",
+   "direction": "ne",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'nw'",
+   "ts": "2026-10-09T23:11:45",
+   "state_hash": "eb082418de1dc4a1c7a7deac747a7a906ab15342",
+   "direction": "nw",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'se'",
+   "ts": "2026-10-09T23:11:57",
+   "state_hash": "e55ca6699502d8396593def3b57b0e8aec1b5d27",
+   "direction": "se",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'sw'",
+   "ts": "2026-10-09T23:12:08",
+   "state_hash": "eb082418de1dc4a1c7a7deac747a7a906ab15342",
+   "direction": "sw",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'n'",
+   "ts": "2026-10-09T23:12:16",
+   "state_hash": "676cec387b7c817b38d74424e44e187de7fdffb9",
+   "direction": "n",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'e'",
+   "ts": "2026-10-09T23:12:23",
+   "state_hash": "15706c2c4ac34df2f583b099702039d95bba83db",
+   "direction": "e",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 's'",
+   "ts": "2026-10-09T23:12:34",
+   "state_hash": "fead2d19d36cc11bf8257b38c668a90c8f59ad3d",
+   "direction": "s",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'w'",
+   "ts": "2026-10-09T23:12:52",
+   "state_hash": "a678c914a8ae678df31ddf62b12253512d4e51a7",
+   "direction": "w",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "replan",
+   "detail": "still stuck after forced exploration (round 2) — LLM re-plan",
+   "ts": "2026-10-09T23:13:12",
+   "state_hash": "a678c914a8ae678df31ddf62b12253512d4e51a7",
+   "repeat": 3,
+   "stuck_round": 2
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'ne'",
+   "ts": "2026-10-09T23:13:46",
+   "state_hash": "a678c914a8ae678df31ddf62b12253512d4e51a7",
+   "direction": "ne",
+   "repeat": 3,
+   "stuck_round": 3
+  },
+  {
+   "kind": "stuck",
+   "escalation": "replan",
+   "detail": "still stuck after forced exploration (round 4) — LLM re-plan",
+   "ts": "2026-10-09T23:14:32",
+   "state_hash": "a678c914a8ae678df31ddf62b12253512d4e51a7",
+   "repeat": 3,
+   "stuck_round": 4
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'nw'",
+   "ts": "2026-10-09T23:14:40",
+   "state_hash": "a678c914a8ae678df31ddf62b12253512d4e51a7",
+   "direction": "nw",
+   "repeat": 3,
+   "stuck_round": 5
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'se'",
+   "ts": "2026-10-09T23:14:47",
+   "state_hash": "15706c2c4ac34df2f583b099702039d95bba83db",
+   "direction": "se",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'sw'",
+   "ts": "2026-10-09T23:14:55",
+   "state_hash": "a678c914a8ae678df31ddf62b12253512d4e51a7",
+   "direction": "sw",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'n'",
+   "ts": "2026-10-09T23:15:03",
+   "state_hash": "18ba45cbfb62e35c5b8827e72ab4223bb1f4ed05",
+   "direction": "n",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "replan",
+   "detail": "still stuck after forced exploration (round 2) — LLM re-plan",
+   "ts": "2026-10-09T23:15:09",
+   "state_hash": "18ba45cbfb62e35c5b8827e72ab4223bb1f4ed05",
+   "repeat": 3,
+   "stuck_round": 2
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'e'",
+   "ts": "2026-10-09T23:15:17",
+   "state_hash": "18ba45cbfb62e35c5b8827e72ab4223bb1f4ed05",
+   "direction": "e",
+   "repeat": 3,
+   "stuck_round": 3
+  },
+  {
+   "kind": "stuck",
+   "escalation": "replan",
+   "detail": "still stuck after forced exploration (round 4) — LLM re-plan",
+   "ts": "2026-10-09T23:15:25",
+   "state_hash": "18ba45cbfb62e35c5b8827e72ab4223bb1f4ed05",
+   "repeat": 3,
+   "stuck_round": 4
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 's'",
+   "ts": "2026-10-09T23:15:34",
+   "state_hash": "18ba45cbfb62e35c5b8827e72ab4223bb1f4ed05",
+   "direction": "s",
+   "repeat": 3,
+   "stuck_round": 5
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'w'",
+   "ts": "2026-10-09T23:15:50",
+   "state_hash": "919cc42ef1cf6dd753327fd3536873c4c8d1d02f",
+   "direction": "w",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'ne'",
+   "ts": "2026-10-09T23:16:01",
+   "state_hash": "f08642dab9f6342efb47fad17168e3f42bf4fd06",
+   "direction": "ne",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'nw'",
+   "ts": "2026-10-09T23:16:10",
+   "state_hash": "6f05f951d985975e8a6c5192b021d3b9ac8172f9",
+   "direction": "nw",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'se'",
+   "ts": "2026-10-09T23:16:26",
+   "state_hash": "568eae0c1f6cddb1a70754fd63aefbc8a4f6279e",
+   "direction": "se",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'sw'",
+   "ts": "2026-10-09T23:16:34",
+   "state_hash": "6f05f951d985975e8a6c5192b021d3b9ac8172f9",
+   "direction": "sw",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'n'",
+   "ts": "2026-10-09T23:16:46",
+   "state_hash": "f08642dab9f6342efb47fad17168e3f42bf4fd06",
+   "direction": "n",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'e'",
+   "ts": "2026-10-09T23:16:56",
+   "state_hash": "271658729b4d12021b9ce1ee974b2f97260ff62d",
+   "direction": "e",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 's'",
+   "ts": "2026-10-09T23:17:04",
+   "state_hash": "6f05f951d985975e8a6c5192b021d3b9ac8172f9",
+   "direction": "s",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'w'",
+   "ts": "2026-10-09T23:17:12",
+   "state_hash": "919cc42ef1cf6dd753327fd3536873c4c8d1d02f",
+   "direction": "w",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'ne'",
+   "ts": "2026-10-09T23:17:24",
+   "state_hash": "f08642dab9f6342efb47fad17168e3f42bf4fd06",
+   "direction": "ne",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'nw'",
+   "ts": "2026-10-09T23:17:32",
+   "state_hash": "6f05f951d985975e8a6c5192b021d3b9ac8172f9",
+   "direction": "nw",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'se'",
+   "ts": "2026-10-09T23:18:10",
+   "state_hash": "568eae0c1f6cddb1a70754fd63aefbc8a4f6279e",
+   "direction": "se",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'sw'",
+   "ts": "2026-10-09T23:19:04",
+   "state_hash": "6f05f951d985975e8a6c5192b021d3b9ac8172f9",
+   "direction": "sw",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'n'",
+   "ts": "2026-10-09T23:19:51",
+   "state_hash": "f08642dab9f6342efb47fad17168e3f42bf4fd06",
+   "direction": "n",
+   "repeat": 3,
+   "stuck_round": 1
+  },
+  {
+   "kind": "stuck",
+   "escalation": "force_explore",
+   "detail": "state unchanged for 3 validations — forcing an exploration move towards 'e'",
+   "ts": "2026-10-09T23:20:30",
+   "state_hash": "271658729b4d12021b9ce1ee974b2f97260ff62d",
+   "direction": "e",
+   "repeat": 3,
+   "stuck_round": 1
+  }
+ ]
+}

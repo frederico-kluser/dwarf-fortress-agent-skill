@@ -60,6 +60,7 @@ from ..jev.fleet import build_action, build_doubt, build_memory, build_retrieval
 from .candidates import generate_actions
 from .config import load_config
 from .executor import MacroExecutor
+from .stuck import StuckDetector, StuckEvent
 from .types import (
     ControlState,
     DecisionRecord,
@@ -485,6 +486,13 @@ class AgentLoop:
         approval_checker: :class:`ApprovalChecker` — aprovações humanas já
             registadas.  Por omissão :class:`NeverApproved` (diz sempre que não),
             pelo que o comportamento do loop não muda sem uma app ligada.
+        stuck: :class:`~.stuck.StuckDetector` (ou falso) — deteção de
+            stuck/loop/morte/dano; por omissão o detetor real com registo na
+            biblioteca de padrões.  Eventos publicam ``stuck_alert``; a escada
+            força movimento de exploração, pede re-plano ou quebra loops de
+            ações (nunca repete a ação que falhou 3×).
+        replan_fn: ``(state, StuckEvent) -> str | None`` — re-plano do LLM na
+            escalada ``replan``; a dica entra no objetivo dos passos seguintes.
     """
 
     def __init__(
@@ -509,6 +517,8 @@ class AgentLoop:
         candidates_fn: Callable[..., Sequence[MacroAction]] = generate_actions,
         approval_checker: Any = None,
         logger: Any = None,
+        stuck: Any = None,
+        replan_fn: Callable[[Any, StuckEvent], Any] | None = None,
     ) -> None:
         if isinstance(config, Mapping):
             config = load_config(meta=config)
@@ -531,6 +541,11 @@ class AgentLoop:
         self.candidates_fn = candidates_fn
         self.approval_checker = approval_checker if approval_checker is not None else NeverApproved()
         self.executor = executor or MacroExecutor(game, self.config)
+        # anti-congelamento: detetor de stuck/loop/morte/dano (injetável p/ testes)
+        self.stuck: Any = stuck if stuck is not None else StuckDetector()
+        self.replan_fn = replan_fn
+        self._last_action_id: str | None = None
+        self._replan_hint: str | None = None
 
         self._lock = threading.Lock()
         self._stopped = False
@@ -832,12 +847,28 @@ class AgentLoop:
 
         # -- 1. ler estado -------------------------------------------------
         state = self.game.snapshot()
+        # -- 1.5. anti-congelamento: stuck/loop/morte/dano -----------------
+        stuck_event = self.stuck.observe(state, action_id=self._last_action_id)
+        if stuck_event is not None:
+            self.publish("stuck_alert", {"event": stuck_event.as_dict(), "ts": self.clock()})
+            self.log.warning("stuck detector: %s (%s)", stuck_event.kind, stuck_event.detail)
+            if stuck_event.kind == "death":
+                # morte: nada mais se executa; o passo reporta e o humano decide
+                metrics = self._publish_metrics(state)
+                self._publish_spend()
+                return self._result(
+                    index, STATUS_KILLED, control, started,
+                    errors=(stuck_event.detail,), usage=usage, metrics=metrics,
+                )
         # -- 2. traduzir o ecrã (fire-and-forget) --------------------------
         self._maybe_translate(state)
 
         # -- 3. estado crítico em EN (orçamentado) -------------------------
         narrative_tail = self._narrative()
         objective = self._objective_text()
+        if self._replan_hint:
+            # dica do re-plano (LLM) entra no estado que o JEV-A/gerador veem
+            objective = f"{objective}\nRE-PLAN HINT: {self._replan_hint}"
         recent_events = [
             event.text for event in state.recent_events if getattr(event, "text", "")
         ][-self.config.max_events:]
@@ -907,7 +938,46 @@ class AgentLoop:
         # -- 6. candidatos + JEV-A ∥ JEV-D ---------------------------------
         candidates = list(self.candidates_fn(
             state, self.config, max_candidates=self.config.max_candidates,
+            objective=objective,
         ))
+        # -- 6.1. anti-congelamento: nunca repetir ação falhada em loop ----
+        blocked = self.stuck.blocked_actions()
+        if blocked:
+            kept = [action for action in candidates if action.id not in blocked]
+            if [action for action in kept if not action.is_exit]:
+                candidates = kept
+            else:  # só restou a saída: mantém as reservas mas marca o bloqueio
+                errors.append(
+                    "every candidate was blocked by the action-loop breaker: "
+                    + ", ".join(sorted(blocked))
+                )
+        # -- 6.2. escada de escalação do stuck ----------------------------
+        #   force_explore/retreat → executa JÁ (anti-congelamento: a personagem
+        #   tem de se mexer, mesmo em checkpoint — é um movimento mínimo, nunca
+        #   um ataque); replan → pede o re-plano (LLM) e segue para o JEV.
+        if stuck_event is not None and stuck_event.escalation in ("force_explore", "retreat"):
+            forced = self._forced_action(candidates, stuck_event)
+            if forced is not None:
+                executed = self.executor.execute(forced, state)
+                status = _status_for(executed)
+                self._last_action_id = forced.id
+                self.publish("action_executed", {
+                    "action_id": forced.id, "ts": self.clock(),
+                    "decision": {"stuck_escalation": stuck_event.escalation},
+                })
+                if executed.errors:
+                    errors.extend(executed.errors)
+                metrics = self._publish_metrics(state)
+                self._publish_spend()
+                return self._result(
+                    index, status, control, started, action=forced, executed=executed,
+                    errors=tuple(errors), usage=usage, state_summary=state_summary,
+                    narration=narration, metrics=metrics,
+                )
+        if stuck_event is not None and stuck_event.escalation == "replan":
+            hint = self._replan(state, stuck_event, errors)
+            if hint:
+                self._replan_hint = str(hint)
         # A opção de saída NÃO vai como candidata: o build_action acrescenta a
         # dele (``exit_key="other"``) e recusa um candidato com esse id. A lista
         # que o JEV vê tem, por isso, exatamente uma opção de saída — a do
@@ -1010,6 +1080,9 @@ class AgentLoop:
             blocked_reason = None
         if blocked_reason is None and action is not None:
             executed = self.executor.execute(action, state)
+            # detetor de loop de ações: só ações EXECUTADAS contam como falhadas
+            # (uma ação retida à espera de aprovação nunca chegou a falhar)
+            self._last_action_id = action.id
             status = _status_for(executed)
             if status == STATUS_EXECUTED:
                 # Evento aditivo: a ação despachou mesmo (com ou sem libertação
@@ -1047,6 +1120,60 @@ class AgentLoop:
         )
 
     # ------------------------------------------------------------ sub-passos
+
+    def _forced_action(
+        self, candidates: Sequence[MacroAction], event: StuckEvent
+    ) -> MacroAction | None:
+        """Ação forçada da escada de escalação (exploração/retirada).
+
+        ``force_explore`` procura um candidato ``explore`` com o rumo do evento
+        (ou sintetiza um — a DSL ``move`` é verificada); ``retreat`` prefere um
+        candidato ``flee``. Sem ação segura devolve ``None`` e o passo segue
+        pelo fluxo normal do JEV.
+        """
+        verb_wanted = "flee" if event.escalation == "retreat" else "explore"
+        for action in candidates:
+            if action.is_exit:
+                continue
+            if (action.verb or action.id.split(":", 1)[0]) != verb_wanted:
+                continue
+            if event.direction:
+                direction = str((action.params or {}).get("direction") or "")
+                if verb_wanted == "explore" and direction != event.direction:
+                    continue
+            return action
+        if verb_wanted != "explore" or not event.direction:
+            return None
+        return MacroAction(
+            id=f"explore:{event.direction}_stuck",
+            name_en=f"Forced exploration towards {event.direction}",
+            description_en=(
+                "Stuck-detector escalation: the state was unchanged for several "
+                f"validations — move towards {event.direction} (unvisited direction) "
+                "to break the freeze."
+            ),
+            target=event.direction, verb="explore", category="objective", priority=10,
+            params={"direction": event.direction, "steps": 3},
+        )
+
+    def _replan(self, state: Any, event: StuckEvent, errors: list[str]) -> str | None:
+        """Escalada ``replan``: chama o re-plano do LLM (``replan_fn``) e publica.
+
+        Sem ``replan_fn`` publica o pedido de re-plano na mesma (o driver humano
+        responde); a dica devolvida entra no objetivo dos passos seguintes.
+        """
+        hint: Any = None
+        if self.replan_fn is not None:
+            try:
+                hint = self.replan_fn(state, event)
+            except Exception as exc:  # o re-plano nunca rebenta o passo
+                errors.append(f"replan_fn failed: {exc}")
+                self.log.warning("replan_fn failed", exc_info=True)
+        self.publish("replan", {
+            "hint": hint if isinstance(hint, str) else None,
+            "detail": event.detail, "ts": self.clock(),
+        })
+        return hint if isinstance(hint, str) and hint.strip() else None
 
     def _maybe_translate(self, state: Any) -> None:
         text = getattr(state, "screen_text", "") or ""

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import signal
 import sys
 from pathlib import Path
@@ -115,6 +116,65 @@ def test_check_expect_focus_screen_e_alternativas():
     assert check_expect("screen: welcome (anotação)", "x", "Welcome to DF")
     assert check_expect(["focus:a", "focus:b"], "b/Default", "")
     assert check_expect("", "qualquer", "qualquer")  # vazio é sempre verdade (soft)
+
+
+def test_check_expect_negacao_not():
+    """``not:<x>`` = ausência — o overlay de boas-vindas já não está no ecrã."""
+    assert check_expect("not:Welcome", "new_region/Basic", "World map size")
+    assert not check_expect("not:Welcome", "x", "Welcome to Dwarf Fortress")
+    # lista: TODAS as negações têm de verificar; havendo positivas, uma tem de casar
+    assert check_expect(["not:Welcome", "not:Okay"], "new_region/Basic", "World map size")
+    assert not check_expect(["not:Welcome", "not:Okay"], "x", "Welcome ... Okay")
+    assert check_expect(["focus:new_region", "not:Okay"], "new_region/Basic", "World map")
+    assert not check_expect(["focus:new_region", "not:Okay"], "new_region/Basic", "press Okay")
+
+
+def test_steps_json_dismiss_welcome_aceita_overlay_ja_dispensado():
+    steps = {s["name"]: s for s in load_steps()}
+    expect = steps["dismiss_welcome"]["expect"]
+    assert check_expect(expect, "new_region/Basic", "World map size\n│ Create world │")
+    assert not check_expect(expect, "new_region/Basic", "Welcome to Dwarf Fortress")
+
+
+def test_steps_json_choose_adventurer_aceita_destiny_direto_e_labels_pt_en():
+    """Regressao: o update do mundo pode ser instantaneo/ausente — o passo tem
+    de aceitar ja estar no destiny e clicar tanto ``Aventura`` (UI PT) como
+    ``Adventurer`` (UI EN).  O marcador do destiny é REAL (``Onward to
+    character creation`` está no ecrã verdadeiro) — o antigo
+    ``focus:setupadventure (...)`` casava sempre e passava em falso."""
+    steps = {s["name"]: s for s in load_steps()}
+    step = steps["choose_adventurer"]
+    expect = step["expect"]
+    # antes do clique (choose_game_type) nada casa; depois, qualquer um dos destinos
+    assert not check_expect(expect, "choose_game_type", "Selecione um tipo de jogo\nAventura")
+    assert check_expect(expect, "update_region", "Passing a few weeks")
+    assert check_expect(expect, "setupadventure",
+                        "Adventurer, choose your destiny!\n│ Onward to character creation │")
+    # sem o botão real, o expect NÃO passa (regressão do expect vazio)
+    assert not check_expect(expect, "setupadventure", "Adventurer, choose your destiny!")
+    directive = step["keys"][0]
+    assert directive.startswith("click_re ")
+    pattern = directive[len("click_re "):]
+    assert re.search(pattern, "│   Aventura   │")
+    assert re.search(pattern, "│ Adventurer  │")
+
+
+def test_steps_json_poll_worldgen_nao_casa_com_o_loading():
+    """Regressao: o needle ``new_region`` casava com ``new_region/Loading`` e o
+    poll seguia para ``Play now`` com o worldgen ainda a decorrer."""
+    steps = {s["name"]: s for s in load_steps()}
+    expect = steps["poll_worldgen"]["expect"]
+    assert not check_expect(expect, "new_region/Loading", "Loading object files")
+    assert check_expect(expect, "new_region", "The world is ready\nPlay now")
+
+
+def test_quick_world_params_casa_labels_dos_botoes_do_df():
+    """Regressao: os labels vivem a meio das linhas (entre molduras) — com
+    ``^…`` nunca casavam e o worldgen corria com parâmetros por omissão."""
+    from system_one_dwarf.game.driver import label_centre as _lc
+    line = "│ │ Pocket            │ │ Smaller           │ │ Small             │"
+    assert _lc(line, r"\bPocket\b", regex=True) is not None
+    assert _lc("│ │ 5 years           │ │ 50 years          │", r"\b5 years\b", regex=True) is not None
 
 
 def test_typed_keys_escreve_ascii_como_string_a():
@@ -258,7 +318,7 @@ def test_build_character_steps_defaults_aceitam_tudo(real_steps):
     steps = driver.build_character_steps()
     by_name = {s["name"]: (s["keys"][0] if s.get("keys") else "") for s in steps}
     assert by_name["select_human"] == 'click "Select human"'
-    assert by_name["select_origin"] == "click_re ^Select [A-Z]"
+    assert by_name["select_origin"] == "click_re Select [A-Z]"
     assert not any(s["name"].startswith(("character_", "randomize_")) for s in steps)
     # o fluxo provado: 13 passos, do tipo de jogo ao in-game
     assert [s["name"] for s in steps][0] == "choose_adventurer"
@@ -293,14 +353,21 @@ def test_create_world_params_invalido_levanta():
 
 def satisfying_screen(s):
     """Ecrã que satisfaz o ``expect`` do passo (necessário e suficiente)."""
-    expect = (s.get("expect") or [""])[0]
-    if expect.startswith("focus:"):
-        needle = expect[len("focus:"):].split(" (")[0].strip()
-        return (needle, "tela")
-    if expect.startswith("screen:"):
-        needle = expect[len("screen:"):].split(" (")[0].strip()
-        return ("focus/x", f"linha\n{needle}\n")
-    return ("focus/x", str(expect))
+    expect = s.get("expect") or [""]
+    items = expect if isinstance(expect, (list, tuple)) else [expect]
+    focus = "focus/x"
+    texts = ["tela"]
+    for item in items:
+        item = str(item)
+        if item.lower().startswith("not:"):
+            continue  # nada do que é negado entra no ecrã fabricado
+        if item.startswith("focus:"):
+            focus = item[len("focus:"):].split(" (")[0].strip()
+        elif item.startswith("screen:"):
+            texts.append(item[len("screen:"):].split(" (")[0].strip())
+        elif item:
+            texts.append(item)
+    return (focus, "\n".join(texts))
 
 
 def pre_screen(s):
@@ -310,7 +377,10 @@ def pre_screen(s):
         label = directive[len("click "):].strip().strip('"')
         return ("pre/focus", f"menu\n{label}\n")
     if directive.startswith("click_re "):
-        return ("pre/focus", "menu\nSelect Omon Wur\n")
+        # ecrã fabricado com todos os labels que os ``click_re`` do steps.json
+        # procuram (PT/EN do tipo de jogo + "Select <lugar>" da origem + as
+        # linhas de raça da seleção — "Human"/"Dwarf" realçam o botão Select)
+        return ("pre/focus", "menu\nSelect Omon Wur\nAdventurer\nHuman\nDwarf\n")
     return ("pre/focus", "menu")
 
 
@@ -360,6 +430,80 @@ def test_create_character_com_params_usa_os_labels_dos_params(real_steps):
     assert result["ok"] is True
     # um clique por passo de clique: os ecrãs pré-ação traziam os labels dos parâmetros
     assert len([c for c in bridge.calls if c[0] == "click"]) == len(click_steps)
+
+
+# --------------------------------------------------------------------------- #
+# Regressões da corrida de caça (2026-10-09): expects vazios, seleção de raça    #
+# em dois cliques, "Go!" e o overlay do tutorial que congelava a personagem      #
+# --------------------------------------------------------------------------- #
+
+
+def test_steps_sem_expects_vazios_de_setupadventure(real_steps):
+    """``focus:setupadventure (comentário)`` casava em QUALQUER ecrã do assistente.
+
+    O needle era reduzido a ``setupadventure`` (o ``split(" (")`` corta o
+    comentário): todos os passos "passavam" sem nada ter acontecido e o fluxo
+    seguia até abortar muito mais tarde. Agora os expects trazem marcadores
+    reais (``screen:Accept background`` etc.).
+    """
+    for s in real_steps:
+        for item in (s.get("expect") or []):
+            assert not str(item).startswith("focus:setupadventure ("), \
+                f"{s['name']}: expect vazio (casa em qualquer ecrã do assistente)"
+
+
+def test_tutorial_so_passa_com_o_overlay_fechado(real_steps):
+    """O overlay ``dungeonmode/Help`` ENGOLE todo o input (personagem congelada).
+
+    O passo ``tutorial_pages`` só valida quando o focus é o mapa
+    (``dungeonmode/Default``) — não quando o tutorial/browser continua em cima.
+    """
+    step = next(s for s in real_steps if s["name"] == "tutorial_pages")
+    assert not check_expect(step["expect"], "dungeonmode/Help", "Movement (2 of 3)")
+    assert not check_expect(step["expect"], "dungeonmode/Options", "Interactive tutorial")
+    assert check_expect(step["expect"], "dungeonmode/Default", "the map")
+
+
+def test_selecao_de_race_dois_cliques_linha_e_botao(real_steps):
+    """A seleção de raça no DF 53.16 são DOIS cliques: linha (realça) → botão."""
+    driver = make_driver(FakeBridge(), real_steps)
+    steps = driver.build_character_steps()
+    row = next(s for s in steps if s["name"] == "select_human_row")
+    assert row["keys"] == ["click_re \\bHuman\\b"]
+    assert row["expect"] == ["screen:Select human"]
+    select = next(s for s in steps if s["name"] == "select_human")
+    assert select["keys"] == ['click "Select human"']
+    # com race, a linha realçada e o botão seguem a raça pedida
+    dwarf = driver.build_character_steps(race="dwarf")
+    row_d = next(s for s in dwarf if s["name"] == "select_human_row")
+    assert row_d["keys"] == ["click_re \\bDwarf\\b"]
+    assert row_d["expect"] == ["screen:Select dwarf"]
+
+
+def test_go_label_e_clicavel_e_o_regex_com_bordas_nao_casa():
+    """Regressão ``\\bGo!\\b``: ``!`` não é char de palavra, o ``\\b`` final falha."""
+    text = "Adventure awaits\n│ Go! │\n"
+    assert label_centre(text, "Go!") is not None          # literal: funciona
+    assert label_centre(text, r"\bGo!\b", regex=True) is None  # armadilha documentada
+    assert label_centre(text, r"Go!", regex=True) is not None
+
+
+def test_click_por_coordenadas_no_passo():
+    """``click 180,1`` é clique por coordenadas (botão de ajuda sem label)."""
+    bridge = FakeBridge([("f", "sem labels nenhumas")])
+    driver = make_driver(bridge, [])
+    desc = driver._do_directive("click 180,1", "sem labels nenhumas")
+    assert ("click", 180, 1) in bridge.calls
+    assert "coords" in desc
+
+
+def test_select_human_row_falha_quando_a_linha_nao_esta_no_ecra():
+    """Sem a linha da raça o clique NÃO acontece (nada de cliques às cegas)."""
+    bridge = FakeBridge([("setupadventure", "Create Your Character\nSelect dwarf\n")])
+    driver = make_driver(bridge, [])
+    desc = driver._do_directive("click_re \\bHuman\\b", "Create Your Character\nSelect dwarf\n")
+    assert "NOT FOUND" in desc
+    assert not [c for c in bridge.calls if c[0] == "click"]
 
 
 # --------------------------------------------------------------------------- #
@@ -492,8 +636,8 @@ def test_subprocess_bridge_screen_click_keys_command():
     assert bridge.screen() == ("a/b", "l1\nl2")
     bridge.click(3, 4)
     bridge.keys(["SELECT"])
-    assert "click 3,4" in seen[-2][-1]
-    assert "key SELECT" in seen[-1][-1]
+    assert any("click 3,4" in part for part in seen[-2])
+    assert any("key SELECT" in part for part in seen[-1])
     assert seen[0][:2] == ["python3", str(bridge.bridge_path)]
     assert "--df-path" in seen[0] and "/fake/df" in seen[0]
     assert bridge.save_root() == Path("/fake/df/data/save")
@@ -515,6 +659,63 @@ def test_subprocess_bridge_snapshot_parseia_o_json():
 
     bridge = SubprocessBridge(df_path="/fake/df", runner=runner)
     assert bridge.snapshot() == {"adventurer": {"name": "U"}}
+
+
+def _bridge_cli_parser():
+    """O argparse REAL de ``dfhack/df_bridge.py`` (carregado por importlib)."""
+    import importlib.util
+
+    os.environ.setdefault("DF_BRIDGE_SKIP_INSTALL", "1")
+    path = REPO_ROOT / "dfhack" / "df_bridge.py"
+    spec = importlib.util.spec_from_file_location("df_bridge_cli_under_test", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module.build_parser()
+
+
+def test_subprocess_bridge_argv_aceite_pelo_cli_real():
+    """Regressao: flags ANTES do subcomando morriam com ``invalid choice: '<path>'``
+    no argparse da ponte (as flags comuns vivem nos SUBPARSERS) — o motor de
+    menus lia ecrãs vazios e falhava 5x "NOT FOUND" contra o jogo real. O
+    ``run`` (REMAINDER) exige as flags mesmo após o subcomando, senão engolia-as."""
+    parser = _bridge_cli_parser()
+    bridge = SubprocessBridge(df_path="/fake/df", port=1234)
+    cases = [
+        (["act", "screen", "--json"], lambda p: p.action == "screen"),
+        (["act", "batch", "click 3,4; sleep 500"],
+         lambda p: p.action == "batch" and p.args == ["click 3,4; sleep 500"]),
+        (["snapshot", "--json"], lambda p: p.cmd == "snapshot"),
+        (["run", "load-save", "region1"],
+         lambda p: p.cmd == "run" and p.command == ["load-save", "region1"]),
+    ]
+    for args, check in cases:
+        argv = bridge.command_argv(args)
+        parsed = parser.parse_args(argv[2:])  # sem [python, df_bridge.py]
+        assert parsed.df_path == "/fake/df", argv
+        assert parsed.port == 1234, argv
+        assert check(parsed), argv
+
+
+def test_subprocess_bridge_screen_erro_da_ponte_fica_visivel():
+    """``ok: false`` nunca vira ecrã vazio em silêncio: o motivo aparece no texto."""
+    def runner(_cmd):
+        return SimpleNamespace(returncode=13, stderr="",
+                               stdout=json.dumps({"ok": False, "error": "sem aventureiro"}))
+
+    bridge = SubprocessBridge(df_path="/fake/df", runner=runner)
+    focus, text = bridge.screen()
+    assert focus == ""
+    assert "bridge error" in text and "sem aventureiro" in text
+
+
+def test_subprocess_bridge_screen_sem_json_mostra_o_stderr():
+    def runner(_cmd):
+        return SimpleNamespace(returncode=2, stderr="usage: ...", stdout="")
+
+    bridge = SubprocessBridge(df_path="/fake/df", runner=runner)
+    focus, text = bridge.screen()
+    assert focus == ""
+    assert "bridge error" in text and "usage:" in text
 
 
 # --------------------------------------------------------------------------- #

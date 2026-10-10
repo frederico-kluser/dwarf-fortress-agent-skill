@@ -105,6 +105,8 @@ def build_loop(
     jev_factory: Callable[..., Any] | None = None,
     llm_factory: Callable[..., Any] | None = None,
     executor_factory: Callable[..., Any] | None = None,
+    stuck: Any = None,
+    replan_fn: Callable[..., Any] | None = None,
 ) -> AgentLoop:
     """Build the production :class:`AgentLoop` for ``campaign``.
 
@@ -112,6 +114,11 @@ def build_loop(
     (``typesafe``) or for the LLM (``openrouter``) — the documented "without keys
     the loop stays stopped" rule.  The factories default to the real pieces and
     exist so tests can swap the game/JEV/LLM without any network or game.
+
+    Anti-congelamento por omissão: um :class:`~.agent.stuck.StuckDetector` real
+    que regista cada evento na biblioteca de padrões (``stuck``) e um re-plano
+    DeepSeek na escalação ``replan`` (``replan_fn``) — os testes podem injetar
+    ambos.
     """
     if game_factory is None:
         from ..game import GameStateClient as game_factory  # type: ignore[assignment]
@@ -174,6 +181,12 @@ def build_loop(
     def publish_release(approval: dict[str, Any]) -> None:
         services.publish_event_threadsafe(campaign.id, "approval_updated", approval)
 
+    if stuck is None:
+        from ..agent.stuck import StuckDetector
+        stuck = StuckDetector(pattern_sink=True)  # cada evento → biblioteca de padrões
+    if replan_fn is None:
+        replan_fn = _llm_replan(llm)
+
     return AgentLoop(
         jev,
         game,
@@ -193,7 +206,42 @@ def build_loop(
         control=control_source,
         executor=executor,
         approval_checker=ApprovalChecker(runtime, on_release=publish_release),
+        stuck=stuck,
+        replan_fn=replan_fn,
     )
+
+
+def _llm_replan(llm: Any) -> Callable[..., Any]:
+    """Re-plano DeepSeek para a escalação ``replan`` do detetor de stuck.
+
+    Recebe ``(state, stuck_event)`` e devolve UMA dica curta (direção/zona) que
+    entra no objetivo dos passos seguintes; nunca levanta (falha → ``None``).
+    """
+
+    def replan(state: Any, event: Any) -> str | None:
+        from ..agent.stuck import state_fingerprint  # noqa: F401  (contrato estável)
+        metrics = getattr(state, "metrics", None)
+        loc = getattr(metrics, "location", None)
+        where = (f"x={getattr(loc, 'x', None)} y={getattr(loc, 'y', None)} "
+                 f"z={getattr(loc, 'z', None)} region={getattr(loc, 'region', None)!r} "
+                 f"site={getattr(loc, 'site', None)!r} "
+                 f"surroundings={getattr(loc, 'surroundings', None)!r}")
+        try:
+            result = llm.complete(
+                "You are the re-planner of a Dwarf Fortress adventure-mode agent. "
+                "The agent is STUCK (the world state did not change across moves). "
+                "Answer with ONE short directive line (<= 25 words): which direction "
+                "or terrain to try next to make progress (find wild animals to hunt). "
+                "No prose, no lists.",
+                f"stuck detail: {getattr(event, 'detail', '')}\nposition: {where}",
+                max_tokens=64, temperature=0.2, purpose="stuck_replan",
+            )
+        except Exception:
+            return None
+        text = (getattr(result, "text", "") or "").strip()
+        return text[:200] or None
+
+    return replan
 
 
 class LoopRunner:

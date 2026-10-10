@@ -12,6 +12,7 @@ Vocabulary (``id`` = ``<verbo>:<alvo>``, alinhado com ``evals/jev-a-action.json`
 ``verb``         ``id``              Quando aparece
 ===============  ==================  ==========================================
 ``attack``       ``attack:<hostil>`` um por hostil visível (sem hostis, nenhum)
+``attack``       ``attack:<animal>`` um por criatura não-sapiente visível (caça)
 ``flee``         ``flee:<direção>``  afastar-se do hostil mais próximo
 ``drink_potion`` ``drink:<poção>``   poção na mochila
 ``eat``          ``eat:<comida>``    fome ≠ ``none`` **ou** comida na mochila
@@ -20,15 +21,25 @@ Vocabulary (``id`` = ``<verbo>:<alvo>``, alinhado com ``evals/jev-a-action.json`
 ``pick_up``      ``pickup:<item>``  um por item visível no chão
 ``talk``         ``talk:<unidade>``  um por unidade não-hostil perto
 ``navigate_to``  ``navigate:<alvo>``destino de viagem / marco / coordenadas
+``hunt``         ``hunt:search_prey``missão de caça sem presa visível (procurar)
 ``explore``      ``explore:<rumo>``  sempre (objetivo por omissão)
 ``wait``         ``wait:<motivo>``   sempre
 ``other``        ``other``           **opção de saída, sempre a última**
 ===============  ==================  ==========================================
 
 Regras de viabilidade (nada é oferecido ao JEV se não for executável agora):
-sem hostis não há ``attack``; ``eat``/``drink`` só com fome/sede declaradas ou
-comida/água na mochila; ``rest`` só com sono ou noite; ``pick_up``/``talk`` só
-com alvo visível.
+sem hostis não há ``attack`` a hostis; ``eat``/``drink`` só com fome/sede
+declaradas ou comida/água na mochila; ``rest`` só com sono ou noite;
+``pick_up``/``talk`` só com alvo visível.
+
+**Caça (regra de segurança):** ``attack:<animal>`` só é gerado para criaturas
+**não-sapientes** (``kind != "sapient"`` e nome/raça sem palavras de raças
+sapiens — humanos, anões, elfos, goblins, …). Unidades **sapiens** nunca são
+alvo de um ataque gerado por aqui sem aprovação humana explícita (as respostas
+a hostis continuam pelo caminho de ``threats``: defesa própria). Com um
+objetivo de missão a falar de caça (``wants_hunt``) e sem presa visível, entra
+``hunt:search_prey``; com presa visível, os ``attack:<animal>`` sobem de
+prioridade e citam a missão no texto do JEV-A.
 
 Triagem e teto: as ações são ordenadas por
 **sobrevivência > resposta a ameaça > objetivo > conveniência** (e, dentro do
@@ -47,6 +58,7 @@ passar a expor esse grupo, nada aqui muda.
 """
 from __future__ import annotations
 
+import re
 from typing import Any, Iterable, Mapping, Sequence
 
 from ..game.models import GameState, InventoryItem, VisibleUnit
@@ -58,14 +70,19 @@ __all__ = [
     "POTION_WORDS",
     "EDIBLE_WORDS",
     "DRINKABLE_WORDS",
+    "HUNT_WORDS",
+    "SAPIENT_WORDS",
     "EXIT_ACTION_ID",
     "WAIT_ACTION_ID",
     "direction_from_text",
     "feasible_verbs",
     "generate_actions",
+    "huntable_units",
     "normalise_direction",
     "opposite_direction",
+    "plan_waypoints",
     "visible_ground_items",
+    "wants_hunt",
 ]
 
 # --------------------------------------------------------------- vocabulary
@@ -87,6 +104,16 @@ EDIBLE_WORDS: tuple[str, ...] = (
     "berry", "seed", "ration", "stew", "egg", "root", "leaf", "nut",
 )
 DRINKABLE_WORDS: tuple[str, ...] = ("water", "wine", "beer", "ale", "drink", "flask", "waterskin")
+
+#: Palavras que denunciam uma MISSÃO DE CAÇA no objetivo (em EN/PT).
+HUNT_WORDS: tuple[str, ...] = ("hunt", "kill", "slay", "prey", "caça", "caca", "matar", "abater")
+
+#: Raças **sapiens** (nome/raça da unidade): nunca alvo de caça gerada aqui.
+SAPIENT_WORDS: tuple[str, ...] = (
+    "human", "dwarf", "elf", "goblin", "hobgoblin", "kobold", "orc", "troll",
+    "gnome", "gremlin", "necromancer", "vampire", "ghost", "demon", "devil",
+    "werebeast", "were-", "nightwraith", "phantom", "siren", "merperson",
+)
 
 _GROUND_ITEM_KEYS = ("items_on_ground", "visible_items", "ground_items")
 _HUNGRY_LEVELS = ("hungry", "starving", "very hungry", "famished")
@@ -238,6 +265,37 @@ def _nearby_units(state: GameState, radius: float) -> list[VisibleUnit]:
     return out
 
 
+def _looks_sapient(unit: VisibleUnit) -> bool:
+    """A unidade parece uma raça **sapiente** (nome ou raça)? Regra de segurança."""
+    text = f"{_lower(unit.name)} {_lower(unit.race)}"
+    return any(word in text for word in SAPIENT_WORDS)
+
+
+def huntable_units(state: GameState) -> list[VisibleUnit]:
+    """Criaturas visíveis que podem ser caçadas: não-hostis e **não-sapiens**.
+
+    Unidades sapiens (humanos e afins) ficam SEMPRE de fora: nunca há ataque
+    gerado por aqui sem aprovação humana explícita. Hostiles também ficam de
+    fora — esses entram pelo caminho de defesa própria (``threats``).
+    """
+    out = []
+    for unit in state.metrics.units_nearby.units:
+        if not unit.visible or not unit.name or unit.hostile:
+            continue
+        if _looks_sapient(unit):
+            continue
+        if unit.kind and unit.kind != "animal":
+            continue
+        out.append(unit)
+    return out
+
+
+def wants_hunt(objective: Any) -> bool:
+    """O objetivo fala em caça/matar (``hunt``/``kill``/``caça``/…)?"""
+    text = _lower(objective if isinstance(objective, str) else "")
+    return any(word in text for word in HUNT_WORDS)
+
+
 def _is_night(state: GameState) -> bool:
     hour = state.metrics.game_clock.hour
     if isinstance(hour, (int, float)) and not isinstance(hour, bool):
@@ -314,6 +372,7 @@ def generate_actions(
     *,
     max_candidates: int | None = None,
     knowledge: Sequence[Any] = (),
+    objective: str = "",
 ) -> list[MacroAction]:
     """Macro-ações executáveis agora, por ordem de triagem, com a saída no fim.
 
@@ -326,6 +385,9 @@ def generate_actions(
         knowledge: itens recuperados pela memória (JEV-R) — aceite por
             compatibilidade de assinatura; a *viabilidade* de uma ação vem
             sempre do estado do jogo, nunca da narrativa.
+        objective: objetivo da missão em EN — ativa o vocabulário de **caça**
+            (``wants_hunt``): presa visível sobe de prioridade; sem presa,
+            entra ``hunt:search_prey``.
 
     Returns:
         Lista não vazia de :class:`~.types.MacroAction`, terminando **sempre**
@@ -476,8 +538,50 @@ def generate_actions(
             target=hostile.name, verb="attack", category="threat",
             priority=10 + int(distance or 0) * 10 + order,
             params={"direction": direction, "distance": distance, "steps": approach,
-                    "great_danger": bool(hostile.great_danger)},
-            needs_manual_mapping=True,
+                    "great_danger": bool(hostile.great_danger), "target_name": hostile.name,
+                    "x": hostile.x, "y": hostile.y, "z": hostile.z},
+        ))
+
+    # --------------------------------------------------------- caça (missão)
+    prey = sorted(
+        huntable_units(state),
+        key=lambda unit: (unit.distance if unit.distance is not None else 1e9, unit.name or ""),
+    )
+    hunt_mission = wants_hunt(objective)
+    for order, unit in enumerate(prey[:max_items]):
+        direction = normalise_direction(unit.direction)
+        distance = unit.distance if isinstance(unit.distance, (int, float)) else None
+        approach = max(1, int(distance) - 1) if distance else 1
+        actions.append(MacroAction(
+            id=_unique(f"attack:{_slug(unit.name, 'prey')}", taken),
+            name_en=f"Hunt and kill the {unit.name}",
+            description_en=(
+                ("MISSION: the objective is to find an animal and kill it. " if hunt_mission else "")
+                + f"Close on the {unit.name} "
+                + (f"({int(distance)} tiles {direction or 'adjacent'}) " if distance else "")
+                + "and strike it down (walk into its tile) until it dies: "
+                "a non-sapient creature, legitimate prey."
+            ),
+            target=unit.name, verb="attack", category="objective",
+            priority=(25 if hunt_mission else 85) + order,
+            params={"direction": direction, "distance": distance, "steps": approach,
+                    "target_name": unit.name, "kind": unit.kind or "animal",
+                    "x": unit.x, "y": unit.y, "z": unit.z},
+        ))
+    if hunt_mission and not prey:
+        hunt_surroundings = _text(metrics.location.surroundings) or _text(metrics.location.region)
+        actions.append(MacroAction(
+            id=_unique("hunt:search_prey", taken),
+            name_en="Search for an animal to hunt",
+            description_en=(
+                "MISSION: find an animal and kill it — none is visible now: walk the "
+                "surroundings"
+                + (f" ({hunt_surroundings})" if hunt_surroundings else "")
+                + " (woods, fields, roads) until a wild animal appears, then attack it."
+            ),
+            target="prey", verb="hunt", category="objective", priority=30,
+            params={"steps": flee_steps,
+                    "direction": direction_from_text(hunt_surroundings, state.focus)},
         ))
 
     # ------------------------------------------------------- objetivo

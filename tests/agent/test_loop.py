@@ -18,6 +18,7 @@ from system_one_dwarf.agent.loop import (
     AgentLoop,
     build_state_summary,
 )
+from system_one_dwarf.agent.stuck import StuckDetector
 from system_one_dwarf.agent.types import (
     ControlState,
     LoopConfig,
@@ -83,7 +84,7 @@ class Rig:
     def __init__(self, *, states=None, config=None, control=None, objective="Reach Boatmurdered alive.",
                  memory_items=None, jev=None, narrator=None, questions=None, memory=None,
                  translator=None, spend=None, runner=None, sink=None, executor=None,
-                 game=None, approval_checker=None):
+                 game=None, approval_checker=None, stuck=None, replan_fn=None):
         self.config = config or LoopConfig(
             screen_translation_async=False, advance_seconds=2.0, advance_on_execute=True,
         )
@@ -106,7 +107,7 @@ class Rig:
             self.jev, self.game, self.memory, self.narrator, self.questions, self.translator,
             self.spend, key_store=None, sink=self.sink, config=self.config,
             objective=objective, control=control, executor=self.executor,
-            approval_checker=approval_checker,
+            approval_checker=approval_checker, stuck=stuck, replan_fn=replan_fn,
         )
 
     # -- atalhos -----------------------------------------------------------
@@ -168,7 +169,7 @@ def test_happy_path_auto_executes_the_attack_with_a_dsl_plan():
     assert action.category == "threat" and action.params["direction"] == "ne"
     plan = rig.executor.dsl_of(0)
     assert "move ne times=5" in plan and "read screen" in plan
-    assert "# MANUAL:" in plan
+    assert "# MANUAL:" not in plan          # o ataque está mapeado (bump-attack)
 
     argv = rig.batch_calls()[0]
     assert "--stop-on-threat" in argv and "--stop-on-focus-change" in argv
@@ -387,7 +388,10 @@ def test_a_formatter_question_always_carries_the_routing_why():
 def test_checkpoint_release_executes_a_human_approved_action_once():
     """GAP 2: aprovar na fila liberta a ação retida; a aprovação é consumida."""
     approvals = FakeApprovals()
-    rig = Rig(control=lambda: ControlState(mode=MODE_CHECKPOINT), approval_checker=approvals)
+    # detetor inerte: ESTE teste é sobre o gate de aprovação, não sobre stuck
+    # (o estado do fake é estático de propósito — 3 validações iguais = stuck).
+    rig = Rig(control=lambda: ControlState(mode=MODE_CHECKPOINT), approval_checker=approvals,
+              stuck=StuckDetector(stuck_after=99, action_loop_after=99, pattern_sink=False))
 
     first = rig.step()                        # 1º passo: nada aprovado ⇒ pergunta
     assert first.status == STATUS_QUESTION
@@ -414,7 +418,8 @@ def test_checkpoint_release_executes_a_human_approved_action_once():
 def test_a_rejected_action_is_asked_again_and_never_executes():
     """Rejeitar não liberta: sem aprovação o loop pergunta a cada passo."""
     approvals = FakeApprovals()               # nada aprovado = pendente/rejeitado
-    rig = Rig(control=lambda: ControlState(mode=MODE_CHECKPOINT), approval_checker=approvals)
+    rig = Rig(control=lambda: ControlState(mode=MODE_CHECKPOINT), approval_checker=approvals,
+              stuck=StuckDetector(stuck_after=99, action_loop_after=99, pattern_sink=False))
 
     for _ in range(3):
         assert rig.step().status == STATUS_QUESTION

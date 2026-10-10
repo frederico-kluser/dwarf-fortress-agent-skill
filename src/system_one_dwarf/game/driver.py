@@ -197,16 +197,8 @@ def label_centre(text: str, needle: str, regex: bool = False) -> tuple[int, int]
     return None
 
 
-def check_expect(expect: Any, focus: str, text: str) -> bool:
-    """True quando o ``expect` do passo é satisfeito pelo focus/texto do ecrã.
-
-    ``expect`` pode ser uma string ou uma lista de alternativas (qualquer uma
-    serve).  ``focus:``/``screen:`` limitam a procura ao focus/ao texto; o resto
-    procura em ambos.  Vazio é sempre verdade (usado pelos passos ``soft``).
-    """
-    if isinstance(expect, (list, tuple)):
-        return any(check_expect(item, focus, text) for item in expect)
-    expect = str(expect)
+def _expect_hit(expect: str, focus: str, text: str) -> bool:
+    """O ``expect`` (uma alternativa) casa no focus/texto do ecrã?"""
     if expect.startswith("focus:"):
         needle = expect[len("focus:"):].split(" (")[0].strip()
         return needle.lower() in focus.lower()
@@ -214,6 +206,32 @@ def check_expect(expect: Any, focus: str, text: str) -> bool:
         needle = expect[len("screen:"):].split(" (")[0].strip()
         return needle.lower() in text.lower()
     return expect.lower() in (focus + "\n" + text).lower()
+
+
+def check_expect(expect: Any, focus: str, text: str) -> bool:
+    """True quando o ``expect`` do passo é satisfeito pelo focus/texto do ecrã.
+
+    ``expect`` pode ser uma string ou uma lista de alternativas (qualquer uma
+    positiva serve).  ``focus:``/``screen:`` limitam a procura ao focus/ao
+    texto; o resto procura em ambos.  ``not:<algo>`` é uma condição de
+    **ausência** (ex.: ``not:Welcome`` = o overlay já não está no ecrã) — numa
+    lista, TODAS as negações têm de se verificar e, havendo positivas, pelo
+    menos uma delas tem de casar.  Vazio é sempre verdade (passos ``soft``).
+    """
+    if isinstance(expect, (list, tuple)):
+        items = [str(item) for item in expect]
+        negatives = [item[len("not:"):].strip() for item in items
+                     if item.lower().startswith("not:")]
+        positives = [item for item in items if not item.lower().startswith("not:")]
+        if any(_expect_hit(needle, focus, text) for needle in negatives):
+            return False
+        if not positives:
+            return True
+        return any(_expect_hit(item, focus, text) for item in positives)
+    expect = str(expect)
+    if expect.lower().startswith("not:"):
+        return not _expect_hit(expect[len("not:"):].strip(), focus, text)
+    return _expect_hit(expect, focus, text)
 
 
 def typed_keys(text: str) -> list[str]:
@@ -264,14 +282,20 @@ class SubprocessBridge:
 
     # ------------------------------------------------------------------ baixo
     def command_argv(self, args: Iterable[str]) -> list[str]:
-        # mesma ordem do CLI E2E: flags da ponte antes do subcomando
-        cmd = [self.python, str(self.bridge_path)]
+        # flags da ponte LOGO APÓS o subcomando (a convenção documentada na
+        # ponte e a única que serve TODOS os subcomandos): antes do subcomando
+        # o argparse tomava ``--df-path <path>`` pelo comando (``invalid
+        # choice``) e, no fim, o ``run`` (positional REMAINDER) engolia as
+        # flags como parte do comando do console.
+        parts = [str(a) for a in args]
+        flags: list[str] = []
         if self.df_path:
-            cmd += ["--df-path", str(self.df_path)]
+            flags += ["--df-path", str(self.df_path)]
         if self.port:
-            cmd += ["--port", str(self.port)]
-        cmd += [str(a) for a in args]
-        return cmd
+            flags += ["--port", str(self.port)]
+        if not parts:
+            return [self.python, str(self.bridge_path), *flags]
+        return [self.python, str(self.bridge_path), parts[0], *flags, *parts[1:]]
 
     def _run(self, args: Iterable[str], timeout: float | None = None) -> Any:
         cmd = self.command_argv(args)
@@ -301,12 +325,26 @@ class SubprocessBridge:
 
     # -------------------------------------------------------------- superfície
     def screen(self) -> tuple[str, str]:
-        """-> (focus:str, text:str) de ``act screen --json``."""
+        """-> (focus:str, text:str) de ``act screen --json``.
+
+        Um ecrã ilegível/devolvido com erro **nunca** vira ``(\"\", \"\")`` em
+        silêncio: o motivo fica no texto (marcado ``<bridge error: …>``) para
+        aparecer no relatório PT dos passos em vez de 5× "NOT FOUND" cego.
+        """
         proc = self._run(["act", "screen", "--json"])
+        raw = getattr(proc, "stdout", "") or ""
         try:
-            data = json.loads(getattr(proc, "stdout", "") or "{}").get("data", {})
+            payload = json.loads(raw or "{}")
         except ValueError:
-            return "", getattr(proc, "stdout", "") or ""
+            return "", raw
+        data = payload.get("data") if isinstance(payload, dict) else None
+        if not isinstance(data, dict):
+            reason = ""
+            if isinstance(payload, dict):
+                reason = str(payload.get("error") or payload.get("hint") or "")
+            if not reason:
+                reason = (getattr(proc, "stderr", "") or "").strip()[:200] or "sem dados do ecrã"
+            return "", f"<bridge error: {reason}>"
         focus = "/".join(data.get("focus") or [])
         text = "\n".join(data.get("lines") or [])
         return focus, text
@@ -389,6 +427,41 @@ class AdventureDriver:
             pass
 
     # ---------------------------------------------------------- motor de passos
+    def _do_directive(self, directive: str, text: str) -> str:
+        """Executa UMA diretiva de passo sobre o ecrã atual → descrição da ação."""
+        if directive.startswith("click_re "):
+            pat = directive[len("click_re "):]
+            centre = label_centre(text, pat, regex=True)
+            if centre:
+                self.bridge.click(*centre)
+                return f"click@{centre} /{pat}/"
+            return f"click_re {pat} -> NOT FOUND"
+        if directive.startswith("click "):
+            label = directive[len("click "):].strip().strip('"')
+            # clique por COORDENADAS (``click 180,1`` — ex.: o botão de ajuda no
+            # canto superior, sem label legível no screen_text)
+            coords = re.match(r"^(\d+)\s*,\s*(\d+)$", label)
+            if coords:
+                point = (int(coords.group(1)), int(coords.group(2)))
+                self.bridge.click(*point)
+                return f"click@{point} (coords)"
+            centre = label_centre(text, label)
+            if centre:
+                self.bridge.click(*centre)
+                return f"click@{centre} '{label}'"
+            return f"click '{label}' -> NOT FOUND"
+        if directive.startswith("key "):
+            names = directive[len("key "):].split()
+            self.bridge.keys(names)
+            return "key " + " ".join(names)
+        if directive.startswith("type "):
+            names = typed_keys(directive[len("type "):])
+            if names:
+                self.bridge.keys(names)
+                return f"type {len(names)} keys"
+            return "type -> EMPTY"
+        return f"unhandled: {directive}"
+
     def run_step(
         self,
         step: dict[str, Any],
@@ -404,7 +477,8 @@ class AdventureDriver:
         (devolvem as telas/ações e o fluxo segue).
         """
         keys = step.get("keys") or []
-        directive = keys[0] if keys else ""
+        directives = [str(item) for item in keys] or [""]
+        directive = directives[0]
         expect = step.get("expect", "")
         wait = step.get("wait", 1.0)
         soft = bool(step.get("soft"))
@@ -430,38 +504,12 @@ class AdventureDriver:
                 "focus": focus, "screen_text": text, "attempt": attempt,
             })
 
-            if directive.startswith("click_re "):
-                pat = directive[len("click_re "):]
-                centre = label_centre(text, pat, regex=True)
-                if centre:
-                    self.bridge.click(*centre)
-                    actions.append(f"click@{centre} /{pat}/")
-                else:
-                    actions.append(f"click_re {pat} -> NOT FOUND")
-            elif directive.startswith("click "):
-                label = directive[len("click "):].strip().strip('"')
-                centre = label_centre(text, label)
-                if centre:
-                    self.bridge.click(*centre)
-                    actions.append(f"click@{centre} '{label}'")
-                else:
-                    actions.append(f"click '{label}' -> NOT FOUND")
-            elif directive.startswith("key "):
-                names = directive[len("key "):].split()
-                self.bridge.keys(names)
-                actions.append("key " + " ".join(names))
-            elif directive.startswith("type "):
-                names = typed_keys(directive[len("type "):])
-                if names:
-                    self.bridge.keys(names)
-                    actions.append(f"type {len(names)} keys")
-                else:
-                    actions.append("type -> EMPTY")
-            else:
-                actions.append(f"unhandled: {directive}")
-
-            self._emit(on_event, {"event": "action", "index": index, "total": total,
-                                  "name": name, "action": actions[-1]})
+            # TODAS as diretivas do passo correm por tentativa (a lista ``keys``
+            # é a lista de ações — ex.: cliques de opções rápidas seguidos).
+            for one in directives:
+                actions.append(self._do_directive(one, text))
+                self._emit(on_event, {"event": "action", "index": index, "total": total,
+                                      "name": name, "action": actions[-1]})
             self.sleep(wait)
             self._check_cancel(cancel)
             focus, text = self.bridge.screen()
@@ -562,13 +610,20 @@ class AdventureDriver:
         """
         steps = self._slice_world()
         if params == "quick":
-            tweak = self._soft_step("quick_world_params", "click_re ^(Pocket|Small|Short)")
+            # GUESS: encurta o worldgen clicando as opções mais curtas quando
+            # estão visíveis (tamanho + anos de história). Sem âncora ``^``:
+            # os labels vivem a meio das linhas do ``screen_text``, entre as
+            # molduras dos botões (com ``^…`` nunca casavam e o worldgen
+            # corria com os parâmetros por omissão = muito mais lento).
+            tweak = {"name": "quick_world_params", "expect": [""], "guessed": True, "soft": True,
+                     "keys": ["click_re \\bPocket\\b", "click_re \\b5 years\\b"],
+                     "wait": 0.8}
         else:
             tweak = None
         name_steps: list[dict[str, Any]] = []
         if world_name:
             name_steps = [
-                self._soft_step("world_name_field", "click_re ^Name"),
+                self._soft_step("world_name_field", "click_re \\bName\\b"),
                 self._soft_step("world_name_type", f"type {world_name}"),
             ]
         out: list[dict[str, Any]] = []
@@ -604,16 +659,22 @@ class AdventureDriver:
         name_steps: list[dict[str, Any]] = []
         if name:
             name_steps = [
-                self._soft_step("character_name_field", "click_re ^Name"),
+                self._soft_step("character_name_field", "click_re \\bName\\b"),
                 self._soft_step("character_name_type", f"type {name}"),
             ]
-        randomize_looks = self._soft_step("randomize_looks", "click_re ^Randomize")
-        randomize_personality = self._soft_step("randomize_personality", "click_re ^Randomize")
+        randomize_looks = self._soft_step("randomize_looks", "click_re \\bRandomize\\b")
+        randomize_personality = self._soft_step("randomize_personality", "click_re \\bRandomize\\b")
         out: list[dict[str, Any]] = []
         for step in steps:
             step = dict(step)
             step_name = step.get("name")
-            if step_name == "select_human":
+            if step_name == "select_human_row":
+                # seleção de raça = DOIS cliques: a linha realça-se e o botão
+                # passa a "Select <raça>" (aprendido ao vivo no DF 53.16)
+                label = (race or "human").capitalize()
+                step["keys"] = [f"click_re \\b{label}\\b"]
+                step["expect"] = [f"screen:Select {label.lower()}"]
+            elif step_name == "select_human":
                 step["keys"] = [f'click "Select {race or "human"}"']
             elif step_name == "select_origin" and origin:
                 step["keys"] = [f'click "Select {origin}"']

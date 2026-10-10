@@ -33,6 +33,7 @@ from fakes_loop import (
     hostile,
 )
 from system_one_dwarf.agent.loop import CallbackEventSink
+from system_one_dwarf.agent.stuck import StuckDetector
 from system_one_dwarf.app.loop_runner import LoopUnavailable, build_loop
 from test_api_telemetry import publish
 
@@ -299,6 +300,7 @@ class TestRealBuilder:
                 jev_factory=lambda key, **kwargs: jev,
                 llm_factory=lambda get_key, **kwargs: llm,
                 executor_factory=lambda game, config: executor,
+                stuck=StuckDetector(stuck_after=99, action_loop_after=99, pattern_sink=False),
             )
 
         services.loop_builder = builder
@@ -367,6 +369,9 @@ class TestRealBuilder:
                 jev_factory=lambda key, **kwargs: jev,
                 llm_factory=lambda get_key, **kwargs: FakeLLM(),
                 executor_factory=lambda game, config: executor,
+                # detetor inerte: este teste é sobre o gate de aprovação do
+                # checkpoint (o estado do fake é estático = condição de stuck).
+                stuck=StuckDetector(stuck_after=99, action_loop_after=99, pattern_sink=False),
             )
 
         services.loop_builder = builder

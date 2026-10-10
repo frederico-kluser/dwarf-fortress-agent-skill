@@ -126,3 +126,14 @@ def test_state_alive_and_to_dict(busy_payload):
     assert state.to_dict() == busy_payload
     assert GameState.from_dict({"metrics": {"health_injuries": {"status": "dead"}}}).is_alive \
         is False
+
+
+def test_visible_unit_parses_kind_race_and_pos_para_a_caca():
+    unit = VisibleUnit.from_dict({"name": "donkey", "distance": 2, "direction": "N",
+                                  "race": "donkey", "kind": "animal",
+                                  "pos": {"x": 88, "y": 70, "z": 0}})
+    assert unit.kind == "animal" and unit.race == "donkey"
+    assert (unit.x, unit.y, unit.z) == (88, 70, 0)
+    # payloads antigos (sem pos/kind) continuam a parsear
+    old = VisibleUnit.from_dict({"name": "deer", "distance": 3})
+    assert old.kind is None and old.x is None

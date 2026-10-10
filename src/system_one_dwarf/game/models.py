@@ -192,7 +192,13 @@ class Inventory:
 
 @dataclass(frozen=True)
 class VisibleUnit:
-    """Unidade vista de perto: distância em tiles e direção (N/S/E/W, ``here`` = mesmo tile)."""
+    """Unidade vista de perto: distância em tiles e direção (N/S/E/W, ``here`` = mesmo tile).
+
+    ``kind`` (``"animal"``/``"sapient"``/``None`` = desconhecido) classifica a
+    criatura para a **caça**: só não-sapiens são alvos legítimos sem aprovação
+    humana explícita. ``race`` é o nome legível da espécie e ``x``/``y``/``z``
+    a posição exata (necessária ao ``goto`` do executor de ataque).
+    """
 
     name: Optional[str] = None
     distance: Optional[float] = None
@@ -200,13 +206,21 @@ class VisibleUnit:
     hostile: bool = False
     visible: bool = True
     great_danger: bool = False
+    race: Optional[str] = None
+    kind: Optional[str] = None
+    x: Optional[int] = None
+    y: Optional[int] = None
+    z: Optional[int] = None
 
     @classmethod
     def from_dict(cls, data: Any) -> "VisibleUnit":
         d = _mapping(data)
+        pos = _mapping(d.get("pos"))
         return cls(name=_text(d.get("name")), distance=_num(d.get("distance")),
                    direction=_text(d.get("direction")), hostile=_flag(d.get("hostile")),
-                   visible=d.get("visible") is not False, great_danger=_flag(d.get("great_danger")))
+                   visible=d.get("visible") is not False, great_danger=_flag(d.get("great_danger")),
+                   race=_text(d.get("race")), kind=_text(d.get("kind")),
+                   x=_int(pos.get("x")), y=_int(pos.get("y")), z=_int(pos.get("z")))
 
 
 @dataclass(frozen=True)

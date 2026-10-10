@@ -15,12 +15,16 @@ negociáveis:
    foi decidida para outra situação.
 3. **Nada de teclas inventadas.** Só passos *verificados* são executados:
    ``move``, ``goto``, ``wait``, ``read``, ``sleep`` (ops do DSL com semântica
-   fechada). Abrir inventário, selecionar item, consumir, pegar, atacar e falar
-   dependem de sequências de ``df.interface_key`` que ainda **não** foram
-   confirmadas ao vivo: esses passos ficam no plano como *manual*, com nota, e
-   o resultado sai com ``needs_manual_mapping=True`` executando apenas a
-   parte de movimento/espera. (O mapeamento ao vivo é refinado contra o jogo
-   real; o plano já está no formato final, só faltam as teclas.)
+   fechada) — **incluindo o ataque**: em adventure mode passar para o tile de
+   uma criatura é o golpe (*bump-attack*), por isso ``attack`` é executado por
+   :meth:`MacroExecutor._execute_attack`: um laço com verificação por passo
+   (relê o snapshot e o gamelog entre golpes: presa morta/fugida, HP/eventos,
+   ameaça nova) e **≤ 5 tentativas** de golpe por ação. A tecla explícita
+   ``A_ATTACK`` (345) existe no ``df.interface_key``, mas o *bump* é o
+   mecanismo mapeado. Abrir inventário, selecionar item, consumir, pegar e
+   falar continuam a depender de sequências por confirmar: esses passos ficam
+   no plano como *manual*, com nota, e o resultado sai com
+   ``needs_manual_mapping=True`` executando apenas a parte verificada.
 
 Comandos gerados (mesma convenção de flags do ``GameStateClient.command()``)::
 
@@ -257,17 +261,25 @@ class MacroExecutor:
 
         plan: list[PlanStep] = []
         if verb == "attack":
-            if direction and steps > 0:
+            x = _safe_coord(params.get("x"), "x", action.id)
+            y = _safe_coord(params.get("y"), "y", action.id)
+            if x is not None and y is not None:
+                plan.append(PlanStep(f"goto {x},{y}", manual=False))
+            elif direction and steps > 0:
                 plan.append(PlanStep(f"move {direction} times={steps}", manual=False))
             plan.append(PlanStep("read screen", manual=False))
-            plan.append(PlanStep(
-                "",
-                manual=True,
-                note=(
-                    "attack key unverified: in adventure mode walking into the hostile's tile is "
-                    "the attack; no df.interface_key for an explicit attack was confirmed live"
-                ),
-            ))
+            if x is None and not (direction and steps > 0):
+                plan.append(PlanStep(
+                    "",
+                    manual=True,
+                    note=(
+                        f"no route to {action.target or 'the target'}: the snapshot has neither "
+                        "coordinates nor a direction to approach from"
+                    ),
+                ))
+        elif verb == "hunt":
+            walk = direction or "n"
+            plan.extend(_hunt_plan_steps(walk, max(1, int(steps or 3)), state))
         elif verb == "flee":
             if direction and steps > 0:
                 plan.append(PlanStep(f"move {direction} times={steps}", manual=False))
@@ -472,15 +484,23 @@ class MacroExecutor:
 
     # --------------------------------------------------------------- execução
 
+    #: Golpes máximos por ação ``attack`` (regra das ≤ 5 tentativas por obstáculo).
+    ATTACK_ROUNDS = 5
+
     def execute(self, action: MacroAction, state: GameState) -> ExecutionResult:
         """Executa a macro-ação (plano seguro) com gates de segurança ligados.
 
         Um plano inválido (argumento fora do vocabulário da DSL) **não** derruba o
         passo nem envia nada ao jogo: devolve ``refused`` com o motivo claro.
+        ``attack`` não-batch segue por :meth:`_execute_attack` (laço de golpes
+        com verificação por passo, ≤ 5 tentativas).
         """
         if not isinstance(action, MacroAction):
             raise TypeError(f"execute expects a MacroAction, got {type(action).__name__}")
         started = time.monotonic()
+        verb = action.verb or action.id.split(":", 1)[0]
+        if verb == "attack" and not self.dry_run:
+            return self._execute_attack(action, state, started)
         try:
             steps = self.plan(action, state)
         except ValueError as exc:
@@ -488,6 +508,13 @@ class MacroExecutor:
                 action_id=action.id, status="refused", ok=False, reason="invalid_plan",
                 errors=(str(exc),),
             ), started)
+        return self._run_batch(action, state, steps, started)
+
+    def _run_batch(
+        self, action: MacroAction, state: GameState, steps: tuple[PlanStep, ...],
+        started: float,
+    ) -> ExecutionResult:
+        """Caminho batch clássico: um ``act batch`` com os gates de segurança."""
         full_dsl = self._render(steps, include_manual=True)
         safe_dsl = self._render(steps, include_manual=False)
         manual_notes = self._manual_notes(steps)
@@ -562,6 +589,7 @@ class MacroExecutor:
             report=report if isinstance(report, Mapping) else None, errors=errors,
         ))
 
+
     @staticmethod
     def _classify(code: Any, report: Any, *, dry_run: bool) -> tuple[str, bool, str | None]:
         """``(status, ok, failure_reason)`` a partir do código de saída + relatório."""
@@ -583,6 +611,243 @@ class MacroExecutor:
         if code == EXIT_OK:
             return "executed", True, None
         return "error", False, f"unexpected bridge exit code {code!r}"
+
+    # --------------------------------------------------- ataque (bump-attack)
+
+    def _execute_attack(
+        self, action: MacroAction, state: GameState, started: float | None = None
+    ) -> ExecutionResult:
+        """Executa ``attack`` até a presa morrer (ou ≤ 5 golpes / guarda falhar).
+
+        Cada golpe é um ``act batch`` de um passo — ``goto x,y`` na aproximação,
+        ``move <dir> times=1`` (passo para o tile da criatura = *bump-attack*)
+        quando adjacente — com os gates de segurança sempre ligados. Entre
+        golpes relê-se o snapshot e o gamelog: morte da presa (``target down``
+        com a linha do jogo), fuga, morte do aventureiro, mudança de focus ou
+        ameaça nova abortam o plano. O gamelog é o **feedback de HP/eventos**
+        do alvo: as linhas novas de combate entram no ``report["events"]``.
+        """
+        started = started if started is not None else time.monotonic()
+        try:
+            steps = self.plan(action, state)
+        except ValueError as exc:
+            return _with_duration(ExecutionResult(
+                action_id=action.id, status="refused", ok=False, reason="invalid_plan",
+                errors=(str(exc),),
+            ), started)
+        full_dsl = self._render(steps, include_manual=True)
+        manual_notes = self._manual_notes(steps)
+        needs_manual = any(step.manual for step in steps) or bool(action.needs_manual_mapping)
+        params = dict(action.params or {})
+        target_name = str(params.get("target_name") or action.target or "").strip()
+
+        commands: list[tuple[str, ...]] = []
+        dsl_parts: list[str] = []
+        events: list[str] = []
+        status, ok_flag, reason = "executed", True, None
+        current = state
+        strikes = 0
+
+        # Alvo não localizado em ``units_nearby`` (sem coordenadas para perseguir):
+        # caminho batch clássico (aproximar + observar) — nunca se inventa rota.
+        if self._find_unit(state, target_name) is None:
+            return self._run_batch(action, state, steps, started)
+
+        # Guard de SEMPRE (antes de tocar no jogo): mesma semântica do caminho
+        # batch — a situação ainda é a que foi decidida?
+        ok, guard_reason, warnings = self.guard_check(state)
+        if not ok:
+            return _with_duration(ExecutionResult(
+                action_id=action.id, status="aborted", ok=False, reason=guard_reason,
+                dsl=full_dsl, steps_planned=len(steps), steps_executed=0,
+                needs_manual_mapping=needs_manual, manual_notes=manual_notes,
+                errors=tuple(warnings),
+                report={"target": target_name, "strikes": 0, "events": []},
+            ), started)
+
+        for round_no in range(1, self.ATTACK_ROUNDS + 1):
+            unit = self._find_unit(current, target_name)
+            if unit is None:
+                death = self._death_event(current, target_name)
+                status, ok_flag = "executed", bool(death)
+                reason = f"target down: {death}" if death else \
+                    "target gone (no death line in the gamelog)"
+                break
+            strike_dsl = self._strike_dsl(current, unit, params)
+            if not strike_dsl:
+                status, ok_flag, reason = "aborted", False, "attack: no route to the target"
+                break
+            strikes += 1
+            dsl_parts.append(strike_dsl)
+            argv = self.bridge_command(
+                "act", "batch",
+                "--stop-on-focus-change", "--stop-on-threat",
+                "--threat-radius", str(self.threat_radius),
+                "--max-steps", str(self.max_steps),
+                "--delay", str(self.delay), strike_dsl,
+            )
+            try:
+                proc = self._run(argv)
+            except Exception as exc:  # ponte ausente, timeout, OSError…
+                return _with_duration(ExecutionResult(
+                    action_id=action.id, status="error", ok=False,
+                    reason=f"bridge_failed: {exc}", dsl=full_dsl,
+                    executed_dsl="; ".join(dsl_parts), steps_planned=len(steps),
+                    steps_executed=strikes, needs_manual_mapping=needs_manual,
+                    manual_notes=manual_notes, commands=tuple(commands),
+                    report={"target": target_name, "strikes": strikes, "events": events[-12:]},
+                    errors=(str(exc),),
+                ), started)
+            commands.append(tuple(argv))
+            code = getattr(proc, "returncode", None)
+            if code in GAME_DOWN_EXITS:
+                status, ok_flag, reason = "error", False, \
+                    f"the game is not reachable (bridge exit {code})"
+                break
+            fresh = self._fresh_state()
+            if fresh is None:
+                status, ok_flag, reason = "error", False, \
+                    "snapshot unavailable: cannot verify the strike"
+                break
+            events.extend(self._new_events(current, fresh))
+            blocked, why = self._attack_guard(state, fresh, target_name)
+            if blocked:
+                status, ok_flag, reason = "aborted", False, why
+                current = fresh
+                break
+            if self._find_unit(fresh, target_name) is None:
+                death = self._death_event(fresh, target_name)
+                status, ok_flag = "executed", bool(death)
+                reason = f"target down: {death}" if death else \
+                    "target gone (no death line in the gamelog)"
+                current = fresh
+                break
+            current = fresh
+        else:
+            status, ok_flag, reason = "executed", False, (
+                f"attempts exhausted ({self.ATTACK_ROUNDS} strikes; the target is still up)"
+            )
+
+        return _with_duration(ExecutionResult(
+            action_id=action.id, status=status, ok=ok_flag, reason=reason,
+            dsl=full_dsl, executed_dsl="; ".join(dsl_parts),
+            steps_planned=len(steps), steps_executed=strikes,
+            needs_manual_mapping=needs_manual, manual_notes=manual_notes,
+            commands=tuple(commands),
+            report={"target": target_name, "strikes": strikes, "events": events[-12:]},
+            errors=tuple(warnings),
+        ), started)
+
+    def _fresh_state(self) -> GameState | None:
+        """Snapshot atual ou ``None`` (jogo/ponte indisponível)."""
+        snapshot = getattr(self.game, "snapshot", None)
+        if not callable(snapshot):
+            return None
+        try:
+            current = snapshot()
+        except Exception:
+            return None
+        return current if isinstance(current, GameState) else None
+
+    @staticmethod
+    def _find_unit(state: GameState, target_name: str) -> Any:
+        """Ainda vemos o alvo? Só ``units_nearby``: é aí que vivem as coordenadas.
+
+        Um alvo que já não está entre as unidades visíveis mais próximas cai no
+        caminho batch estático (aproximar + observar) — perseguir às cegas sem
+        coordenadas seria inventar um plano.
+        """
+        needle = (target_name or "").strip().lower()
+        best = None
+        for unit in getattr(state.metrics.units_nearby, "units", ()) or ():
+            name = (getattr(unit, "name", None) or "").strip().lower()
+            if not name:
+                continue
+            if needle and not (needle in name or name in needle):
+                continue
+            scored = (2 if getattr(unit, "x", None) is not None else 0) + \
+                     (1 if getattr(unit, "visible", True) else 0)
+            if best is None or scored > best[0]:
+                best = (scored, unit)
+        return best[1] if best else None
+
+    _DEATH_WORDS: tuple[str, ...] = (
+        "slain", "struck down", "killed", "dies", "died", "dead", "falls",
+        "destroyed", "no longer",
+    )
+
+    @classmethod
+    def _death_event(cls, state: GameState, target_name: str) -> str | None:
+        """Linha do gamelog que confirma a morte da presa (``None`` se não há)."""
+        words = [w for w in (target_name or "").lower().replace("-", " ").split() if len(w) >= 3]
+        for event in reversed(list(state.recent_events)):
+            text = (event.text or "").lower()
+            if not text:
+                continue
+            if words and not any(word in text for word in words):
+                continue
+            if any(dead in text for dead in cls._DEATH_WORDS):
+                return event.text
+        return None
+
+    @staticmethod
+    def _new_events(before: GameState, after: GameState) -> list[str]:
+        seen = {(event.text or "") for event in before.recent_events}
+        return [event.text for event in after.recent_events
+                if event.text and event.text not in seen]
+
+    def _attack_guard(
+        self, decided: GameState, fresh: GameState, target_name: str
+    ) -> tuple[bool, str | None]:
+        """Guard do laço de ataque: ``(bloqueado, motivo)``.
+
+        Igual ao ``guard_check`` mas tolera a própria presa (que pode tornar-se
+        hostil ao levar o primeiro golpe) — só ameaças **fora** do alvo contam.
+        """
+        if decided.is_alive and not fresh.is_alive:
+            return True, "guard:adventurer_dead"
+        if decided.focus and fresh.focus and decided.focus != fresh.focus:
+            return True, "guard:focus_changed"
+        needle = (target_name or "").strip().lower()
+
+        def others(state: GameState) -> set[str]:
+            out = set()
+            for unit in state.metrics.threats.hostiles:
+                name = (getattr(unit, "name", None) or "").strip().lower()
+                if needle and (needle in name or name in needle):
+                    continue  # a própria presa: esperada como hostil no combate
+                out.add(self._threat_key(unit))
+            return out
+
+        after = others(fresh)
+        if after - others(decided):
+            return True, "guard:threat_appeared"
+        if any(bool(getattr(unit, "great_danger", False)) for unit in fresh.metrics.threats.hostiles):
+            if not any(bool(getattr(unit, "great_danger", False))
+                       for unit in decided.metrics.threats.hostiles):
+                return True, "guard:great_danger_appeared"
+        return False, None
+
+    def _strike_dsl(self, state: GameState, unit: Any, params: Mapping[str, Any]) -> str:
+        """DSL do próximo golpe: ``goto`` na aproximação, ``move`` no *bump*."""
+        x = _attr(unit, "x", default=None)
+        y = _attr(unit, "y", default=None)
+        if x is None:
+            x = _safe_coord(_pick(params, "x", default=None), "x")
+        if y is None:
+            y = _safe_coord(_pick(params, "y", default=None), "y")
+        loc = state.metrics.location
+        ax, ay = loc.x, loc.y
+        if isinstance(x, int) and isinstance(y, int) and isinstance(ax, int) and isinstance(ay, int):
+            dx, dy = x - ax, y - ay
+            chebyshev = max(abs(dx), abs(dy))
+            if chebyshev == 1:
+                return f"move {_delta_dir(dx, dy)} times=1"  # passo para o tile = golpe
+            if chebyshev == 0:
+                return "move wait times=1"
+            return f"goto {x},{y}"
+        direction = _safe_direction(_pick(params, "direction", "dir", default=""))
+        return f"move {direction} times=1" if direction else ""
 
     # ------------------------------------------------------------ tempo (passo 9)
 
@@ -636,11 +901,75 @@ MOVE_DIRECTIONS: frozenset[str] = frozenset(
     "n s e w ne nw se sw up down wait".split()
 )
 
+#: Vetores ``(dx, dy)`` das direções de caminhada (``goto`` plano; z não muda).
+_DIR_VECTORS: dict[str, tuple[int, int]] = {
+    "n": (0, -1), "s": (0, 1), "e": (1, 0), "w": (-1, 0),
+    "ne": (1, -1), "nw": (-1, -1), "se": (1, 1), "sw": (-1, 1),
+}
+
+#: Lados de ziguezague por direção principal (a caça nunca fica presa numa parede).
+_HUNT_SIDES: dict[str, tuple[str, str]] = {
+    "n": ("e", "w"), "s": ("e", "w"), "e": ("n", "s"), "w": ("n", "s"),
+    "ne": ("e", "n"), "nw": ("w", "n"), "se": ("e", "s"), "sw": ("w", "s"),
+}
+
+
+def _adventurer_pos(state: Any) -> tuple[int, int] | None:
+    """Posição ``(x, y)`` do aventureiro no snapshot, se conhecida."""
+    loc = getattr(getattr(state, "metrics", None), "location", None)
+    x, y = getattr(loc, "x", None), getattr(loc, "y", None)
+    if isinstance(x, int) and not isinstance(x, bool) and isinstance(y, int) and not isinstance(y, bool):
+        return x, y
+    return None
+
+
+def _hunt_plan_steps(walk: str, stride: int, state: Any) -> list[PlanStep]:
+    """Plano de BUSCA de presa: escadaria à prova de paredes + ``goto`` BFS.
+
+    Porquê: o ``move <dir> times=N`` sozinho ficava **presa contra paredes** (o
+    spawn dentro de edifícios deixa o aventureiro encostado a uma) e uma
+    alternância de lado entre rondas só oscilava (e→w→e…). O plano novo é uma
+    **escadaria determinística dentro da mesma ronda** — anda, desliza, anda,
+    desliza — nunca cancelando o próprio progresso, mais um ``goto`` (BFS,
+    ``dfb-nav``) até ao fim ideal da escadaria: quando os moves ficaram presos,
+    o ``goto`` dá a volta; quando chegaram, é um trecho curto sem efeito.
+
+    Sem coordenadas conhecidas fica só a escadaria; direções sem vetor
+    (``up``/``down``/``wait``) ficam num único ``move``.
+    """
+    vec = _DIR_VECTORS.get(walk)
+    if vec is None:
+        return [PlanStep(f"move {walk} times={stride}", manual=False),
+                PlanStep("read screen", manual=False)]
+    side = _HUNT_SIDES.get(walk, ("e", "w"))[0]
+    svec = _DIR_VECTORS[side]
+    out: list[PlanStep] = [
+        PlanStep(f"move {walk} times={stride}", manual=False),
+        PlanStep(f"move {side} times={stride}", manual=False),
+        PlanStep(f"move {walk} times={stride}", manual=False),
+        PlanStep(f"move {side} times={stride}", manual=False),
+    ]
+    pos = _adventurer_pos(state)
+    if pos is not None:
+        dest = (pos[0] + vec[0] * 2 * stride + svec[0] * 2 * stride,
+                pos[1] + vec[1] * 2 * stride + svec[1] * 2 * stride)
+        if all(-MAX_COORD <= v <= MAX_COORD for v in dest):
+            out.append(PlanStep(f"goto {dest[0]},{dest[1]}", manual=False))
+    out.append(PlanStep("read screen", manual=False))
+    return out
+
 #: Teto de passos de um único passo do plano (um valor maior é bug de quem gerou).
 MAX_PLAN_STEPS = 1000
 
 #: Coordenadas plausíveis para ``goto`` (o mundo do DF não chega perto disto).
 MAX_COORD = 1_000_000
+
+
+def _delta_dir(dx: int, dy: int) -> str:
+    """Direção do DSL do vetor ``(dx, dy)`` (y cresce para sul, como no DF)."""
+    north_south = "n" if dy < 0 else "s" if dy > 0 else ""
+    east_west = "e" if dx > 0 else "w" if dx < 0 else ""
+    return f"{north_south}{east_west}" or "wait"
 
 
 def _safe_direction(value: Any) -> str:

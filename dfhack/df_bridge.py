@@ -1504,7 +1504,8 @@ def fail(msg, code, hint, as_json):
     sys.exit(code)
 
 
-def main():
+def build_parser():
+    """Parser do CLI (exposto para os testes validarem a ordem real de argv)."""
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--df-path", help="diretório do Dwarf Fortress (senão: $DF_PATH ou auto-detecção Steam)")
     common.add_argument("--port", type=int, help="porta RPC do DFHack (senão: $DFHACK_PORT, remote-server.json, 5000)")
@@ -1569,6 +1570,11 @@ def main():
     p.add_argument("--stdin", action="store_true", help="batch: lê o plano do stdin")
     p.add_argument("--no-journal", action="store_true", help="batch: não grava o journal JSONL")
 
+    return ap
+
+
+def main():
+    ap = build_parser()
     args = ap.parse_args()
     handlers = {
         "status": cmd_status,

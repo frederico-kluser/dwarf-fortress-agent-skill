@@ -372,6 +372,18 @@ local function inventory_group(u)
 end
 
 -- varredura enxuta (só o que o prompt precisa): nome, distância, direção, hostil, visível
+-- 'sapient' (humanoide inteligente: nunca alvo de caça sem aprovação humana) /
+-- 'animal' (restantes criaturas: caçáveis) / nil (DFHack sem os helpers).
+local function unit_kind(u)
+  if type(dfhack.units.isSapient) == 'function' then
+    return guard(function() return dfhack.units.isSapient(u) and 'sapient' or 'animal' end, nil)
+  end
+  if type(dfhack.units.isAnimal) == 'function' then
+    return guard(function() return dfhack.units.isAnimal(u) and 'animal' or 'sapient' end, nil)
+  end
+  return nil
+end
+
 local function units_lean(only_hostile, cap)
   local adv = adventurer_unit()
   local ax, ay, az = adv.pos.x, adv.pos.y, adv.pos.z
@@ -385,8 +397,11 @@ local function units_lean(only_hostile, cap)
         if not only_hostile or hostile then
           out[#out + 1] = {
             name = utf(dfhack.units.getReadableName(u)),
+            race = guard(function() return utf(dfhack.units.getRaceReadableNameById(u.race)) end, nil),
             distance = dist,
             direction = direction(dx, dy, dz),
+            pos = { x = as_number(u.pos.x), y = as_number(u.pos.y), z = as_number(u.pos.z) },
+            kind = unit_kind(u),
             hostile = hostile,
             visible = (dfhack.units.isVisible(u) and not dfhack.units.isHidden(u)) and true or false,
             great_danger = dfhack.units.isGreatDanger(u) and true or false,

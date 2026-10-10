@@ -18,7 +18,7 @@ import pytest
 from system_one_dwarf.agent.executor import DEFAULT_BRIDGE_PATH, MacroExecutor
 from system_one_dwarf.agent.types import LoopConfig, MacroAction
 
-from .fakes_loop import FakeBridgeRunner, FakeGame, game_state, hostile
+from .fakes_loop import FakeBridgeRunner, FakeGame, animal, game_state, hostile
 
 CONFIG = LoopConfig(advance_seconds=3.0)
 
@@ -56,7 +56,6 @@ def attack_action(**params) -> MacroAction:
         id="attack:goblin_skulker", name_en="Attack goblin skulker",
         description_en="Close on the skulker and attack.", target="goblin skulker",
         verb="attack", category="threat", priority=20, params=base,
-        needs_manual_mapping=True,
     )
 
 
@@ -82,16 +81,15 @@ def test_attack_executes_movement_dsl_with_safety_gates():
     assert "--allow-travel-barrier" not in argv      # a barreira de viagem fica ligada
     assert argv[1].endswith("df_bridge.py") and argv[2:4] == ("act", "batch")
 
-    # o plano verificável: aproximar + ler o ecrã (as teclas de ataque não entram)
+    # o ataque está MAPPADO (bump-attack): aproximar + ler o ecrã, sem notas
     assert result.executed_dsl == "move ne times=5; read screen"
-    assert result.needs_manual_mapping is True
-    assert any("attack" in note for note in result.manual_notes)
-    assert "# MANUAL:" in result.dsl                    # plano completo, com notas
+    assert result.needs_manual_mapping is False
+    assert result.manual_notes == ()
     assert parse_batch(result.executed_dsl) == [
         {"op": "move", "dir": "ne", "times": 5},
         {"op": "read", "what": "screen"},
     ]
-    assert parse_batch(result.dsl) == parse_batch(result.executed_dsl)  # comentários não contam
+    assert parse_batch(result.dsl) == parse_batch(result.executed_dsl)  # sem comentários
 
 
 def test_execute_rejects_non_macro_action():
@@ -396,3 +394,146 @@ def test_bridge_command_carries_the_client_flags():
     assert "--json" in argv
     assert argv[argv.index("--df-path") + 1] == "/games/Dwarf Fortress"
     assert argv[argv.index("--port") + 1] == "5001"
+
+
+# ------------------------------------------- ataque: laço de golpes (bump)
+
+
+def prey_action(**params):
+    base = {"direction": "n", "distance": 1.0, "steps": 1, "target_name": "donkey",
+            "x": 88, "y": 70, "z": 0}
+    base.update(params)
+    return MacroAction(id="attack:donkey", name_en="Hunt and kill the donkey",
+                       description_en="Strike it down.", target="donkey",
+                       verb="attack", category="objective", priority=25, params=base)
+
+
+def test_attack_loop_strikes_into_the_target_tile_until_it_dies():
+    """Bump-attack: passo para o tile da presa, verificação por passo, morte
+    confirmada pela linha do gamelog (feedback de eventos)."""
+    with_prey = game_state(units=[animal("donkey", 1, "N", x=88, y=70)],
+                           x=88, y=71, focus="dungeonmode")
+    kill_line = game_state(units=[], x=88, y=71, focus="dungeonmode",
+                           events=["The donkey has been slain!"])
+    ex, runner = executor(game=FakeGame(kill_line))
+    result = ex.execute(prey_action(), with_prey)
+
+    assert result.status == "executed" and result.ok is True
+    assert result.reason.startswith("target down") and "slain" in result.reason
+    assert len(runner.batch_calls()) == 1
+    argv = runner.batch_calls()[0]
+    assert "move n times=1" in argv          # adjacente → golpe = passo para o tile
+    assert "--stop-on-threat" in argv and "--stop-on-focus-change" in argv
+    assert result.report["strikes"] == 1
+    assert result.report["events"] == ["The donkey has been slain!"]
+    assert result.needs_manual_mapping is False
+
+
+def test_attack_loop_approaches_with_goto_and_stops_after_five_attempts():
+    far_prey = game_state(units=[animal("wild boar", 4, "S", x=88, y=76)],
+                          x=88, y=72, focus="dungeonmode")
+    ex, runner = executor(game=FakeGame(far_prey))
+    result = ex.execute(prey_action(target_name="wild boar", x=88, y=76,
+                                    direction="s", distance=4.0, steps=3), far_prey)
+
+    assert result.status == "executed" and result.ok is False
+    assert "attempts exhausted" in result.reason
+    assert len(runner.batch_calls()) == MacroExecutor.ATTACK_ROUNDS  # regra das ≤ 5
+    assert all("goto 88,76" in argv for argv in runner.batch_calls())
+    assert result.report["strikes"] == MacroExecutor.ATTACK_ROUNDS
+
+
+def test_attack_loop_aborts_mid_fight_when_a_real_threat_appears():
+    calm = game_state(units=[animal("donkey", 1, "N", x=88, y=70)],
+                      x=88, y=71, focus="dungeonmode")
+    ambush = game_state(units=[animal("donkey", 1, "N", x=88, y=70)],
+                        x=88, y=71, focus="dungeonmode",
+                        hostiles=[hostile("troll", 3, "S")])
+    ex, runner = executor(game=FakeGame(calm, ambush))
+    result = ex.execute(prey_action(), calm)
+
+    assert result.status == "aborted" and result.ok is False
+    assert result.reason.startswith("guard:")
+    assert len(runner.batch_calls()) == 1     # o golpe 1 foi dado; a guarda travou o resto
+
+
+def test_attack_loop_stops_when_the_adventurer_dies_mid_fight():
+    calm = game_state(units=[animal("donkey", 1, "N", x=88, y=70)],
+                      x=88, y=71, focus="dungeonmode")
+    dead = game_state(units=[animal("donkey", 1, "N", x=88, y=70)],
+                      x=88, y=71, focus="dungeonmode", status="dead")
+    ex, runner = executor(game=FakeGame(calm, dead))
+    result = ex.execute(prey_action(), calm)
+
+    assert result.status == "aborted"
+    assert result.reason == "guard:adventurer_dead"
+    assert len(runner.batch_calls()) == 1
+
+
+def test_attack_target_gone_without_death_line_is_reported_as_such():
+    with_prey = game_state(units=[animal("donkey", 1, "N", x=88, y=70)],
+                           x=88, y=71, focus="dungeonmode")
+    fled = game_state(units=[], x=88, y=71, focus="dungeonmode")
+    ex, runner = executor(game=FakeGame(fled))
+    result = ex.execute(prey_action(), with_prey)
+
+    assert result.status == "executed" and result.ok is False
+    assert "target gone" in result.reason
+    assert result.report["strikes"] == 1
+
+
+# ------------------------------------------- caça: plano de busca (ziguezague)
+
+
+def hunt_search_action(**params) -> MacroAction:
+    base = {"steps": 5, "direction": "n"}
+    base.update(params)
+    return MacroAction(
+        id="hunt:search_prey", name_en="Search for an animal to hunt",
+        description_en="Walk the surroundings until a wild animal appears.",
+        target="prey", verb="hunt", category="objective", priority=30, params=base,
+    )
+
+
+def test_hunt_plan_is_staircase_plus_goto_and_valid_dsl():
+    """Regressao: `move n times=N` sozinho ficava PRESO contra paredes e a
+    alternância de lado entre rondas oscilava — o plano de busca passou a
+    escadaria determinística + `goto` (BFS) até ao fim ideal da escadaria."""
+    state = game_state(x=68, y=66, z=132)
+    ex, _ = executor()
+    plan = ex.plan(hunt_search_action(), state)
+    assert not any(step.manual for step in plan), "busca não tem passos manuais"
+    steps = parse_batch(ex.executable_dsl(hunt_search_action(), state))
+    ops = [s["op"] for s in steps]
+    assert ops == ["move", "move", "move", "move", "goto", "read"]
+    # escadaria: anda, desliza, anda, desliza (nunca cancela o próprio progresso)
+    assert [(s["dir"], s["times"]) for s in steps[:4]] == [
+        ("n", 5), ("e", 5), ("n", 5), ("e", 5)]
+    # destino ideal: pos + 2*stride*walk + 2*stride*lado
+    assert (steps[4]["x"], steps[4]["y"]) == (78, 56)
+
+
+def test_hunt_plan_side_is_deterministic_per_direction():
+    """O lado NÃO depende da paridade da posição (oscilava e→w→e…): é fixo
+    por direção de marcha (n->e), para o progresso nunca se cancelar."""
+    ex, _ = executor()
+    for x, y in ((68, 66), (69, 66)):
+        steps = parse_batch(ex.executable_dsl(hunt_search_action(), game_state(x=x, y=y, z=132)))
+        assert steps[1]["dir"] == "e"
+
+
+def test_hunt_plan_without_position_skips_goto():
+    ex, _ = executor()
+    state = game_state()
+    steps = parse_batch(ex.executable_dsl(hunt_search_action(), state))
+    ops = [s["op"] for s in steps]
+    assert "goto" not in ops and ops == ["move", "move", "move", "move", "read"]
+
+
+def test_hunt_plan_vertical_direction_keeps_single_move():
+    ex, _ = executor()
+    state = game_state(x=68, y=66, z=132)
+    steps = parse_batch(ex.executable_dsl(hunt_search_action(direction="up", steps=3), state))
+    ops = [s["op"] for s in steps]
+    assert ops == ["move", "read"]
+    assert steps[0]["dir"] == "up" and steps[0]["times"] == 3

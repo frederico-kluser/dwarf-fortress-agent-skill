@@ -172,14 +172,32 @@ def game_state(**kwargs: Any) -> GameState:
 
 
 def hostile(name: str = "goblin skulker", distance: float = 6.0, direction: str = "NE",
-            great_danger: bool = False, visible: bool = True, hostile_flag: bool = True) -> dict[str, Any]:
-    return {"name": name, "distance": distance, "direction": direction, "hostile": hostile_flag,
-            "visible": visible, "great_danger": great_danger}
+            great_danger: bool = False, visible: bool = True, hostile_flag: bool = True,
+            **extra: Any) -> dict[str, Any]:
+    out = {"name": name, "distance": distance, "direction": direction, "hostile": hostile_flag,
+           "visible": visible, "great_danger": great_danger}
+    out.update(extra)
+    return out
 
 
-def friendly(name: str = "hunter", distance: float = 3.0, direction: str = "S") -> dict[str, Any]:
-    return {"name": name, "distance": distance, "direction": direction, "hostile": False,
-            "visible": True, "great_danger": False}
+def friendly(name: str = "hunter", distance: float = 3.0, direction: str = "S",
+             **extra: Any) -> dict[str, Any]:
+    """Unidade não-hostil **sapiente** (pessoa: alvo de conversa, nunca de caça)."""
+    out = {"name": name, "distance": distance, "direction": direction, "hostile": False,
+           "visible": True, "great_danger": False, "kind": "sapient"}
+    out.update(extra)
+    return out
+
+
+def animal(name: str = "donkey", distance: float = 2.0, direction: str = "N",
+           *, x: int | None = 88, y: int | None = 70, z: int | None = 0,
+           **extra: Any) -> dict[str, Any]:
+    """Criatura não-sapiente visível (presa de caça), com posição para o ``goto``."""
+    out = {"name": name, "distance": distance, "direction": direction, "hostile": False,
+           "visible": True, "great_danger": False, "kind": "animal",
+           "pos": {"x": x, "y": y, "z": z}}
+    out.update(extra)
+    return out
 
 
 # --------------------------------------------------------------------- JEV

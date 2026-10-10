@@ -21,7 +21,7 @@ import pytest
 
 from system_one_dwarf.agent.types import LoopConfig
 
-from .fakes_loop import friendly, game_state, hostile
+from .fakes_loop import animal, friendly, game_state, hostile
 
 CONFIG = LoopConfig()
 
@@ -326,3 +326,55 @@ def test_direction_helpers():
     assert opposite_direction("") == ""
     assert direction_from_text("a road runs north past the river") == "n"
     assert direction_from_text("", None) == ""
+
+
+# ------------------------------------------------------------------- caça
+
+
+def test_animal_visible_gives_attack_candidate_with_mission_text():
+    """Presa visível + missão de caça → ``attack:<animal>`` prioridade alta."""
+    state = game_state(units=[animal("donkey", 2, "N")], hour=12.0)
+    actions = generate_actions(state, LoopConfig(max_candidates=12),
+                               objective="MISSION: find a wild animal and kill it.")
+    hunt = [action for action in actions if action.verb == "attack" and action.target == "donkey"]
+    assert hunt, "a presa visível tem de gerar um candidato de ataque"
+    assert "MISSION" in hunt[0].description_en and "kill" in hunt[0].description_en
+    assert hunt[0].needs_manual_mapping is False
+    assert hunt[0].params["target_name"] == "donkey"
+    assert hunt[0].params["x"] == 88 and hunt[0].params["y"] == 70
+    ids = [action.id for action in actions]
+    explore_id = next(action.id for action in actions if action.verb == "explore")
+    assert ids.index("attack:donkey") < ids.index(explore_id), "missão de caça antes do explore"
+
+
+def test_sapient_units_are_never_hunt_targets():
+    """Regra de segurança: humanos/sapiens nunca viram alvo de caça gerado."""
+    state = game_state(
+        units=[friendly("Urist McHunter", 2, "S", race="human"),
+               animal("grizzly bear", 4, "W", x=80, y=72)],
+        hour=12.0,
+    )
+    actions = generate_actions(state, LoopConfig(max_candidates=12),
+                               objective="MISSION: find a wild animal and kill it.")
+    assert not any(action.verb == "attack" and action.target == "Urist McHunter"
+                   for action in actions)
+    assert any(action.verb == "attack" and action.target == "grizzly bear"
+               for action in actions)
+    assert any(action.verb == "talk" for action in actions)
+
+
+def test_hunt_mission_without_prey_offers_search():
+    state = game_state(units=[], hour=12.0, surroundings="dense forest")
+    actions = generate_actions(state, LoopConfig(max_candidates=12),
+                               objective="MISSION: find a wild animal and kill it.")
+    search = [action for action in actions if action.verb == "hunt"]
+    assert search and search[0].id == "hunt:search_prey"
+    ids = [action.id for action in actions]
+    explore_id = next(action.id for action in actions if action.verb == "explore")
+    assert ids.index("hunt:search_prey") < ids.index(explore_id)
+
+
+def test_no_hunt_search_without_mission():
+    state = game_state(units=[], hour=12.0)
+    actions = generate_actions(state, LoopConfig(max_candidates=12))
+    assert not any(action.verb == "hunt" for action in actions)

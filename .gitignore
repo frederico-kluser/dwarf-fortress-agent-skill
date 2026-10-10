@@ -35,3 +35,7 @@ scripts/e2e/logs/
 #   .work/crawl_api.py build_skills.py htmlmd.py taxonomy.py   (pipeline)
 #   requirements.txt
 *.cover
+
+# Artefactos de runtime da missao de caça (estado/plano/report por corrida).
+scripts/e2e/mission-hunt-*.json
+scripts/e2e/hunt-plan-live.json
