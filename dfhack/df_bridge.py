@@ -16,6 +16,8 @@ Uso:
   python3 df_bridge.py act screen               # lê o texto visível na tela do jogo
   python3 df_bridge.py act move n --times 3     # anda 3 passos para o norte (adventure)
   python3 df_bridge.py act batch "goto 88,72; key A_TALK; wait short; read screen"  # array de ações
+  python3 df_bridge.py act goto 88 72 5         # goto 3D (X Y Z): escadas/rampas — EXPERIMENTAL
+  python3 df_bridge.py act reach 88 72 5        # sonda: o alvo é alcançável? (grupos de caminhada)
   python3 df_bridge.py run prospect all         # comando arbitrário do console DFHack
   python3 df_bridge.py pause | unpause          # atalhos seguros (lua SetPauseState)
 
@@ -85,6 +87,37 @@ ACTION_OPS = frozenset(("goto", "move", "key", "click", "wait"))   # ops que mex
 READ_WHATS = frozenset(("screen", "adventurer", "threats", "units",
                         "inventory", "date", "all", "state"))
 _KEY_SHAPE = re.compile(r"^[A-Z_][A-Z0-9_]*$")    # forma de um df.interface_key
+_INT_SHAPE = re.compile(r"^[+-]?[0-9]+$")          # inteiro decimal estrito (sem 1_0, sem 1.5)
+
+# ---------- navegação multi-z (EXPERIMENTAL: verify live) ----------
+# `goto X,Y,Z` (3 inteiros) pede `dfb-nav route3d` e anda a rota passo a passo. Passos
+# que o dfb-nav emite (um por tecla/turno) e o vetor (dx, dy, dz) de cada um — a ponte
+# usa-os para VERIFICAR a posição depois de cada tecla:
+#   n s e w ne nw se sw    planar                → `dfb-act move <dir>`
+#   up | down              escada (mesmo x,y)    → `dfb-act move up|down`  (A_MOVE_UP/DOWN)
+#   <dir>_up | <dir>_down  rampa (diagonal em z) → `dfb-act key A_MOVE_<DIR>_UP|DOWN`
+# (o `dfb-act move` só conhece as 11 palavras do DSL; as teclas de rampa existem em
+# data/init/interface.txt do DF 53.16 — adventure mode, Shift/Ctrl+direção — e entram
+# por `dfb-act key`.) Como NÃO está provado ao vivo qual tecla faz o jogo subir uma
+# escada/rampa, um passo em z tenta teclas por ordem e pára na 1.ª que mexe o personagem
+# (a tecla que resultou sai em `z_keys`: é a evidência para fixar o mapeamento).
+MAX_GOTO_Z = 1000                 # teto de sanidade do z de um goto 3D (o z do DF é < ~500)
+NAV_STUCK_ROUTES = 5              # rotas 3D seguidas sem progresso até desistir
+NAV_STAIR_AUX_FALLBACK = True     # escada: se A_MOVE_UP/DOWN não mexer, tenta `<` / `>` (_AUX)
+NAV_SLOPE_UP_FALLBACKS = True     # subir rampa: se Shift+dir não mexer, anda na direção e depois `<`
+NAV_SLOPE_DOWN_WALK = False       # descer rampa: tentar andar para o ar (= cair) — só após verificar
+NAV_MENU_FOCUS = ("Announcements", "Sheet", "Conversation", "Travel")   # = guarda do dfb-act move
+_PLANAR_VECTORS = {"n": (0, -1), "s": (0, 1), "e": (1, 0), "w": (-1, 0),
+                   "ne": (1, -1), "nw": (-1, -1), "se": (1, 1), "sw": (-1, 1)}
+NAV_STEP_VECTORS = {d: (dx, dy, 0) for d, (dx, dy) in _PLANAR_VECTORS.items()}
+NAV_STEP_VECTORS.update({"up": (0, 0, 1), "down": (0, 0, -1)})
+NAV_SLOPE_KEYS = {}               # token de rampa → nome do df.interface_key
+for _d, (_dx, _dy) in _PLANAR_VECTORS.items():
+    NAV_STEP_VECTORS[_d + "_up"] = (_dx, _dy, 1)
+    NAV_STEP_VECTORS[_d + "_down"] = (_dx, _dy, -1)
+    NAV_SLOPE_KEYS[_d + "_up"] = "A_MOVE_%s_UP" % _d.upper()
+    NAV_SLOPE_KEYS[_d + "_down"] = "A_MOVE_%s_DOWN" % _d.upper()
+del _d, _dx, _dy
 
 
 class BridgeError(Exception):
@@ -1162,6 +1195,181 @@ def _goto(args, df, tx, ty, max_steps):
             "note": "orçamento de passos esgotado" if steps_taken >= max_steps else None}
 
 
+# ---------- goto 3D (EXPERIMENTAL: verify live) ----------
+# Nunca foi corrido contra o jogo vivo: nasce só da documentação (formas de tile +
+# grupos de caminhada, ver dfb-nav.lua). Regras da ponte: (1) só mexe no personagem com
+# uma rota provada pelo dfb-nav; (2) verifica a posição depois de CADA tecla e recomputa
+# quando bloqueou ou desviou; (3) rota 3D falhada só cai no goto planar quando o z do
+# alvo é o z actual — com z diferente devolve o erro (nunca um sucesso silencioso).
+def _as_int(value):
+    """int de um valor JSON (int, float inteiro) — None para bool/None/lixo."""
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float) and value.is_integer():
+        return int(value)
+    return None
+
+
+def _read_pos(args, df):
+    """Posição {x,y,z} (ints) do aventureiro; BridgeError se o jogo não a devolver."""
+    adv, _ = run_game_script(args, df, ["dfb-state", "adventurer", "1"])
+    pos = adv.get("pos") if isinstance(adv, dict) else None
+    vals = [_as_int(pos.get(k)) for k in ("x", "y", "z")] if isinstance(pos, dict) else [None]
+    if any(v is None for v in vals):
+        raise BridgeError("posição do aventureiro indisponível (dfb-state adventurer)",
+                          EXIT_CMD_FAILED, "há um aventureiro vivo no mapa?")
+    return {"x": vals[0], "y": vals[1], "z": vals[2]}
+
+
+def _arrived3d(pos, tx, ty, tz):
+    """Chegou: mesmo z e a ≤ 1 tile (a mesma regra do goto planar, mais o z)."""
+    return pos["z"] == tz and max(abs(pos["x"] - tx), abs(pos["y"] - ty)) <= 1
+
+
+def _route_tokens(route):
+    """(passos, None) de uma resposta `dfb-nav route3d` válida; (None, motivo) senão."""
+    if not isinstance(route, dict) or not route.get("ok"):
+        return None, "dfb-nav não devolveu rota"
+    steps = route.get("steps")
+    if not isinstance(steps, list):
+        return None, "rota sem lista de passos"
+    for token in steps:
+        if not isinstance(token, str) or token not in NAV_STEP_VECTORS:
+            return None, "passo 3D desconhecido: %r" % (token,)
+    return list(steps), None
+
+
+def _z_attempts(token):
+    """[(via, nome)] a tentar, por ordem, num passo da rota 3D. via "move" =
+    `dfb-act move <nome>`; via "key" = `dfb-act key <nome>`. A tecla documentada vem
+    primeiro; as outras só correm se a posição NÃO mudou. Descer uma rampa nunca
+    "anda para o ar" por omissão: seria cair de um rebordo."""
+    if token in MOVE_DIRS:                              # planar | up | down
+        attempts = [("move", token)]
+        if token in ("up", "down") and NAV_STAIR_AUX_FALLBACK:
+            attempts.append(("key", "A_MOVE_%s_AUX" % token.upper()))     # `<` / `>`
+        return attempts
+    direction, _, vertical = token.rpartition("_")
+    name = direction.upper()
+    attempts = [("key", NAV_SLOPE_KEYS[token])]         # Shift/Ctrl + direção
+    if vertical == "up" and NAV_SLOPE_UP_FALLBACKS:
+        attempts += [("key", "A_MOVE_%s" % name), ("key", "A_MOVE_UP")]   # a rampa sobe ao andar
+    elif vertical == "down" and NAV_SLOPE_DOWN_WALK:
+        attempts.append(("key", "A_MOVE_%s" % name))
+    return attempts
+
+
+def _require_map_focus(args, df, key):
+    """Recusa enviar uma tecla de movimento com um menu por cima do mapa (o `dfb-act
+    key` não tem a guarda de foco do `dfb-act move`, por isso repete-se aqui)."""
+    shown, _ = run_game_script(args, df, ["dfb-act", "focus"])
+    focus = shown.get("focus") if isinstance(shown, dict) else None
+    where = "/".join(str(p) for p in focus) if isinstance(focus, list) else ""
+    if "dungeonmode" not in where or any(w in where for w in NAV_MENU_FOCUS):
+        raise BridgeError("não está no mapa de aventura (focus: %s) — não enviei %s"
+                          % (where or "?", key), EXIT_CMD_FAILED,
+                          "feche o menu antes (key LEAVESCREEN)")
+
+
+def _nav_step(args, df, token, before):
+    """Executa UM passo da rota 3D → (posição depois, teclas enviadas, tecla que mexeu).
+
+    Tenta as teclas de `_z_attempts` pela ordem e pára na 1.ª que muda a posição; só um
+    passo em z (up/down/rampa) tem mais do que uma tentativa. `tecla que mexeu` é None
+    nos passos planares (o jogo não deixa dúvida: foi a tecla do próprio passo)."""
+    if token not in NAV_STEP_VECTORS:
+        raise BridgeError("passo 3D desconhecido: %r" % (token,), EXIT_CMD_FAILED)
+    pos, pressed, guarded = before, 0, False
+    for via, name in _z_attempts(token):
+        if via == "key":
+            if not guarded:                    # só uma vez por passo
+                _require_map_focus(args, df, name)
+                guarded = True
+            run_game_script(args, df, ["dfb-act", "key", name])
+        else:
+            run_game_script(args, df, ["dfb-act", "move", name])
+        pressed += 1
+        time.sleep(args.delay)
+        pos = _read_pos(args, df)
+        if pos != before:
+            if token in _PLANAR_VECTORS:
+                return pos, pressed, None
+            return pos, pressed, name if via == "key" else "A_MOVE_%s" % name.upper()
+    return pos, pressed, None
+
+
+def _goto3d(args, df, tx, ty, tz, max_steps):
+    """Anda até (tx,ty,tz) por rota 3D (escadas/rampas) com verificação por passo.
+
+    Mesmo contrato do `_goto` (dict com ok/arrived/pos/steps/...) mais `mode`,
+    `target` e `z_steps`. Chegar = mesmo z e a ≤ 1 tile do alvo."""
+    steps_taken = recomputes = z_steps = dead_routes = 0
+    z_keys = {}                                # token em z → tecla que o jogo aceitou
+    base = {"mode": "3d", "target": {"x": tx, "y": ty, "z": tz}}
+    pos = _read_pos(args, df)
+    while steps_taken < max_steps:
+        if _arrived3d(pos, tx, ty, tz):
+            return dict(base, ok=True, arrived=True, pos=pos, steps=steps_taken,
+                        recomputes=recomputes, z_steps=z_steps, z_keys=z_keys)
+        route, _ = run_game_script(args, df, ["dfb-nav", "route3d",
+                                              str(tx), str(ty), str(tz)])
+        tokens, why = _route_tokens(route)
+        if tokens is None:
+            detail = route if isinstance(route, dict) else {"raw": str(route)[:200]}
+            if pos["z"] == tz:                 # mesmo z: o goto planar (provado) assume
+                planar = dict(_goto(args, df, tx, ty, max_steps - steps_taken))
+                planar["mode"] = "planar-fallback"
+                planar["steps"] = steps_taken + planar.get("steps", 0)
+                planar["detail3d"] = detail
+                return planar
+            return dict(base, ok=False, error="sem rota 3D até o alvo (%s)" % why,
+                        pos=pos, steps=steps_taken, recomputes=recomputes,
+                        z_steps=z_steps, z_keys=z_keys, detail=detail)
+        progressed = False
+        for token in tokens:
+            before = pos
+            pos, pressed, key = _nav_step(args, df, token, before)
+            steps_taken += pressed             # o orçamento conta teclas, não passos
+            if pos == before:                  # bloqueado (NPC/porta/regra errada)
+                break
+            progressed = True
+            dx, dy, dz = NAV_STEP_VECTORS[token]
+            if pos != {"x": before["x"] + dx, "y": before["y"] + dy, "z": before["z"] + dz}:
+                break                          # desviou da rota planeada: recomputa
+            if dz:
+                z_steps += 1
+            if key:
+                z_keys[token] = key
+            if _arrived3d(pos, tx, ty, tz) or steps_taken >= max_steps:
+                break
+        recomputes += 1
+        dead_routes = 0 if progressed else dead_routes + 1
+        if dead_routes >= NAV_STUCK_ROUTES:
+            return dict(base, ok=False,
+                        error="preso: %d rotas 3D seguidas sem progresso" % NAV_STUCK_ROUTES,
+                        pos=pos, steps=steps_taken, recomputes=recomputes, z_steps=z_steps,
+                        z_keys=z_keys)
+    arrived = _arrived3d(pos, tx, ty, tz)
+    return dict(base, ok=arrived, arrived=arrived, pos=pos, steps=steps_taken,
+                recomputes=recomputes, z_steps=z_steps, z_keys=z_keys,
+                note=None if arrived else "orçamento de passos esgotado")
+
+
+def _parse_goto_args(tokens):
+    """['88','72'] | ['88,72,5'] | ['88','72','5'] → (x, y, z|None); BridgeError se não."""
+    nums = " ".join(tokens or []).replace(",", " ").split()
+    if len(nums) not in (2, 3) or not all(_INT_SHAPE.match(n) for n in nums):
+        raise BridgeError("uso: act goto <x> <y> [<z>] — só inteiros (z = rota 3D)",
+                          EXIT_CMD_FAILED)
+    x, y = int(nums[0]), int(nums[1])
+    z = int(nums[2]) if len(nums) == 3 else None
+    if z is not None and not 0 <= z <= MAX_GOTO_Z:
+        raise BridgeError("z fora de 0..%d: %d" % (MAX_GOTO_Z, z), EXIT_CMD_FAILED)
+    return x, y, z
+
+
 def _do_move(args, df, direction, times):
     """Anda `times` passos numa direção, relê a posição e devolve (data, via).
     Usado pelo `act move` e pelo executor de batch."""
@@ -1181,11 +1389,20 @@ def cmd_act(args):
         return cmd_act_batch(args)
     df = require_df(args)
     if args.action == "goto":
-        if len(args.args) < 2:
-            raise BridgeError("uso: act goto <x> <y> [--max-steps N]", EXIT_CMD_FAILED)
-        data = _goto(args, df, int(args.args[0]), int(args.args[1]), args.max_steps)
+        x, y, z = _parse_goto_args(args.args)
+        if z is None:                      # goto planar: o caminho padrão, provado em jogo
+            data = _goto(args, df, x, y, args.max_steps)
+        else:                              # goto X Y Z: rota 3D (EXPERIMENTAL: verify live)
+            data = _goto3d(args, df, x, y, z, args.max_steps)
         emit_data(args, data, "auto", "goto")
         return EXIT_OK if data.get("ok") else EXIT_CMD_FAILED
+    if args.action == "reach":
+        x, y, z = _parse_goto_args(args.args)
+        if z is None:
+            raise BridgeError("uso: act reach <x> <y> <z>", EXIT_CMD_FAILED)
+        data, via = run_game_script(args, df, ["dfb-nav", "reach", str(x), str(y), str(z)])
+        emit_data(args, data, via, "reach")
+        return EXIT_OK                     # a sonda correu; o veredito está em data.reachable
     if args.action == "move":
         if not args.args:
             raise BridgeError("uso: act move <n|s|e|w|ne|nw|se|sw|up|down|wait> [--times N]",
@@ -1210,11 +1427,17 @@ def _parse_dsl_line(line):
     rest = parts[1:]
     try:
         if op == "goto":
+            # goto X,Y (planar, o padrão) | goto X,Y,Z (rota 3D — EXPERIMENTAL) [maxsteps=N]
             nums = " ".join(rest).replace(",", " ").split()
-            step = {"op": "goto", "x": int(nums[0]), "y": int(nums[1])}
-            for tok in nums[2:]:
-                if tok.startswith("maxsteps="):
-                    step["maxsteps"] = int(tok.split("=", 1)[1])
+            step = {"op": "goto", "x": _dsl_int(nums[0]), "y": _dsl_int(nums[1])}
+            extra = nums[2:]
+            if extra and not extra[0].startswith("maxsteps="):
+                step["z"] = _dsl_int(extra[0])        # 3.º inteiro = z; o dict planar não o traz
+                extra = extra[1:]
+            for tok in extra:
+                if not tok.startswith("maxsteps="):
+                    raise ValueError(tok)             # nada de lixo/4.º inteiro em silêncio
+                step["maxsteps"] = int(tok.split("=", 1)[1])
             return step
         if op == "move":
             step = {"op": "move", "dir": rest[0].lower(), "times": 1}
@@ -1238,8 +1461,27 @@ def _parse_dsl_line(line):
             return {"op": "sleep", "ms": int(rest[0])}
     except (IndexError, ValueError):
         raise BridgeError("passo mal formado: %r" % line, EXIT_CMD_FAILED,
-                          "sintaxe: goto X,Y | move DIR | key NOME | click X,Y | wait short | read screen")
+                          "sintaxe: goto X,Y[,Z] | move DIR | key NOME | click X,Y | wait short | read screen")
     raise BridgeError("passo desconhecido: %r" % line, EXIT_CMD_FAILED)
+
+
+def _dsl_int(token):
+    """Inteiro decimal estrito de um token do DSL (ValueError se não for)."""
+    if not _INT_SHAPE.match(token):
+        raise ValueError(token)
+    return int(token)
+
+
+def _step_int(step, field, i):
+    """Inteiro estrito de um campo de passo (DSL ou JSON); BridgeError se não for."""
+    value = step.get(field)
+    if isinstance(value, str) and _INT_SHAPE.match(value.strip()):
+        return int(value)
+    as_int = _as_int(value)
+    if as_int is None:
+        raise BridgeError("passo %d goto: %s tem de ser inteiro (veio %r)" % (i, field, value),
+                          EXIT_CMD_FAILED, "sintaxe: goto X,Y[,Z]")
+    return as_int
 
 
 def _validate_step(s, i):
@@ -1249,7 +1491,18 @@ def _validate_step(s, i):
             raise BridgeError("passo %d move: direção inválida %r" % (i, s.get("dir")), EXIT_CMD_FAILED)
         s["times"] = int(s.get("times", 1))
     elif op == "goto":
-        s["x"], s["y"] = int(s["x"]), int(s["y"])
+        s["x"], s["y"] = _step_int(s, "x", i), _step_int(s, "y", i)
+        if s.get("z") is None:
+            s.pop("z", None)                 # goto planar: o passo fica exactamente {op,x,y}
+        else:
+            s["z"] = _step_int(s, "z", i)
+            if not 0 <= s["z"] <= MAX_GOTO_Z:
+                raise BridgeError("passo %d goto: z fora de 0..%d (%d)" % (i, MAX_GOTO_Z, s["z"]),
+                                  EXIT_CMD_FAILED)
+        if s.get("maxsteps") is None:
+            s.pop("maxsteps", None)
+        else:
+            s["maxsteps"] = _step_int(s, "maxsteps", i)
     elif op == "click":
         s["x"], s["y"] = int(s["x"]), int(s["y"])
         s["button"] = s.get("button", "left")
@@ -1408,7 +1661,11 @@ def cmd_act_batch(args):
             break
         try:
             if op == "goto":
-                data = _goto(args, df, s["x"], s["y"], s.get("maxsteps", args.max_steps))
+                budget = s.get("maxsteps", args.max_steps)
+                if s.get("z") is None:         # goto X,Y: planar, o caminho padrão
+                    data = _goto(args, df, s["x"], s["y"], budget)
+                else:                          # goto X,Y,Z: rota 3D (EXPERIMENTAL: verify live)
+                    data = _goto3d(args, df, s["x"], s["y"], s["z"], budget)
                 rec.update(data)
                 summary["move_steps"] += data.get("steps", 0)
             elif op == "move":
@@ -1546,10 +1803,12 @@ def build_parser():
                    help="grava também um registo compacto no journal JSONL")
     p = sub.add_parser("act", parents=[common],
                        help="observa a tela e age no jogo (camada de copiloto)")
-    p.add_argument("action", choices=("focus", "screen", "key", "click", "move", "goto", "batch"),
-                   help="focus/screen/key/click/move/goto · batch=array de ações (DSL ou JSON)")
+    p.add_argument("action",
+                   choices=("focus", "screen", "key", "click", "move", "goto", "reach", "batch"),
+                   help="focus/screen/key/click/move/goto/reach · batch=array de ações (DSL ou JSON)")
     p.add_argument("args", nargs="*",
-                   help="move: dir · key: teclas · click: x y [right] · screen: [y1 y2] · goto: x y · batch: passos DSL")
+                   help="move: dir · key: teclas · click: x y [right] · screen: [y1 y2] · "
+                        "goto: x y [z] (z = rota 3D, EXPERIMENTAL) · reach: x y z · batch: passos DSL")
     p.add_argument("--times", type=int, default=1, help="repete o passo (move) N vezes")
     p.add_argument("--delay", type=float, default=0.4,
                    help="pausa entre passos e antes de ler o efeito (padrão 0.4s)")

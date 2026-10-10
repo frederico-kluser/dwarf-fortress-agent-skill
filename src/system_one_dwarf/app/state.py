@@ -29,17 +29,24 @@ Three seams live here on purpose, because they are *app* policy:
   the task runner).
 * :meth:`system_status` / :meth:`game_action` — ``/api/system``: the game
   process (start/stop at the configured path) plus frontend/loop health.
+* :meth:`runtime` — the live per-campaign store.  When the campaign has a root on
+  disk it is backed by ``<root>/runtime.sqlite`` (:mod:`.persist`, H3): the audit
+  trail, the pending approvals and the id counters survive a backend restart.
+  ``persist_runtime=False`` / ``runtime_store_factory`` are the test seams.
 """
 
 from __future__ import annotations
 
 import logging
 import socket
+import threading
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Callable
 
 from .. import __version__
 from ..campaign import (
+    PROVIDERS,
     Campaign,
     CampaignManager,
     IdentityTranslator,
@@ -53,6 +60,7 @@ from ..game.driver import AdventureDriver, GameProcessError, SubprocessBridge
 from .adventure_flow import AdventureTasks
 from .bus import EventBus
 from .loop_runner import DEFAULT_STOP_TIMEOUT, LoopRunner, build_loop
+from .persist import RuntimeStore, runtime_db_path
 from .runtime import (
     APPROVAL_PENDING,
     SOURCE_LIVE,
@@ -117,6 +125,19 @@ class AppServices:
     #: Sonda do frontend (test seam; omissão: :func:`probe_tcp_port`).
     frontend_probe: Callable[[int], bool] | None = None
     _adventures: AdventureTasks | None = None
+    # ---- persistência dos stores rotativos (ARQUITETURA §9 · PROBLEMAS H3)
+    #: Guarda decisions/questions/approvals/inputs em ``<campanha>/runtime.sqlite``
+    #: (só acrescenta durabilidade); ``False`` = só memória (testes/embedders).
+    persist_runtime: bool = True
+    #: Construtor do store por campanha — ``(Campaign) -> store | None`` (test
+    #: seam; omissão: :class:`~system_one_dwarf.app.persist.RuntimeStore`).
+    runtime_store_factory: Callable[[Campaign], Any] | None = None
+    _runtime_lock: Any = field(default_factory=threading.Lock, repr=False, compare=False)
+    #: One callback per campaign, fired when the human answers a question — it is
+    #: how the session watchdog (``agent.watchdog``) learns the human is present.
+    _answer_listeners: dict[str, Callable[[], Any]] = field(
+        default_factory=dict, repr=False, compare=False
+    )
 
     # ------------------------------------------------------------------ campaigns
 
@@ -125,18 +146,113 @@ class AppServices:
         return self.manager.require(campaign_id)
 
     def runtime(self, campaign_id: str) -> CampaignRuntime:
+        """The live store of a campaign (built once; reloaded from its SQLite)."""
         runtime = self.runtimes.get(campaign_id)
         if runtime is None:
-            runtime = CampaignRuntime(campaign_id=campaign_id)
-            self.runtimes[campaign_id] = runtime
+            # Lock: a loop thread and a request thread may both ask for the first
+            # runtime of a campaign; two instances over one file would lose edits.
+            with self._runtime_lock:
+                runtime = self.runtimes.get(campaign_id)
+                if runtime is None:
+                    runtime = CampaignRuntime(
+                        campaign_id=campaign_id, store=self._runtime_store_for(campaign_id)
+                    )
+                    self.runtimes[campaign_id] = runtime
         return runtime
 
+    def _runtime_store_for(self, campaign_id: str) -> Any:
+        """The persistent store of ``campaign_id`` (``None`` = memory-only).
+
+        Only a campaign that exists with a root directory on disk gets one — an
+        unknown id (tests, stray events) stays in memory instead of conjuring a
+        directory.  Never raises: the runtime must come up without its store.
+        """
+        if not self.persist_runtime:
+            return None
+        try:
+            campaign = self.manager.get(campaign_id)
+            if campaign is None or not Path(campaign.root).is_dir():
+                return None
+            if self.runtime_store_factory is not None:
+                return self.runtime_store_factory(campaign)
+            return RuntimeStore(
+                runtime_db_path(campaign.root), secrets=self._live_secrets(campaign)
+            )
+        except Exception:
+            log.warning("no persistent runtime store for %s", campaign_id, exc_info=True)
+            return None
+
+    def _live_secrets(self, campaign: Campaign) -> Callable[[], list[str]]:
+        """The campaign's live API keys, so the store can mask them literally."""
+        keys = self.keys(campaign)
+
+        def read() -> list[str]:
+            found: list[str] = []
+            for provider in PROVIDERS:
+                try:
+                    key = keys.get_key(provider)
+                except Exception:  # a broken key store must not break persistence
+                    continue
+                if isinstance(key, str) and key.strip():
+                    found.append(key.strip())
+            return found
+
+        return read
+
+    def set_answer_listener(
+        self, campaign_id: str, callback: Callable[[], Any] | None
+    ) -> None:
+        """Register (replacing the previous one; ``None`` clears) the callback that
+        runs on every ``question_answered`` of ``campaign_id``.  It must be cheap
+        and must not raise (a failure is logged and swallowed by ``apply_event``)."""
+        if callback is None:
+            self._answer_listeners.pop(campaign_id, None)
+        else:
+            self._answer_listeners[campaign_id] = callback
+
+    def pause_campaign(self, campaign_id: str, *, reason: str = "") -> dict[str, Any] | None:
+        """Put the campaign in ``paused`` — what ``pause_and_ask`` / a budget stop ask for.
+
+        Exactly ``POST .../control {mode: "paused"}``: persisted in ``meta.json``,
+        the loop is stopped and ``control_state`` is fanned out.  Safe to call from
+        the loop's own thread (``LoopRunner.stop`` never joins the current thread).
+        Never raises; ``None`` when the campaign is unknown or the write failed.
+        """
+        try:
+            campaign = self.manager.get(campaign_id)
+            if campaign is None:
+                return None
+            payload = self.manager.set_control(campaign, mode="paused")
+            control = {"mode": payload["mode"], "kill_switch": payload["kill_switch"]}
+            log.info("campaign %s paused%s", campaign.id, f" ({reason})" if reason else "")
+            self.sync_loop(campaign, control)
+            self.publish_event_threadsafe(campaign.id, "control_state", control)
+            return payload
+        except Exception:
+            log.warning("could not pause campaign %s", campaign_id, exc_info=True)
+            return None
+
     def drop_runtime(self, campaign_id: str) -> None:
-        self.runtimes.pop(campaign_id, None)
+        runtime = self.runtimes.pop(campaign_id, None)
+        if runtime is not None:
+            runtime.close()
         runner = self.loops.pop(campaign_id, None)
         if runner is not None:
             runner.shutdown()
         self._translators.pop(campaign_id, None)
+
+    def close_runtimes(self) -> None:
+        """Flush every runtime and release its store connection — never raises.
+
+        The runtimes stay usable (a store reopens on demand): this is the app
+        shutdown courtesy that checkpoints the SQLite WAL, not a terminal state.
+        """
+        for runtime in list(self.runtimes.values()):
+            try:
+                runtime.close()
+            except Exception:  # pragma: no cover - shutdown is best effort
+                log.warning("could not close the runtime of %s", runtime.campaign_id,
+                            exc_info=True)
 
     # ----------------------------------------------------------------- sub-stores
 
@@ -232,6 +348,7 @@ class AppServices:
                 runner.shutdown()
             except Exception:  # pragma: no cover - shutdown is best effort
                 log.warning("could not stop the loop of %s", runner.campaign_id, exc_info=True)
+        self.close_runtimes()
 
     # ---------------------------------------------------- adventures + system
 
@@ -343,6 +460,12 @@ class AppServices:
                 # Passo falhou antes de executar: a decisão de ação mais recente
                 # ainda sem estado morreu com ele.
                 runtime.mark_decision_error(data)
+            elif event_type == "question_answered":
+                # O humano está presente: o watchdog da sessão conta isto como
+                # progresso (ver ``set_answer_listener``).
+                listener = self._answer_listeners.get(campaign_id)
+                if listener is not None:
+                    listener()
         except Exception:  # pragma: no cover - never let a bad event kill the loop
             log.warning("could not mirror %s into the runtime store", event_type, exc_info=True)
         return data, follow

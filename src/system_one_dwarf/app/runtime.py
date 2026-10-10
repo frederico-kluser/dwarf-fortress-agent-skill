@@ -23,14 +23,35 @@ Two live surfaces are owned here:
   action; the app mirrors those questions here as ``pending`` approvals, each
   with an approve/reject decision.  In autopilot nothing is mirrored, so
   ``GET .../approvals`` is empty by construction.
+
+**Durability (H3).**  The rings stay the source of truth (caps, order, pagination
+and dedupe are unchanged); given a ``store``
+(:class:`~system_one_dwarf.app.persist.RuntimeStore`) every mutation is written
+through and, when the runtime is built, the recent records (+ every pending
+question/approval) and the id counters are reloaded.  The store never raises:
+without a working disk the runtime is memory-only, as before.
 """
 
 from __future__ import annotations
 
+import functools
+import logging
+import threading
 from dataclasses import dataclass, field
-from typing import Any, Mapping
+from typing import Any, Callable, Mapping
 
 from ..campaign.clock import parse_iso, utc_now_iso
+from .persist import (
+    KIND_APPROVALS,
+    KIND_DECISIONS,
+    KIND_INPUTS,
+    KIND_QUESTIONS,
+    OP_DROP,
+    OP_SAVE,
+    TrackedRecord,
+)
+
+log = logging.getLogger("system_one_dwarf.app.runtime")
 
 SOURCE_LIVE = "live"
 SOURCE_STUB = "stub"
@@ -53,6 +74,14 @@ HISTORY_LIMIT = INPUTS_LIMIT
 #: action dedupe (see :meth:`CampaignRuntime.add_approval`) and this cap the
 #: queue grew to hundreds of identical pending entries.
 APPROVAL_PENDING_LIMIT = 20
+
+#: *Decided* approvals reloaded from the store at construction (pending ones are
+#: always reloaded, whatever their age).
+APPROVAL_HISTORY_LIMIT = 2000
+
+#: Suffix of the id of a question whose loop-issued id collides with an older,
+#: different record (:meth:`CampaignRuntime._unique_question_id`).
+ID_COLLISION_SUFFIX = ".r"
 
 #: Additive repeat-tracking fields: a re-ask of the same ``action_id`` bumps
 #: them on the pending entry instead of piling up a new one.
@@ -89,6 +118,9 @@ APPROVAL_PENDING = "pending"
 APPROVAL_APPROVED = "approved"
 APPROVAL_REJECTED = "rejected"
 APPROVAL_STATUSES: tuple[str, str, str] = (APPROVAL_PENDING, APPROVAL_APPROVED, APPROVAL_REJECTED)
+
+#: Status string of a not-yet-answered question / not-yet-decided approval.
+_PENDING = "pending"
 
 #: Provenance fields of a queue entry (additive; all of them optional).
 PROVENANCE_FIELDS: tuple[str, ...] = ("band", "role", "action_id", "why_pt", "source_data")
@@ -332,6 +364,24 @@ def stub_screen(ts: str | None = None) -> dict[str, Any]:
     return {"translated_pt": "", "ts": ts or utc_now_iso(), "source": SOURCE_STUB}
 
 
+def _mutating(method: Callable[..., Any]) -> Callable[..., Any]:
+    """Public mutators: one lock (the loop and request threads share the runtime)
+    and one store transaction per outermost call (nested mutators flush at its exit)."""
+
+    @functools.wraps(method)
+    def wrapper(self: "CampaignRuntime", *args: Any, **kwargs: Any) -> Any:
+        with self._lock:
+            self._depth += 1
+            try:
+                return method(self, *args, **kwargs)
+            finally:
+                self._depth -= 1
+                if self._depth == 0:
+                    self._flush()
+
+    return wrapper
+
+
 @dataclass
 class CampaignRuntime:
     """Live store of one campaign: decisions, questions, approvals, inputs, metrics."""
@@ -345,21 +395,148 @@ class CampaignRuntime:
     screen: dict[str, Any] | None = None
     _question_seq: int = 0
     _input_seq: int = 0
+    #: Optional :class:`~.persist.RuntimeStore` (duck-typed: ``apply_ops``,
+    #: ``load_snapshot``, ``close``).  ``None`` = memory-only, as before H3.
+    store: Any = field(default=None, repr=False, compare=False)
+    #: Monotonic counter behind the default ``d-N`` decision ids.  It replaces
+    #: ``len(decisions) + 1``, which repeated one id forever once the ring was full.
+    _decision_seq: int = field(default=0, repr=False)
+    _lock: Any = field(default_factory=threading.RLock, repr=False, compare=False)
+
+    def __post_init__(self) -> None:
+        self._depth = 0
+        self._ops: list[tuple[str, str, Any, Any]] = []
+        #: How many records of each kind came back from the store at construction.
+        self.restored: dict[str, int] = {}
+        if self.store is not None:
+            self._restore()
+
+    # ----------------------------------------------------------------- durability
+
+    @property
+    def persistent(self) -> bool:
+        """``True`` when a store is attached (it may still be degraded to memory)."""
+        return self.store is not None
+
+    def _bind(self, kind: str, key: Any, record: dict[str, Any]) -> dict[str, Any]:
+        """Make an in-place edit of ``record`` (by whoever holds it) write through."""
+        if isinstance(record, TrackedRecord):
+            record.bind(functools.partial(self._edited, kind, key))
+        return record
+
+    def _touch(self, kind: str, key: Any, record: dict[str, Any]) -> None:
+        """Queue an upsert of ``record`` (the batch keeps the last op per record)."""
+        if self.store is not None:
+            self._ops.append((OP_SAVE, kind, key, record))
+
+    def _track(self, kind: str, key: Any, record: dict[str, Any]) -> None:
+        self._bind(kind, key, record)
+        self._touch(kind, key, record)
+
+    def _forget(self, kind: str, key: Any, record: dict[str, Any]) -> None:
+        """``record`` left the in-memory view.
+
+        Decided/answered records are history and stay on disk; one that is still
+        *pending* is tombstoned so a restart does not resurrect what the runtime
+        deliberately dropped (duplicate, cap overflow).
+        """
+        if isinstance(record, TrackedRecord):
+            record.bind(None)
+        if self.store is not None and str(record.get("status") or "") == _PENDING:
+            self._ops.append((OP_DROP, kind, key, None))
+
+    def _edited(self, kind: str, key: Any, record: dict[str, Any]) -> None:
+        """Hook of :class:`TrackedRecord`: a stored record was edited in place."""
+        with self._lock:
+            self._touch(kind, key, record)
+            if self._depth == 0:
+                self._flush()
+
+    def _flush(self) -> None:
+        ops, self._ops = self._ops, []
+        if self.store is None or not ops:
+            return
+        last = {(op[1], op[2]): op for op in ops}  # only the final state of each record
+        try:
+            self.store.apply_ops(list(last.values()))
+        except Exception:  # the store is a courtesy: memory stays the truth
+            log.warning("runtime store write failed for %s", self.campaign_id, exc_info=True)
+
+    def close(self) -> None:
+        """Flush and release the store's connection (it reopens on next use)."""
+        with self._lock:
+            self._flush()
+            closer = getattr(self.store, "close", None)
+        if callable(closer):
+            try:
+                closer()
+            except Exception:  # pragma: no cover - shutdown is best effort
+                log.warning("could not close the runtime store of %s", self.campaign_id,
+                            exc_info=True)
+
+    @_mutating
+    def _restore(self) -> None:
+        """Reload the audit trail, the pending queue and the id counters.
+
+        Never raises: a store that fails (or hands back junk) leaves whatever was
+        already loaded and the runtime simply starts from there.
+        """
+        try:
+            snap = self.store.load_snapshot(
+                decisions=DECISIONS_LIMIT, questions=QUESTIONS_LIMIT,
+                approvals=APPROVAL_HISTORY_LIMIT, inputs=INPUTS_LIMIT,
+            )
+            floor = 0
+            for seq, payload in getattr(snap, "decisions", ()):
+                record = TrackedRecord(payload)
+                record.setdefault("id", f"d-{seq}")
+                self.decisions.append(self._bind(KIND_DECISIONS, int(seq), record))
+                floor = max(floor, int(seq))
+            for kind, bucket in ((KIND_QUESTIONS, self.questions),
+                                 (KIND_APPROVALS, self.approvals)):
+                for payload in getattr(snap, kind, ()):
+                    if payload.get("id"):
+                        key = str(payload["id"])
+                        bucket[key] = self._bind(kind, key, TrackedRecord(payload))
+            for payload in getattr(snap, KIND_INPUTS, ()):
+                if payload.get("id"):
+                    key = str(payload["id"])
+                    self.inputs.append(self._bind(KIND_INPUTS, key, TrackedRecord(payload)))
+            counters = getattr(snap, "counters", None) or {}
+            self._decision_seq = max(self._decision_seq, floor,
+                                     int(counters.get(KIND_DECISIONS) or 0))
+            self._question_seq = max(self._question_seq, int(counters.get(KIND_QUESTIONS) or 0))
+            self._input_seq = max(self._input_seq, int(counters.get(KIND_INPUTS) or 0))
+        except Exception:
+            log.warning("could not reload the runtime store of %s", self.campaign_id,
+                        exc_info=True)
+        self.restored = {KIND_DECISIONS: len(self.decisions), KIND_QUESTIONS: len(self.questions),
+                         KIND_APPROVALS: len(self.approvals), KIND_INPUTS: len(self.inputs)}
+        self._trim_pending_approvals()  # a store written under a bigger cap
 
     # ------------------------------------------------------------------ decisions
 
+    @_mutating
     def add_decision(self, decision: dict[str, Any]) -> dict[str, Any]:
-        item = dict(decision)
-        item.setdefault("id", f"d-{len(self.decisions) + 1}")
+        item = TrackedRecord(decision)
+        self._decision_seq = max(self._decision_seq, len(self.decisions)) + 1
+        seq = self._decision_seq
+        item.setdefault("id", f"d-{seq}")
         item.setdefault("ts", utc_now_iso())
         self.decisions.append(item)
+        overflow = self.decisions[:-DECISIONS_LIMIT]
         del self.decisions[:-DECISIONS_LIMIT]
+        for old in overflow:  # leaves the ring: later edits must not write through
+            if isinstance(old, TrackedRecord):
+                old.bind(None)
+        self._track(KIND_DECISIONS, seq, item)
         return item
 
     def list_decisions(self, *, limit: int | None = None, before: str | None = None) -> list[dict[str, Any]]:
         """The decision log, paginated (``?limit=&before=`` of ``docs/api.md``)."""
         return _page(self.decisions, limit=limit, before=before)
 
+    @_mutating
     def mark_decision_released(self, payload: Mapping[str, Any]) -> dict[str, Any] | None:
         """Mirror :data:`RELEASED_BY_APPROVAL` onto the stored JEV-A decision.
 
@@ -383,6 +560,7 @@ class CampaignRuntime:
         item["status"] = DECISION_EXECUTED
         return item
 
+    @_mutating
     def mark_decision_executed(self, payload: Mapping[str, Any]) -> dict[str, Any] | None:
         """Mirror ``status: "executed"`` (additive) onto the matching decision.
 
@@ -396,6 +574,7 @@ class CampaignRuntime:
         item["status"] = DECISION_EXECUTED
         return item
 
+    @_mutating
     def mark_decision_question(self, payload: Mapping[str, Any]) -> dict[str, Any] | None:
         """Mirror ``status: "question"`` onto the decision the question is about.
 
@@ -418,6 +597,7 @@ class CampaignRuntime:
                 return item
         return None
 
+    @_mutating
     def mark_decision_error(self, payload: Mapping[str, Any]) -> dict[str, Any] | None:
         """Mirror ``status: "error"`` onto the latest undecided action decision.
 
@@ -448,10 +628,12 @@ class CampaignRuntime:
 
     # ------------------------------------------------------------------ questions
 
+    @_mutating
     def next_question_id(self) -> str:
         self._question_seq += 1
         return f"q-{self._question_seq}"
 
+    @_mutating
     def add_question(self, question: dict[str, Any]) -> dict[str, Any]:
         """Store a queue entry, keeping the provenance the loop published.
 
@@ -482,10 +664,39 @@ class CampaignRuntime:
             for key in (*PROVENANCE_FIELDS, "format"):
                 if key in item:
                     pending[key] = item[key]
+            self._touch(KIND_QUESTIONS, str(pending.get("id") or ""), pending)
             return mark_repeat(pending, item.get("ts"))
-        self.questions[qid] = item
+        qid = self._unique_question_id(qid, item)
+        item["id"] = qid
+        stored = TrackedRecord(item)
+        self.questions[qid] = stored
+        self._track(KIND_QUESTIONS, qid, stored)
         self._evict_questions()
-        return item
+        return stored
+
+    def _unique_question_id(self, qid: str, item: Mapping[str, Any]) -> str:
+        """``qid``, or a free ``qid.rN`` when it names an older, *different* record.
+
+        The loop issues ``q-{step}-{n}`` per :class:`AgentLoop` instance, so after a
+        loop or backend restart ``q-1-1`` is reused for a new ask — which would
+        overwrite the answered one, or make the new approval look like a *repeat*
+        of an old, already released one (the human would never see it).  The same
+        event published again (same id **and** ``ts``) keeps the replace semantics.
+        """
+        ts = str(item.get("ts") or "")
+        holders = (self.questions.get(qid), self.approvals.get(qid),
+                   self.approvals.get(f"{APPROVAL_ID_PREFIX}{qid}"))
+        if all(h is None or str(h.get("ts") or "") == ts for h in holders):
+            return qid
+
+        def taken(key: str) -> bool:
+            return (key in self.questions or key in self.approvals
+                    or f"{APPROVAL_ID_PREFIX}{key}" in self.approvals)
+
+        number = 1
+        while taken(f"{qid}{ID_COLLISION_SUFFIX}{number}"):
+            number += 1
+        return f"{qid}{ID_COLLISION_SUFFIX}{number}"
 
     def _pending_question_for(self, action_id: str | None) -> dict[str, Any] | None:
         """The unanswered question already asking about ``action_id`` (if any)."""
@@ -511,7 +722,9 @@ class CampaignRuntime:
         answered = [item for item in self.questions.values() if item.get("status") != "pending"]
         pending = [item for item in self.questions.values() if item.get("status") == "pending"]
         for item in (answered + pending)[:overflow]:
-            self.questions.pop(str(item.get("id") or ""), None)
+            key = str(item.get("id") or "")
+            self.questions.pop(key, None)
+            self._forget(KIND_QUESTIONS, key, item)
 
     def get_question(self, question_id: str) -> dict[str, Any] | None:
         return self.questions.get(question_id)
@@ -530,6 +743,7 @@ class CampaignRuntime:
         items.sort(key=lambda q: str(q.get("ts") or ""))
         return _page(items, limit=limit, before=before)
 
+    @_mutating
     def answer_question(
         self,
         question_id: str,
@@ -545,6 +759,7 @@ class CampaignRuntime:
         question["answer_text"] = answer_text
         question["option_id"] = option_id
         question["answered_at"] = utc_now_iso()
+        self._touch(KIND_QUESTIONS, question_id, question)
         return question
 
     def question_answer(self, question_id: str) -> dict[str, Any] | None:
@@ -560,6 +775,7 @@ class CampaignRuntime:
 
     # ----------------------------------------------------------------- approvals
 
+    @_mutating
     def add_approval(self, question: dict[str, Any]) -> dict[str, Any] | None:
         """Mirror an approval question as a ``pending`` approval (``None`` if not one).
 
@@ -585,13 +801,17 @@ class CampaignRuntime:
         seen_ts = _clean_str(question.get(LAST_SEEN_TS)) or entry.get("ts")
         pending = self._pending_approval_for(str(entry.get("action_id") or ""))
         if pending is not None:
+            self._touch(KIND_APPROVALS, str(pending.get("id") or ""), pending)
             return mark_repeat(pending, seen_ts)
         existing = self.approvals.get(entry["id"])
         if existing is not None:
+            self._touch(KIND_APPROVALS, entry["id"], existing)
             return mark_repeat(existing, seen_ts)
-        self.approvals[entry["id"]] = entry
+        stored = TrackedRecord(entry)
+        self.approvals[entry["id"]] = stored
+        self._track(KIND_APPROVALS, entry["id"], stored)
         self._trim_pending_approvals()
-        return entry
+        return stored
 
     def _pending_approval_for(self, action_id: str) -> dict[str, Any] | None:
         """The ``pending`` approval already covering ``action_id`` (if any)."""
@@ -610,9 +830,18 @@ class CampaignRuntime:
         for item in pending[: max(0, len(pending) - APPROVAL_PENDING_LIMIT)]:
             self.drop_approval(str(item.get("id") or ""))
 
+    @_mutating
     def drop_approval(self, approval_id: str) -> dict[str, Any] | None:
-        """Remove an approval from the store (dropped duplicates / cap overflow)."""
-        return self.approvals.pop(str(approval_id or ""), None)
+        """Remove an approval from the store (dropped duplicates / cap overflow).
+
+        A *pending* one is tombstoned on disk (``status = 'dropped'``: audited,
+        never reloaded); a decided one is history and stays.
+        """
+        key = str(approval_id or "")
+        record = self.approvals.pop(key, None)
+        if record is not None:
+            self._forget(KIND_APPROVALS, key, record)
+        return record
 
     def get_approval(self, approval_id: str) -> dict[str, Any] | None:
         return self.approvals.get(approval_id)
@@ -625,6 +854,7 @@ class CampaignRuntime:
         items.sort(key=lambda item: str(item.get("ts") or ""))
         return items
 
+    @_mutating
     def decide_approval(
         self,
         approval_id: str,
@@ -645,18 +875,26 @@ class CampaignRuntime:
         entry["status"] = status
         entry["note"] = note
         entry["decided_at"] = utc_now_iso()
+        self._touch(KIND_APPROVALS, approval_id, entry)
         return entry
 
     # --------------------------------------------------------------------- inputs
 
+    @_mutating
     def next_input_id(self) -> str:
         self._input_seq += 1
         return f"in-{self._input_seq}"
 
+    @_mutating
     def add_input(self, text: str, *, ts: str | None = None) -> dict[str, Any]:
-        item = {"id": self.next_input_id(), "text": text, "ts": ts or utc_now_iso()}
+        item = TrackedRecord({"id": self.next_input_id(), "text": text, "ts": ts or utc_now_iso()})
         self.inputs.append(item)
+        overflow = self.inputs[:-HISTORY_LIMIT]
         del self.inputs[:-HISTORY_LIMIT]
+        for old in overflow:
+            if isinstance(old, TrackedRecord):
+                old.bind(None)
+        self._track(KIND_INPUTS, item["id"], item)
         return item
 
     def list_inputs(self) -> list[dict[str, Any]]:

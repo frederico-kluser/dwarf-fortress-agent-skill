@@ -5,12 +5,19 @@ ausências: campo em falta ou com tipo inesperado vira ``None`` (ou lista/contag
 nunca uma exceção. Nada aqui inventa valores — o que o jogo não expõe é ``None``.
 
 Os 8 grupos de métricas (ordem do contrato) estão em :data:`METRIC_GROUPS`.
+
+A prontidão de combate (mudança 02) vive no bloco ``adventurer.combat`` — **não** é um
+9.º grupo de métricas: :attr:`Adventurer.combat` guarda o mapeamento cru e
+:attr:`Adventurer.readiness` devolve o :class:`~.readiness.CombatReadiness` tipado.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, ClassVar, Dict, Mapping, Optional, Tuple
+from typing import TYPE_CHECKING, Any, ClassVar, Dict, Mapping, Optional, Tuple
+
+if TYPE_CHECKING:  # pragma: no cover - só para anotações (sem ciclo em runtime)
+    from .readiness import CombatReadiness
 
 __all__ = [
     "METRIC_GROUPS", "Adventurer", "GameClock", "GameEvent", "GameState",
@@ -345,19 +352,30 @@ class Adventurer:
     kills: Optional[int] = None
     stress_category: Optional[float] = None
     raw: Mapping[str, Any] = field(default_factory=dict)
+    #: Bloco ``combat`` do Lua (skills efetivas, atributos, dor/exaustão/sangue, armadura).
+    #: ``None`` = o bridge não o trouxe (payload antigo). Aditivo: fica no fim do dataclass.
+    combat: Optional[Mapping[str, Any]] = None
 
     @property
     def pos(self) -> Tuple[Optional[int], Optional[int], Optional[int]]:
         return (self.x, self.y, self.z)
 
+    @property
+    def readiness(self) -> "CombatReadiness":
+        """Prontidão de combate tipada; campos em falta ficam ``None`` (``known`` False)."""
+        from .readiness import CombatReadiness          # import tardio: sem ciclo
+        return CombatReadiness.from_dict(self.combat)
+
     @classmethod
     def from_dict(cls, data: Any) -> "Adventurer":
         d = _mapping(data)
         pos = _mapping(d.get("pos"))
+        combat = d.get("combat")
         return cls(name=_text(d.get("name")), race=_text(d.get("race")),
                    profession=_text(d.get("profession")), x=_int(pos.get("x")),
                    y=_int(pos.get("y")), z=_int(pos.get("z")), kills=_int(d.get("kills")),
-                   stress_category=_num(d.get("stress_category")), raw=dict(d))
+                   stress_category=_num(d.get("stress_category")), raw=dict(d),
+                   combat=dict(combat) if isinstance(combat, dict) else None)
 
 
 @dataclass(frozen=True)
@@ -431,6 +449,14 @@ class GameState:
     @property
     def recent_events(self) -> Tuple[GameEvent, ...]:
         return self.gamelog_events or self.metrics.events
+
+    @property
+    def readiness(self) -> "CombatReadiness":
+        """Prontidão do aventureiro; sem aventureiro devolve um retrato vazio (``known`` False)."""
+        from .readiness import CombatReadiness          # import tardio: sem ciclo
+        if self.adventurer is None:
+            return CombatReadiness()
+        return self.adventurer.readiness
 
     def group(self, name: str) -> Any:
         return self.metrics.group(name)

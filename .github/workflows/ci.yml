@@ -1,0 +1,237 @@
+# =============================================================================
+# CI — System One Dwarf (PROBLEMAS-E-SOLUCOES H4; ARQUITETURA §9 "Processo")
+#
+# Regras (decididas, ver docs/ci.md):
+#   * SEM segredos obrigatórios: corre em PRs de forks. O único segredo usado é
+#     MOTION_TOKEN (registo Motion+ do web) e é OPCIONAL — sem ele o job `web`
+#     faz só as verificações que não precisam dele e avisa.
+#   * privilégio mínimo (contents: read), runs cancelados quando superados,
+#     timeout em todos os jobs, nada de `${{ }}` dentro de `run:`.
+#   * actions fixadas por tag MAJOR (scripts/oss-pin-actions.sh da skill
+#     opensource-project converte-as para SHA quando se quiser).
+#   * `workflow_call`: o release.yml reutiliza ESTE ficheiro — "os mesmos testes".
+#
+# Equivalentes locais de cada passo: docs/ci.md.
+# =============================================================================
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONDONTWRITEBYTECODE: "1"
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+
+jobs:
+  python:
+    name: Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.14"]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install Python dependencies
+        run: python -m pip install -r requirements.txt
+
+      # lua5.4 traz o interpretador (test_snapshot.py corre os dfb-*.lua com um
+      # stub do DFHack quando há `lua`) e o `luac` do passo de sintaxe.
+      - name: Install Lua 5.4
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends lua5.4
+
+      - name: Byte-compile (syntax)
+        run: python -m compileall -q src scripts dfhack tests
+
+      - name: Unit tests (pytest)
+        run: python -m pytest -q -p no:cacheprovider
+
+      - name: DFHack bridge tests
+        run: python3 dfhack/test_bridge.py
+
+      - name: Snapshot tests
+        run: python3 dfhack/test_snapshot.py
+
+      - name: Lua syntax (luac -p)
+        run: |
+          luac="$(command -v luac5.4 || command -v luac)"
+          "$luac" -p dfhack/*.lua
+
+      - name: Pattern library check
+        run: python3 scripts/smoke/patterns_check.py
+
+      - name: Offline smoke
+        run: python3 scripts/smoke/df_smoke.py --offline --report smoke-offline.json
+
+      # O golden set de prompts (ARQUITETURA §8 #12) é construído noutra peça:
+      # o passo só corre quando o script existe.
+      - name: Golden set (offline)
+        run: |
+          if [ -f scripts/golden.py ]; then
+            python3 scripts/golden.py check
+          else
+            echo "scripts/golden.py ainda não existe — passo ignorado"
+          fi
+
+      - name: Upload smoke report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-offline-py${{ matrix.python-version }}
+          path: smoke-offline.json
+          if-no-files-found: ignore
+          retention-days: 14
+
+  web:
+    name: Web (lock, lint, typecheck, build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      # Vite 8 / oxlint exigem Node ^20.19 || >=22.12: "20" resolve para o último 20.x.
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      # Sem rede de pacotes privados e sem token: apanha package.json ↔ lock fora de sincronia.
+      - name: Lockfile in sync (npm ci --dry-run)
+        env:
+          MOTION_TOKEN: not-needed-for-a-dry-run
+        run: npm ci --dry-run --ignore-scripts
+
+      # oxlint é autónomo (não precisa de node_modules): versão = a do lockfile.
+      - name: Lint (oxlint, token-free)
+        run: |
+          version="$(node -p "require('./package-lock.json').packages['node_modules/oxlint'].version")"
+          npx --yes "oxlint@${version}"
+
+      # `motion-plus` (@motionplus/core) vem do registo privado api.motion.dev:
+      # sem MOTION_TOKEN o `npm ci` completo é impossível (401). Opcional por desenho.
+      - name: Check the Motion+ token
+        id: token
+        env:
+          MOTION_TOKEN: ${{ secrets.MOTION_TOKEN }}
+        run: |
+          if [ -n "${MOTION_TOKEN:-}" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=web::MOTION_TOKEN não configurado (secret do repositório) — npm ci, typecheck e build do web foram ignorados; ver docs/ci.md"
+          fi
+
+      - name: Install (npm ci)
+        if: steps.token.outputs.available == 'true'
+        env:
+          MOTION_TOKEN: ${{ secrets.MOTION_TOKEN }}
+        run: npm ci
+
+      - name: Typecheck
+        if: steps.token.outputs.available == 'true'
+        run: npm run typecheck
+
+      - name: Build
+        if: steps.token.outputs.available == 'true'
+        run: npm run build
+
+  shell:
+    name: Shell scripts
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Syntax (bash -n)
+        run: |
+          for f in install.sh scripts/df.sh scripts/sod.sh dfhack/install_dfhack_linux.sh; do
+            bash -n "$f"
+            echo "ok  $f"
+          done
+
+      # Não bloqueante: o histórico tem avisos de estilo conhecidos (SC2034/SC2088).
+      - name: ShellCheck (non-blocking)
+        continue-on-error: true
+        run: |
+          command -v shellcheck >/dev/null 2>&1 || sudo apt-get install -y --no-install-recommends shellcheck
+          shellcheck -S warning install.sh scripts/df.sh scripts/sod.sh dfhack/install_dfhack_linux.sh
+
+  secrets:
+    name: Secrets sweep
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      # Espelha a "varredura de segredos antes de cada commit" (G32). Chaves de teste
+      # do repositório são inequivocamente falsas (não-hex) e por isso não casam.
+      # Nunca imprime o valor encontrado: só ficheiro:linha.
+      - name: Scan tracked files
+        run: |
+          PATTERN='sk-or-v1-[0-9a-fA-F]{32,}|sk-ant-[A-Za-z0-9_-]{20,}|sk-[A-Za-z0-9]{32,}|-----BEGIN [A-Z ]*PRIVATE KEY-----|AKIA[0-9A-Z]{16}|ASIA[0-9A-Z]{16}|gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{22,}|glpat-[A-Za-z0-9_-]{20,}|tvly-[A-Za-z0-9-]{16,}|npm_[A-Za-z0-9]{36}|xox[baprs]-[A-Za-z0-9-]{10,}|AIza[0-9A-Za-z_-]{35}'
+          hits="$(git grep -InE "$PATTERN" -- . ':(exclude)web/package-lock.json' | cut -d: -f1,2 | sort -u || true)"
+          if [ -n "$hits" ]; then
+            echo "$hits"
+            echo "::error::possível segredo em ficheiros versionados (valores ocultos)"
+            exit 1
+          fi
+          echo "sem segredos detetados"
+
+  # Um único estado para exigir em rulesets/branch protection ("CI gate").
+  gate:
+    name: CI gate
+    if: always()
+    needs: [python, web, shell, secrets]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: All required jobs passed
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "resultados: $RESULTS"
+          for r in $RESULTS; do
+            if [ "$r" != "success" ]; then
+              echo "::error::um job do CI não terminou com sucesso ($r)"
+              exit 1
+            fi
+          done

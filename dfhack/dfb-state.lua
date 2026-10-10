@@ -9,6 +9,10 @@
 --   health_injuries, needs_state, inventory, threats, location, game_clock,
 --   units_nearby, events.
 --
+-- O bloco `adventurer` ganhou `combat` (prontidão de combate: skills efetivas, atributos,
+-- dor/exaustão/sangue, armadura — ver "prontidão de combate" abaixo); as demais chaves
+-- do `adventurer` ficam como estavam.
+--
 -- Regras desta camada:
 --   * leitura DEFENSIVA (C.safe + pcall/guard): o script NUNCA estoura por causa de
 --     um campo que mudou de nome/versão;
@@ -79,6 +83,228 @@ local function needs_block(c2)
   }
 end
 
+-- ---------- prontidão de combate (ARQUITETURA §8, mudança 02) ----------
+-- Retrato compacto (~30 números) do que o aventureiro consegue fazer AGORA: o decisor
+-- (src/system_one_dwarf/game/readiness.py) pesa ataque/fuga/caça com a capacidade real.
+--   * skills EFETIVAS (dfhack.units.getEffectiveSkill já desconta ferrugem, exaustão,
+--     dor...), níveis 0..20+ (0 = Dabbling/sem skill; 5 = Proficient; 15 = Legendary);
+--   * cada campo é lido à parte (guard/C.safe): o que o jogo ou esta versão do DFHack
+--     não der SAI nil (a chave some do JSON). Nada é inventado — nem "desarmado" sem ter
+--     conseguido ler o inventário;
+--   * aqui só se MEDE; quem interpreta e decide é o Python.
+-- Forma (secção ausente = nada legível; `skill` = nível efetivo, `skill_token` = df.job_skill):
+--   combat = { weapon = { name, skill_token, skill_noun, skill, ranged, armed },
+--              skills = { fighter, dodger, shield_user, armor_user, wrestler, striker, kicker },
+--              attributes = { strength, agility, toughness, endurance, spatial_sense,
+--                             kinesthetic_sense, willpower },
+--              condition = { blood_ratio, pain, exhaustion, winded, stunned, nausea,
+--                            dizziness, webbed, wound_count, bleeding },
+--              armor = { pieces, slots, shield } }
+local COMBAT_SKILLS = {                      -- chave do bloco -> token de df.job_skill
+  fighter = 'MELEE_COMBAT', dodger = 'DODGING', shield_user = 'SHIELD',
+  armor_user = 'ARMOR', wrestler = 'WRESTLING',
+  striker = 'GRASP_STRIKE', kicker = 'STANCE_STRIKE',   -- soco (mãos) / chute (pés)
+}
+local UNARMED_SKILL = 'GRASP_STRIKE'         -- o soco é o ataque desarmado do aventureiro
+local COMBAT_ATTRS = {                       -- { chave, 'physical'|'mental', token do enum }
+  { 'strength', 'physical', 'STRENGTH' }, { 'agility', 'physical', 'AGILITY' },
+  { 'toughness', 'physical', 'TOUGHNESS' }, { 'endurance', 'physical', 'ENDURANCE' },
+  { 'spatial_sense', 'mental', 'SPATIAL_SENSE' },
+  { 'kinesthetic_sense', 'mental', 'KINESTHETIC_SENSE' },
+  { 'willpower', 'mental', 'WILLPOWER' },
+}
+-- tipos de item de proteção -> espaço do corpo coberto (armorlevel 0 = roupa, não conta)
+local ARMOR_SLOTS = { ARMOR = 'body', PANTS = 'legs', HELM = 'head', GLOVES = 'hands',
+                      SHOES = 'feet' }
+local COMBAT_CAP_INVENTORY, COMBAT_CAP_WOUNDS = 60, 60
+
+local function effective_skill(u, token)
+  return guard(function()
+    return as_number(dfhack.units.getEffectiveSkill(u, df.job_skill[token]))
+  end, nil)
+end
+
+local function attribute_value(u, kind, token)
+  return guard(function()
+    if kind == 'physical' then
+      return as_number(dfhack.units.getPhysicalAttrValue(u, df.physical_attribute_type[token]))
+    end
+    return as_number(dfhack.units.getMentalAttrValue(u, df.mental_attribute_type[token]))
+  end, nil)
+end
+
+local function item_type_name(item)
+  return guard(function()
+    local name = df.item_type[item:getType()]
+    return type(name) == 'string' and name or nil
+  end, nil)
+end
+
+-- skill de combate da arma: a de tiro se for arma de longo alcance, senão a corpo a corpo
+-- (itemdef_weaponst.skill_ranged / skill_melee; -1 = nenhuma). -> { id, ranged } | nil
+local function weapon_skill(item)
+  return guard(function()
+    local def = dfhack.items.getSubtypeDef(item:getType(), item:getSubtype())
+    local ranged = as_number(C.safe(def, 'skill_ranged'))
+    if ranged and ranged >= 0 then return { id = ranged, ranged = true } end
+    local melee = as_number(C.safe(def, 'skill_melee'))
+    if melee and melee >= 0 then return { id = melee, ranged = false } end
+    return nil
+  end, nil)
+end
+
+local function job_skill_name(id)
+  return guard(function()
+    local name = df.job_skill[id]
+    return type(name) == 'string' and name or nil
+  end, nil)
+end
+
+local function job_skill_noun(id)       -- "Spearman", "Striker"... (caption_noun do jogo)
+  return guard(function()
+    local noun = df.job_skill.attrs[id].caption_noun
+    return (type(noun) == 'string' and noun ~= '') and utf(noun) or nil
+  end, nil)
+end
+
+-- inventário: arma na mão (item WEAPON em modo Weapon), escudo na mão e peças de armadura
+-- vestidas (modo Worn, armorlevel > 0). nil = inventário ilegível; um item cujo tipo não
+-- se lê torna `armed`/`armor` desconhecidos (nil) em vez de errados.
+local function inventory_scan(u)
+  local inv = C.safe(u, 'inventory')
+  if inv == nil then return nil end
+  local scan = { weapon = nil, shield = false, pieces = 0, slots = 0, covered = {},
+                 unreadable_hand = false, unreadable_worn = false }
+  local seen = 0
+  for _, e in ipairs(inv) do
+    seen = seen + 1
+    if seen > COMBAT_CAP_INVENTORY then break end
+    local item, mode = C.safe(e, 'item'), C.safe(e, 'mode')
+    local mode_name = mode ~= nil and df.inv_item_role_type[mode] or nil
+    if item ~= nil and (mode_name == 'Weapon' or mode_name == 'Worn') then
+      local tname = item_type_name(item)
+      if tname == nil then
+        if mode_name == 'Weapon' then scan.unreadable_hand = true
+        else scan.unreadable_worn = true end
+      elseif mode_name == 'Weapon' then
+        if tname == 'WEAPON' and scan.weapon == nil then
+          scan.weapon = item
+        elseif tname == 'SHIELD' then
+          scan.shield = true
+        end
+      elseif ARMOR_SLOTS[tname] then
+        -- armorlevel 0 = roupa (túnica, calças de pano); se não der p/ ler, conta a peça
+        local level = as_number(C.safe(C.safe(item, 'subtype'), 'armorlevel'))
+        if level == nil or level > 0 then
+          scan.pieces = scan.pieces + 1
+          local slot = ARMOR_SLOTS[tname]
+          if not scan.covered[slot] then
+            scan.covered[slot] = true
+            scan.slots = scan.slots + 1
+          end
+        end
+      end
+    end
+  end
+  return scan
+end
+
+local function weapon_block(u, scan)
+  local w = {}
+  if scan == nil then return w end
+  if scan.weapon ~= nil then
+    w.armed = true
+    w.name = guard(function()
+      return utf(dfhack.items.getReadableDescription(scan.weapon))
+    end, nil)
+    local sk = weapon_skill(scan.weapon)
+    if sk ~= nil then
+      w.ranged = sk.ranged
+      w.skill_token = job_skill_name(sk.id)
+      w.skill_noun = job_skill_noun(sk.id)
+      w.skill = guard(function()                    -- nível EFETIVO da skill da arma
+        return as_number(dfhack.units.getEffectiveSkill(u, sk.id))
+      end, nil)
+    end
+  elseif not scan.unreadable_hand then
+    -- nada na mão: ataca com o punho (GRASP_STRIKE, "Striker")
+    w.armed = false
+    w.skill_token = UNARMED_SKILL
+    w.skill_noun = guard(function() return job_skill_noun(df.job_skill[UNARMED_SKILL]) end, nil)
+    w.skill = effective_skill(u, UNARMED_SKILL)
+  end
+  return w
+end
+
+local function armor_block(scan)
+  if scan == nil or scan.unreadable_worn then return nil end
+  local shield = nil
+  if scan.shield then shield = true elseif not scan.unreadable_hand then shield = false end
+  return { pieces = scan.pieces, slots = scan.slots, shield = shield }
+end
+
+-- sangue (razão), dor, exaustão (counters2), estados transitórios e ferimentos a sangrar
+local function condition_block(body, c, c2)
+  local blood = as_number(C.safe(body, 'blood_count'))
+  local blood_max = as_number(C.safe(body, 'blood_max'))
+  local ratio = nil
+  if blood and blood_max and blood_max > 0 then
+    ratio = math.max(0, math.min(1, blood / blood_max))
+  end
+  local wounds = C.safe(body, 'wounds')
+  local wound_count, bleeding = nil, nil
+  if wounds ~= nil then
+    wound_count, bleeding = #wounds, 0
+    local seen = 0
+    for _, w in ipairs(wounds) do
+      seen = seen + 1
+      if seen > COMBAT_CAP_WOUNDS then break end
+      for _, part in ipairs(C.safe(w, 'parts') or {}) do
+        local bl = as_number(C.safe(part, 'bleeding'))
+        if bl and bl > 0 then
+          bleeding = bleeding + 1
+          break
+        end
+      end
+    end
+  end
+  return {
+    blood_ratio = ratio,
+    pain = as_number(C.safe(c, 'pain')),
+    exhaustion = as_number(C.safe(c2, 'exhaustion')),
+    winded = as_number(C.safe(c, 'winded')),
+    stunned = as_number(C.safe(c, 'stunned')),
+    nausea = as_number(C.safe(c, 'nausea')),
+    dizziness = as_number(C.safe(c, 'dizziness')),
+    webbed = as_number(C.safe(c, 'webbed')),
+    wound_count = wound_count,
+    bleeding = bleeding,
+  }
+end
+
+local function nonempty(t)
+  if t ~= nil and next(t) ~= nil then return t end
+  return nil
+end
+
+local function combat_block(u)
+  local scan = guard(function() return inventory_scan(u) end, nil)
+  local skills, attributes = {}, {}
+  for key, token in pairs(COMBAT_SKILLS) do skills[key] = effective_skill(u, token) end
+  for _, spec in ipairs(COMBAT_ATTRS) do
+    attributes[spec[1]] = attribute_value(u, spec[2], spec[3])
+  end
+  return nonempty({
+    weapon = nonempty(guard(function() return weapon_block(u, scan) end, nil)),
+    skills = nonempty(skills),
+    attributes = nonempty(attributes),
+    condition = nonempty(guard(function()
+      return condition_block(C.safe(u, 'body'), C.safe(u, 'counters'), C.safe(u, 'counters2'))
+    end, nil)),
+    armor = nonempty(guard(function() return armor_block(scan) end, nil)),
+  })
+end
+
 local function state_adventurer()
   local u = adventurer_unit()
   local c, c2, body = C.safe(u, 'counters'), C.safe(u, 'counters2'), C.safe(u, 'body')
@@ -102,6 +328,8 @@ local function state_adventurer()
     needs = needs_block(c2),
     kills = guard(function() return dfhack.units.getKillCount(u) end, nil),
     stress_category = guard(function() return dfhack.units.getStressCategory(u) end, nil),
+    -- aditivo (mudança 02): prontidão de combate; nil se nada for legível
+    combat = guard(function() return combat_block(u) end, nil),
   }
 end
 

@@ -1,0 +1,158 @@
+# =============================================================================
+# Release — System One Dwarf (PROBLEMAS-E-SOLUCOES H4)
+#
+# Dispara numa tag anotada `vX.Y.Z` (ou `vX.Y.Z-pre`). Fluxo:
+#   1. `verify`  — os MESMOS testes do CI (reutiliza ci.yml via workflow_call);
+#   2. `release` — valida tag ↔ versão do código, extrai a secção correspondente do
+#                  CHANGELOG.md como notas e cria/atualiza a GitHub Release (gh CLI,
+#                  GITHUB_TOKEN efémero; sem segredos próprios).
+#
+# Política SemVer (docs/ci.md): 0.y.z ENQUANTO o smoke E2E ao vivo não estiver
+# automatizado — qualquer 1.0.0+ exige a variável de repositório
+# SOD_ALLOW_STABLE_RELEASE=true (decisão explícita). Commits Convencionais
+# alimentam o CHANGELOG.md (Keep a Changelog); a versão NÃO é bumpada por este
+# workflow: pyproject.toml, src/system_one_dwarf/__init__.py e web/package.json
+# são alterados no PR da release e a tag tem de coincidir.
+#
+# Como cortar uma release: docs/ci.md → "Release".
+# =============================================================================
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Verify (same tests as CI)
+    uses: ./.github/workflows/ci.yml
+    secrets: inherit
+
+  release:
+    name: Publish GitHub release
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # `${{ }}` nunca entra no script: tudo passa por env (injeção via nome de tag).
+      - name: Validate tag, version and policy
+        env:
+          TAG: ${{ github.ref_name }}
+          ALLOW_STABLE: ${{ vars.SOD_ALLOW_STABLE_RELEASE }}
+        run: |
+          python3 - <<'PY'
+          import os
+          import re
+          import sys
+          import tomllib
+          from pathlib import Path
+
+          tag = os.environ["TAG"]
+          allow_stable = os.environ.get("ALLOW_STABLE", "").strip().lower() == "true"
+          m = re.fullmatch(
+              r"v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z.-]+))?", tag)
+          problems = []
+          if not m:
+              print(f"::error::a tag {tag!r} não é SemVer vX.Y.Z[-pre]")
+              sys.exit(1)
+          version = tag[1:]
+          core = ".".join(m.group(i) for i in (1, 2, 3))
+          prerelease = m.group(4) is not None
+
+          pyproject = tomllib.loads(
+              Path("pyproject.toml").read_text(encoding="utf-8"))["project"]["version"]
+          init = re.search(
+              r'__version__\s*=\s*"([^"]+)"',
+              Path("src/system_one_dwarf/__init__.py").read_text(encoding="utf-8"))
+          package = re.search(
+              r'"version"\s*:\s*"([^"]+)"',
+              Path("web/package.json").read_text(encoding="utf-8"))
+          for label, found in (("pyproject.toml", pyproject),
+                               ("src/system_one_dwarf/__init__.py",
+                                init.group(1) if init else None)):
+              expected = core if prerelease else version
+              got_core = re.match(r"\d+\.\d+\.\d+", found or "")
+              ok = (found == expected) or (prerelease and got_core and got_core.group(0) == core)
+              if not ok:
+                  problems.append(f"{label} tem versão {found!r} mas a tag é {tag}")
+          if package and package.group(1) != version and not prerelease:
+              print(f"::warning::web/package.json tem versão {package.group(1)!r} (tag {tag})")
+          if int(m.group(1)) >= 1 and not allow_stable:
+              problems.append(
+                  "política 0.y.z: versões >= 1.0.0 só com a variável de repositório "
+                  "SOD_ALLOW_STABLE_RELEASE=true (docs/ci.md)")
+          for problem in problems:
+              print(f"::error::{problem}")
+          if problems:
+              sys.exit(1)
+          print(f"tag {tag} coerente com o código; política SemVer respeitada")
+          PY
+
+      - name: Extract release notes from CHANGELOG.md
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          python3 - <<'PY'
+          import os
+          import re
+          import sys
+          from pathlib import Path
+
+          version = os.environ["TAG"][1:]
+          text = Path("CHANGELOG.md").read_text(encoding="utf-8")
+
+          def section(name):
+              for chunk in re.split(r"(?m)^(?=## \[)", text):
+                  head = re.match(r"## \[([^\]]+)\][^\n]*\n", chunk)
+                  if head and head.group(1).lower() == name.lower():
+                      body = chunk[head.end():]
+                      body = re.sub(r"(?m)^\[[^\]]+\]:\s+\S+\s*$", "", body)  # links de rodapé
+                      return body.strip()
+              return None
+
+          notes = section(version)
+          if not notes and "-" in version:     # pré-release sem secção própria
+              notes = section("Unreleased")
+          if not notes:
+              print(f"::error::CHANGELOG.md não tem a secção '## [{version}]' (ou está vazia)")
+              sys.exit(1)
+          Path("release-notes.md").write_text(notes + "\n", encoding="utf-8")
+          print(f"notas extraídas ({len(notes.splitlines())} linhas)")
+          PY
+
+      - name: Create or update the GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          flags=()
+          case "$TAG" in
+            *-*) flags+=(--prerelease) ;;
+          esac
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" --title "$TAG" --notes-file release-notes.md "${flags[@]}"
+          else
+            gh release create "$TAG" --verify-tag --title "$TAG" \
+              --notes-file release-notes.md "${flags[@]}"
+          fi

@@ -1,0 +1,85 @@
+# =============================================================================
+# Smoke AO VIVO — OPCIONAL (PROBLEMAS-E-SOLUCOES H7; ARQUITETURA §9 "Navegação")
+#
+# O Dwarf Fortress não corre em runners hospedados do GitHub: este workflow só
+# faz sentido num runner AUTO-HOSPEDADO com o jogo instalado e etiquetado
+# `dwarf-fortress` (docs/ci.md → "Smoke ao vivo": instalação, DISPLAY/Xvfb,
+# variáveis `DF_PATH` e `SMOKE_ADVENTURE_ID`). Sem esse runner o job fica em fila
+# e não faz mal a ninguém — o CI normal (ci.yml) já corre o smoke OFFLINE.
+#
+# Alarme de deriva: um update do DF/DFHack que mude menus/foco/estruturas parte
+# aqui (padrões de UI, snapshot, movida com prova) em vez de partir a meio de uma
+# missão. Corre semanalmente e a pedido; NUNCA em pull_request (um runner
+# auto-hospedado executaria código de forks na máquina do dono).
+#
+# Sem segredos: o script retira do ambiente filho tudo o que pareça uma
+# credencial e o relatório passa por `redact`.
+# =============================================================================
+name: Smoke (live, self-hosted)
+
+on:
+  workflow_dispatch:
+    inputs:
+      adventure_id:
+        description: "Save a carregar pela API (vazio = SMOKE_ADVENTURE_ID ou mundo+personagem novos)"
+        required: false
+        default: ""
+        type: string
+  schedule:
+    - cron: "17 5 * * 1"   # segundas-feiras 05:17 UTC (diário: "17 5 * * *")
+
+permissions:
+  contents: read
+
+concurrency:
+  group: smoke-live
+  cancel-in-progress: false
+
+jobs:
+  live:
+    name: DF 53.16 ao vivo
+    # Forks não têm o runner: não ficam em fila para sempre.
+    if: github.repository == 'frederico-kluser/dwarf-fortress-agent-skill'
+    runs-on: [self-hosted, linux, dwarf-fortress]
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      # `df up` usa .venv/bin/python do repositório quando existe (senão python3).
+      - name: Prepare the backend virtualenv
+        run: |
+          python3 -m venv .venv
+          .venv/bin/python -m pip install --quiet -r requirements.txt
+
+      - name: Live smoke (df up --no-web → provas → df stop)
+        env:
+          DF_PATH: ${{ vars.DF_PATH }}
+          ADVENTURE_ID: ${{ inputs.adventure_id || vars.SMOKE_ADVENTURE_ID }}
+        run: |
+          set -euo pipefail
+          args=(--live --report smoke-live.json)
+          if [ -n "${DF_PATH:-}" ]; then
+            args+=(--df-path "$DF_PATH")
+          fi
+          if [ -n "${ADVENTURE_ID:-}" ]; then
+            args+=(--adventure-id "$ADVENTURE_ID")
+          else
+            args+=(--new-adventure)
+          fi
+          prefix=()
+          if [ -z "${DISPLAY:-}" ] && command -v xvfb-run >/dev/null 2>&1; then
+            prefix=(xvfb-run -a)
+          fi
+          "${prefix[@]}" python3 scripts/smoke/df_smoke.py "${args[@]}"
+
+      - name: Upload smoke report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-live
+          path: smoke-live.json
+          if-no-files-found: ignore
+          retention-days: 30

@@ -1,0 +1,8 @@
+{
+ "format": 1,
+ "status": "unset",
+ "model": null,
+ "date": null,
+ "splits": {},
+ "note": "Set by `scripts/golden.py run --online --update-baseline` after the first accepted run against the pinned snapshot."
+}
