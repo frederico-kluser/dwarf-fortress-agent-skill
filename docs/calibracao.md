@@ -690,3 +690,31 @@ python3 scripts/calibrate.py thresholds --table calibration.json --model typesaf
 Quando mudar o **gerador de candidatos** (ids novos) as etiquetas sintéticas
 derivadas mudam com ele: o `check` falha com `build-drift` e a resposta correta é
 `build` + `freeze-holdout --reason` (uma decisão registada), não `bless`.
+
+---
+
+## 16. Evolução de critérios via prompt-builder (2026-10-11, `bench/`)
+
+Os critérios das perguntas do JEV (`fleet.py`) foram medidos e evoluídos com o
+**prompt-builder** (modo `jev compare`, `typesafe/jev-1.13`, 2 repetições, ouro
+dos 66 casos de `evals/`): redação **original** (controle) × variante
+**`criterios-v2`** (`bench/jev/variantes-criterios.json` — definição-e-não-rótulo
+`{what, not_for}`, situações concretas simétricas, política anti-abstention
+explícita). Resultados, decisões e tabela de evolução:
+`docs/prompt-builder-evolucao.md` e `bench/relatorios/jev-*.md`.
+
+**Aplicado em `fleet.py`** (com ganho prático sem regressão significativa; n
+pequeno, métricas instáveis): `criterios-v2` em JEV-A (`urgency`,
+`needs_human`), JEV-M (`update_memory`, `narrator_effort`, `record_type`) e
+JEV-D (`ask_human`, `question_format`), **achatado para `str`** (o runtime
+valida descrições não-vazias — ver `jev/schema.py`). JEV-R (`include_*`,
+`dominant_theme`) **mantém a redação original** (a variante perdeu 1,9 p.p. de
+accuracy no pareamento).
+
+Consequência obrigatória (espelho): os blocos `state`/`questions`/`ordering` de
+`evals/*.json` foram **regenerados** com os builders actuais via
+`.venv/bin/python bench/gerar.py --sync-evals` — `expected`, `bands` e `notes`
+não tocados; `golden.py freeze-holdout` refixou o hold-out com os **mesmos ids e
+etiquetas** (só a redação dos pedidos mudou; o split determinístico é idêntico)
+e `golden.py bless --reason` aceitou a mudança de prompt
+(`evals/golden/CHANGELOG.md` regista as duas decisões).

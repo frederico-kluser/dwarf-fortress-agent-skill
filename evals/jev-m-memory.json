@@ -8,31 +8,31 @@
         "type": "noul",
         "instructions": "Should the narrative memory be updated now?",
         "criteria": {
-          "true": "The recent events change what the narrative should say: a milestone, a reversal or a decision worth remembering.",
-          "false": "Nothing new is worth recording yet: the narrative already covers the recent events."
+          "true": "A milestone, reversal, injury, death, new companion, objective change, location change or reusable lesson happened: the chronicle would be wrong or stale without this update.",
+          "false": "Nothing the chronicle must carry changed: routine movement, a repeated event already covered, or a detail too small to deserve a clause."
         }
       },
       "narrator_effort": {
         "type": "choice",
         "instructions": "How much narrator effort should this memory update use?",
         "criteria": {
-          "max": "Turning point: rewrite the rolling narrative with maximum care.",
-          "xhigh": "Major event: extend and refine the rolling narrative.",
-          "high": "Notable event: write a solid paragraph for the narrative.",
-          "medium": "Ordinary progress: write one short accurate sentence.",
-          "low": "Minor detail: append a brief clause to the narrative.",
-          "minimal": "Trivial detail: make the smallest possible edit.",
-          "none": "Do not call the narrator; skip the update."
+          "max": "Turning point: a death, near-death, goal change or permanent party change — rewrite the rolling narrative with maximum care.",
+          "xhigh": "Major event: a dangerous fight won or lost, a serious injury, a betrayal or a major discovery — extend and refine the rolling narrative.",
+          "high": "Notable event: a first-time milestone (new companion, new region, a key item) — write a solid paragraph for the narrative.",
+          "medium": "Ordinary progress with something real to record (arrived somewhere, met someone in passing) — write one short accurate sentence.",
+          "low": "Minor detail that still deserves a clause (weather turning, a small resupply) — append a brief clause to the narrative.",
+          "minimal": "Trivial detail with marginal value — make the smallest possible edit.",
+          "none": "Nothing here is worth recording — do not call the narrator; skip the update."
         }
       },
       "record_type": {
         "type": "choice",
         "instructions": "What kind of memory record should be stored?",
         "criteria": {
-          "episode": "A dated event that happened in this campaign.",
-          "fact": "A stable fact about the world, the character or the objective.",
-          "procedure": "A method worth reusing in a later situation.",
-          "skip": "Nothing here is worth storing."
+          "episode": "A dated event of this campaign: a fight, a journey leg, a meeting, a discovery. NOT for: stable truths (fact) or reusable methods (procedure).",
+          "fact": "A stable truth about the world, the character or the objective: a persistent injury, the current objective, a companion's identity. NOT for: things that happened at one moment (episode).",
+          "procedure": "A method worth reusing later: how to cross rivers safely, how to trade with a caravan. NOT for: one-off events (episode) or stable truths (fact).",
+          "skip": "Nothing here is worth storing: routine movement or already recorded elsewhere."
         }
       }
     },
@@ -57,31 +57,31 @@
         "type": "noul",
         "instructions": "Should the narrative memory be updated now?",
         "criteria": {
-          "true": "The recent events change what the narrative should say: a milestone, a reversal or a decision worth remembering.",
-          "false": "Nothing new is worth recording yet: the narrative already covers the recent events."
+          "true": "A milestone, reversal, injury, death, new companion, objective change, location change or reusable lesson happened: the chronicle would be wrong or stale without this update.",
+          "false": "Nothing the chronicle must carry changed: routine movement, a repeated event already covered, or a detail too small to deserve a clause."
         }
       },
       "narrator_effort": {
         "type": "choice",
         "instructions": "How much narrator effort should this memory update use?",
         "criteria": {
-          "max": "Turning point: rewrite the rolling narrative with maximum care.",
-          "xhigh": "Major event: extend and refine the rolling narrative.",
-          "high": "Notable event: write a solid paragraph for the narrative.",
-          "medium": "Ordinary progress: write one short accurate sentence.",
-          "low": "Minor detail: append a brief clause to the narrative.",
-          "minimal": "Trivial detail: make the smallest possible edit.",
-          "none": "Do not call the narrator; skip the update."
+          "max": "Turning point: a death, near-death, goal change or permanent party change — rewrite the rolling narrative with maximum care.",
+          "xhigh": "Major event: a dangerous fight won or lost, a serious injury, a betrayal or a major discovery — extend and refine the rolling narrative.",
+          "high": "Notable event: a first-time milestone (new companion, new region, a key item) — write a solid paragraph for the narrative.",
+          "medium": "Ordinary progress with something real to record (arrived somewhere, met someone in passing) — write one short accurate sentence.",
+          "low": "Minor detail that still deserves a clause (weather turning, a small resupply) — append a brief clause to the narrative.",
+          "minimal": "Trivial detail with marginal value — make the smallest possible edit.",
+          "none": "Nothing here is worth recording — do not call the narrator; skip the update."
         }
       },
       "record_type": {
         "type": "choice",
         "instructions": "What kind of memory record should be stored?",
         "criteria": {
-          "episode": "A dated event that happened in this campaign.",
-          "fact": "A stable fact about the world, the character or the objective.",
-          "procedure": "A method worth reusing in a later situation.",
-          "skip": "Nothing here is worth storing."
+          "episode": "A dated event of this campaign: a fight, a journey leg, a meeting, a discovery. NOT for: stable truths (fact) or reusable methods (procedure).",
+          "fact": "A stable truth about the world, the character or the objective: a persistent injury, the current objective, a companion's identity. NOT for: things that happened at one moment (episode).",
+          "procedure": "A method worth reusing later: how to cross rivers safely, how to trade with a caravan. NOT for: one-off events (episode) or stable truths (fact).",
+          "skip": "Nothing here is worth storing: routine movement or already recorded elsewhere."
         }
       }
     },
@@ -106,31 +106,31 @@
         "type": "noul",
         "instructions": "Should the narrative memory be updated now?",
         "criteria": {
-          "true": "The recent events change what the narrative should say: a milestone, a reversal or a decision worth remembering.",
-          "false": "Nothing new is worth recording yet: the narrative already covers the recent events."
+          "true": "A milestone, reversal, injury, death, new companion, objective change, location change or reusable lesson happened: the chronicle would be wrong or stale without this update.",
+          "false": "Nothing the chronicle must carry changed: routine movement, a repeated event already covered, or a detail too small to deserve a clause."
         }
       },
       "narrator_effort": {
         "type": "choice",
         "instructions": "How much narrator effort should this memory update use?",
         "criteria": {
-          "max": "Turning point: rewrite the rolling narrative with maximum care.",
-          "xhigh": "Major event: extend and refine the rolling narrative.",
-          "high": "Notable event: write a solid paragraph for the narrative.",
-          "medium": "Ordinary progress: write one short accurate sentence.",
-          "low": "Minor detail: append a brief clause to the narrative.",
-          "minimal": "Trivial detail: make the smallest possible edit.",
-          "none": "Do not call the narrator; skip the update."
+          "max": "Turning point: a death, near-death, goal change or permanent party change — rewrite the rolling narrative with maximum care.",
+          "xhigh": "Major event: a dangerous fight won or lost, a serious injury, a betrayal or a major discovery — extend and refine the rolling narrative.",
+          "high": "Notable event: a first-time milestone (new companion, new region, a key item) — write a solid paragraph for the narrative.",
+          "medium": "Ordinary progress with something real to record (arrived somewhere, met someone in passing) — write one short accurate sentence.",
+          "low": "Minor detail that still deserves a clause (weather turning, a small resupply) — append a brief clause to the narrative.",
+          "minimal": "Trivial detail with marginal value — make the smallest possible edit.",
+          "none": "Nothing here is worth recording — do not call the narrator; skip the update."
         }
       },
       "record_type": {
         "type": "choice",
         "instructions": "What kind of memory record should be stored?",
         "criteria": {
-          "episode": "A dated event that happened in this campaign.",
-          "fact": "A stable fact about the world, the character or the objective.",
-          "procedure": "A method worth reusing in a later situation.",
-          "skip": "Nothing here is worth storing."
+          "episode": "A dated event of this campaign: a fight, a journey leg, a meeting, a discovery. NOT for: stable truths (fact) or reusable methods (procedure).",
+          "fact": "A stable truth about the world, the character or the objective: a persistent injury, the current objective, a companion's identity. NOT for: things that happened at one moment (episode).",
+          "procedure": "A method worth reusing later: how to cross rivers safely, how to trade with a caravan. NOT for: one-off events (episode) or stable truths (fact).",
+          "skip": "Nothing here is worth storing: routine movement or already recorded elsewhere."
         }
       }
     },
@@ -155,31 +155,31 @@
         "type": "noul",
         "instructions": "Should the narrative memory be updated now?",
         "criteria": {
-          "true": "The recent events change what the narrative should say: a milestone, a reversal or a decision worth remembering.",
-          "false": "Nothing new is worth recording yet: the narrative already covers the recent events."
+          "true": "A milestone, reversal, injury, death, new companion, objective change, location change or reusable lesson happened: the chronicle would be wrong or stale without this update.",
+          "false": "Nothing the chronicle must carry changed: routine movement, a repeated event already covered, or a detail too small to deserve a clause."
         }
       },
       "narrator_effort": {
         "type": "choice",
         "instructions": "How much narrator effort should this memory update use?",
         "criteria": {
-          "max": "Turning point: rewrite the rolling narrative with maximum care.",
-          "xhigh": "Major event: extend and refine the rolling narrative.",
-          "high": "Notable event: write a solid paragraph for the narrative.",
-          "medium": "Ordinary progress: write one short accurate sentence.",
-          "low": "Minor detail: append a brief clause to the narrative.",
-          "minimal": "Trivial detail: make the smallest possible edit.",
-          "none": "Do not call the narrator; skip the update."
+          "max": "Turning point: a death, near-death, goal change or permanent party change — rewrite the rolling narrative with maximum care.",
+          "xhigh": "Major event: a dangerous fight won or lost, a serious injury, a betrayal or a major discovery — extend and refine the rolling narrative.",
+          "high": "Notable event: a first-time milestone (new companion, new region, a key item) — write a solid paragraph for the narrative.",
+          "medium": "Ordinary progress with something real to record (arrived somewhere, met someone in passing) — write one short accurate sentence.",
+          "low": "Minor detail that still deserves a clause (weather turning, a small resupply) — append a brief clause to the narrative.",
+          "minimal": "Trivial detail with marginal value — make the smallest possible edit.",
+          "none": "Nothing here is worth recording — do not call the narrator; skip the update."
         }
       },
       "record_type": {
         "type": "choice",
         "instructions": "What kind of memory record should be stored?",
         "criteria": {
-          "episode": "A dated event that happened in this campaign.",
-          "fact": "A stable fact about the world, the character or the objective.",
-          "procedure": "A method worth reusing in a later situation.",
-          "skip": "Nothing here is worth storing."
+          "episode": "A dated event of this campaign: a fight, a journey leg, a meeting, a discovery. NOT for: stable truths (fact) or reusable methods (procedure).",
+          "fact": "A stable truth about the world, the character or the objective: a persistent injury, the current objective, a companion's identity. NOT for: things that happened at one moment (episode).",
+          "procedure": "A method worth reusing later: how to cross rivers safely, how to trade with a caravan. NOT for: one-off events (episode) or stable truths (fact).",
+          "skip": "Nothing here is worth storing: routine movement or already recorded elsewhere."
         }
       }
     },
@@ -204,31 +204,31 @@
         "type": "noul",
         "instructions": "Should the narrative memory be updated now?",
         "criteria": {
-          "true": "The recent events change what the narrative should say: a milestone, a reversal or a decision worth remembering.",
-          "false": "Nothing new is worth recording yet: the narrative already covers the recent events."
+          "true": "A milestone, reversal, injury, death, new companion, objective change, location change or reusable lesson happened: the chronicle would be wrong or stale without this update.",
+          "false": "Nothing the chronicle must carry changed: routine movement, a repeated event already covered, or a detail too small to deserve a clause."
         }
       },
       "narrator_effort": {
         "type": "choice",
         "instructions": "How much narrator effort should this memory update use?",
         "criteria": {
-          "max": "Turning point: rewrite the rolling narrative with maximum care.",
-          "xhigh": "Major event: extend and refine the rolling narrative.",
-          "high": "Notable event: write a solid paragraph for the narrative.",
-          "medium": "Ordinary progress: write one short accurate sentence.",
-          "low": "Minor detail: append a brief clause to the narrative.",
-          "minimal": "Trivial detail: make the smallest possible edit.",
-          "none": "Do not call the narrator; skip the update."
+          "max": "Turning point: a death, near-death, goal change or permanent party change — rewrite the rolling narrative with maximum care.",
+          "xhigh": "Major event: a dangerous fight won or lost, a serious injury, a betrayal or a major discovery — extend and refine the rolling narrative.",
+          "high": "Notable event: a first-time milestone (new companion, new region, a key item) — write a solid paragraph for the narrative.",
+          "medium": "Ordinary progress with something real to record (arrived somewhere, met someone in passing) — write one short accurate sentence.",
+          "low": "Minor detail that still deserves a clause (weather turning, a small resupply) — append a brief clause to the narrative.",
+          "minimal": "Trivial detail with marginal value — make the smallest possible edit.",
+          "none": "Nothing here is worth recording — do not call the narrator; skip the update."
         }
       },
       "record_type": {
         "type": "choice",
         "instructions": "What kind of memory record should be stored?",
         "criteria": {
-          "episode": "A dated event that happened in this campaign.",
-          "fact": "A stable fact about the world, the character or the objective.",
-          "procedure": "A method worth reusing in a later situation.",
-          "skip": "Nothing here is worth storing."
+          "episode": "A dated event of this campaign: a fight, a journey leg, a meeting, a discovery. NOT for: stable truths (fact) or reusable methods (procedure).",
+          "fact": "A stable truth about the world, the character or the objective: a persistent injury, the current objective, a companion's identity. NOT for: things that happened at one moment (episode).",
+          "procedure": "A method worth reusing later: how to cross rivers safely, how to trade with a caravan. NOT for: one-off events (episode) or stable truths (fact).",
+          "skip": "Nothing here is worth storing: routine movement or already recorded elsewhere."
         }
       }
     },
@@ -253,31 +253,31 @@
         "type": "noul",
         "instructions": "Should the narrative memory be updated now?",
         "criteria": {
-          "true": "The recent events change what the narrative should say: a milestone, a reversal or a decision worth remembering.",
-          "false": "Nothing new is worth recording yet: the narrative already covers the recent events."
+          "true": "A milestone, reversal, injury, death, new companion, objective change, location change or reusable lesson happened: the chronicle would be wrong or stale without this update.",
+          "false": "Nothing the chronicle must carry changed: routine movement, a repeated event already covered, or a detail too small to deserve a clause."
         }
       },
       "narrator_effort": {
         "type": "choice",
         "instructions": "How much narrator effort should this memory update use?",
         "criteria": {
-          "max": "Turning point: rewrite the rolling narrative with maximum care.",
-          "xhigh": "Major event: extend and refine the rolling narrative.",
-          "high": "Notable event: write a solid paragraph for the narrative.",
-          "medium": "Ordinary progress: write one short accurate sentence.",
-          "low": "Minor detail: append a brief clause to the narrative.",
-          "minimal": "Trivial detail: make the smallest possible edit.",
-          "none": "Do not call the narrator; skip the update."
+          "max": "Turning point: a death, near-death, goal change or permanent party change — rewrite the rolling narrative with maximum care.",
+          "xhigh": "Major event: a dangerous fight won or lost, a serious injury, a betrayal or a major discovery — extend and refine the rolling narrative.",
+          "high": "Notable event: a first-time milestone (new companion, new region, a key item) — write a solid paragraph for the narrative.",
+          "medium": "Ordinary progress with something real to record (arrived somewhere, met someone in passing) — write one short accurate sentence.",
+          "low": "Minor detail that still deserves a clause (weather turning, a small resupply) — append a brief clause to the narrative.",
+          "minimal": "Trivial detail with marginal value — make the smallest possible edit.",
+          "none": "Nothing here is worth recording — do not call the narrator; skip the update."
         }
       },
       "record_type": {
         "type": "choice",
         "instructions": "What kind of memory record should be stored?",
         "criteria": {
-          "episode": "A dated event that happened in this campaign.",
-          "fact": "A stable fact about the world, the character or the objective.",
-          "procedure": "A method worth reusing in a later situation.",
-          "skip": "Nothing here is worth storing."
+          "episode": "A dated event of this campaign: a fight, a journey leg, a meeting, a discovery. NOT for: stable truths (fact) or reusable methods (procedure).",
+          "fact": "A stable truth about the world, the character or the objective: a persistent injury, the current objective, a companion's identity. NOT for: things that happened at one moment (episode).",
+          "procedure": "A method worth reusing later: how to cross rivers safely, how to trade with a caravan. NOT for: one-off events (episode) or stable truths (fact).",
+          "skip": "Nothing here is worth storing: routine movement or already recorded elsewhere."
         }
       }
     },
@@ -302,31 +302,31 @@
         "type": "noul",
         "instructions": "Should the narrative memory be updated now?",
         "criteria": {
-          "true": "The recent events change what the narrative should say: a milestone, a reversal or a decision worth remembering.",
-          "false": "Nothing new is worth recording yet: the narrative already covers the recent events."
+          "true": "A milestone, reversal, injury, death, new companion, objective change, location change or reusable lesson happened: the chronicle would be wrong or stale without this update.",
+          "false": "Nothing the chronicle must carry changed: routine movement, a repeated event already covered, or a detail too small to deserve a clause."
         }
       },
       "narrator_effort": {
         "type": "choice",
         "instructions": "How much narrator effort should this memory update use?",
         "criteria": {
-          "max": "Turning point: rewrite the rolling narrative with maximum care.",
-          "xhigh": "Major event: extend and refine the rolling narrative.",
-          "high": "Notable event: write a solid paragraph for the narrative.",
-          "medium": "Ordinary progress: write one short accurate sentence.",
-          "low": "Minor detail: append a brief clause to the narrative.",
-          "minimal": "Trivial detail: make the smallest possible edit.",
-          "none": "Do not call the narrator; skip the update."
+          "max": "Turning point: a death, near-death, goal change or permanent party change — rewrite the rolling narrative with maximum care.",
+          "xhigh": "Major event: a dangerous fight won or lost, a serious injury, a betrayal or a major discovery — extend and refine the rolling narrative.",
+          "high": "Notable event: a first-time milestone (new companion, new region, a key item) — write a solid paragraph for the narrative.",
+          "medium": "Ordinary progress with something real to record (arrived somewhere, met someone in passing) — write one short accurate sentence.",
+          "low": "Minor detail that still deserves a clause (weather turning, a small resupply) — append a brief clause to the narrative.",
+          "minimal": "Trivial detail with marginal value — make the smallest possible edit.",
+          "none": "Nothing here is worth recording — do not call the narrator; skip the update."
         }
       },
       "record_type": {
         "type": "choice",
         "instructions": "What kind of memory record should be stored?",
         "criteria": {
-          "episode": "A dated event that happened in this campaign.",
-          "fact": "A stable fact about the world, the character or the objective.",
-          "procedure": "A method worth reusing in a later situation.",
-          "skip": "Nothing here is worth storing."
+          "episode": "A dated event of this campaign: a fight, a journey leg, a meeting, a discovery. NOT for: stable truths (fact) or reusable methods (procedure).",
+          "fact": "A stable truth about the world, the character or the objective: a persistent injury, the current objective, a companion's identity. NOT for: things that happened at one moment (episode).",
+          "procedure": "A method worth reusing later: how to cross rivers safely, how to trade with a caravan. NOT for: one-off events (episode) or stable truths (fact).",
+          "skip": "Nothing here is worth storing: routine movement or already recorded elsewhere."
         }
       }
     },
@@ -351,31 +351,31 @@
         "type": "noul",
         "instructions": "Should the narrative memory be updated now?",
         "criteria": {
-          "true": "The recent events change what the narrative should say: a milestone, a reversal or a decision worth remembering.",
-          "false": "Nothing new is worth recording yet: the narrative already covers the recent events."
+          "true": "A milestone, reversal, injury, death, new companion, objective change, location change or reusable lesson happened: the chronicle would be wrong or stale without this update.",
+          "false": "Nothing the chronicle must carry changed: routine movement, a repeated event already covered, or a detail too small to deserve a clause."
         }
       },
       "narrator_effort": {
         "type": "choice",
         "instructions": "How much narrator effort should this memory update use?",
         "criteria": {
-          "max": "Turning point: rewrite the rolling narrative with maximum care.",
-          "xhigh": "Major event: extend and refine the rolling narrative.",
-          "high": "Notable event: write a solid paragraph for the narrative.",
-          "medium": "Ordinary progress: write one short accurate sentence.",
-          "low": "Minor detail: append a brief clause to the narrative.",
-          "minimal": "Trivial detail: make the smallest possible edit.",
-          "none": "Do not call the narrator; skip the update."
+          "max": "Turning point: a death, near-death, goal change or permanent party change — rewrite the rolling narrative with maximum care.",
+          "xhigh": "Major event: a dangerous fight won or lost, a serious injury, a betrayal or a major discovery — extend and refine the rolling narrative.",
+          "high": "Notable event: a first-time milestone (new companion, new region, a key item) — write a solid paragraph for the narrative.",
+          "medium": "Ordinary progress with something real to record (arrived somewhere, met someone in passing) — write one short accurate sentence.",
+          "low": "Minor detail that still deserves a clause (weather turning, a small resupply) — append a brief clause to the narrative.",
+          "minimal": "Trivial detail with marginal value — make the smallest possible edit.",
+          "none": "Nothing here is worth recording — do not call the narrator; skip the update."
         }
       },
       "record_type": {
         "type": "choice",
         "instructions": "What kind of memory record should be stored?",
         "criteria": {
-          "episode": "A dated event that happened in this campaign.",
-          "fact": "A stable fact about the world, the character or the objective.",
-          "procedure": "A method worth reusing in a later situation.",
-          "skip": "Nothing here is worth storing."
+          "episode": "A dated event of this campaign: a fight, a journey leg, a meeting, a discovery. NOT for: stable truths (fact) or reusable methods (procedure).",
+          "fact": "A stable truth about the world, the character or the objective: a persistent injury, the current objective, a companion's identity. NOT for: things that happened at one moment (episode).",
+          "procedure": "A method worth reusing later: how to cross rivers safely, how to trade with a caravan. NOT for: one-off events (episode) or stable truths (fact).",
+          "skip": "Nothing here is worth storing: routine movement or already recorded elsewhere."
         }
       }
     },
@@ -400,31 +400,31 @@
         "type": "noul",
         "instructions": "Should the narrative memory be updated now?",
         "criteria": {
-          "true": "The recent events change what the narrative should say: a milestone, a reversal or a decision worth remembering.",
-          "false": "Nothing new is worth recording yet: the narrative already covers the recent events."
+          "true": "A milestone, reversal, injury, death, new companion, objective change, location change or reusable lesson happened: the chronicle would be wrong or stale without this update.",
+          "false": "Nothing the chronicle must carry changed: routine movement, a repeated event already covered, or a detail too small to deserve a clause."
         }
       },
       "narrator_effort": {
         "type": "choice",
         "instructions": "How much narrator effort should this memory update use?",
         "criteria": {
-          "max": "Turning point: rewrite the rolling narrative with maximum care.",
-          "xhigh": "Major event: extend and refine the rolling narrative.",
-          "high": "Notable event: write a solid paragraph for the narrative.",
-          "medium": "Ordinary progress: write one short accurate sentence.",
-          "low": "Minor detail: append a brief clause to the narrative.",
-          "minimal": "Trivial detail: make the smallest possible edit.",
-          "none": "Do not call the narrator; skip the update."
+          "max": "Turning point: a death, near-death, goal change or permanent party change — rewrite the rolling narrative with maximum care.",
+          "xhigh": "Major event: a dangerous fight won or lost, a serious injury, a betrayal or a major discovery — extend and refine the rolling narrative.",
+          "high": "Notable event: a first-time milestone (new companion, new region, a key item) — write a solid paragraph for the narrative.",
+          "medium": "Ordinary progress with something real to record (arrived somewhere, met someone in passing) — write one short accurate sentence.",
+          "low": "Minor detail that still deserves a clause (weather turning, a small resupply) — append a brief clause to the narrative.",
+          "minimal": "Trivial detail with marginal value — make the smallest possible edit.",
+          "none": "Nothing here is worth recording — do not call the narrator; skip the update."
         }
       },
       "record_type": {
         "type": "choice",
         "instructions": "What kind of memory record should be stored?",
         "criteria": {
-          "episode": "A dated event that happened in this campaign.",
-          "fact": "A stable fact about the world, the character or the objective.",
-          "procedure": "A method worth reusing in a later situation.",
-          "skip": "Nothing here is worth storing."
+          "episode": "A dated event of this campaign: a fight, a journey leg, a meeting, a discovery. NOT for: stable truths (fact) or reusable methods (procedure).",
+          "fact": "A stable truth about the world, the character or the objective: a persistent injury, the current objective, a companion's identity. NOT for: things that happened at one moment (episode).",
+          "procedure": "A method worth reusing later: how to cross rivers safely, how to trade with a caravan. NOT for: one-off events (episode) or stable truths (fact).",
+          "skip": "Nothing here is worth storing: routine movement or already recorded elsewhere."
         }
       }
     },
@@ -449,31 +449,31 @@
         "type": "noul",
         "instructions": "Should the narrative memory be updated now?",
         "criteria": {
-          "true": "The recent events change what the narrative should say: a milestone, a reversal or a decision worth remembering.",
-          "false": "Nothing new is worth recording yet: the narrative already covers the recent events."
+          "true": "A milestone, reversal, injury, death, new companion, objective change, location change or reusable lesson happened: the chronicle would be wrong or stale without this update.",
+          "false": "Nothing the chronicle must carry changed: routine movement, a repeated event already covered, or a detail too small to deserve a clause."
         }
       },
       "narrator_effort": {
         "type": "choice",
         "instructions": "How much narrator effort should this memory update use?",
         "criteria": {
-          "max": "Turning point: rewrite the rolling narrative with maximum care.",
-          "xhigh": "Major event: extend and refine the rolling narrative.",
-          "high": "Notable event: write a solid paragraph for the narrative.",
-          "medium": "Ordinary progress: write one short accurate sentence.",
-          "low": "Minor detail: append a brief clause to the narrative.",
-          "minimal": "Trivial detail: make the smallest possible edit.",
-          "none": "Do not call the narrator; skip the update."
+          "max": "Turning point: a death, near-death, goal change or permanent party change — rewrite the rolling narrative with maximum care.",
+          "xhigh": "Major event: a dangerous fight won or lost, a serious injury, a betrayal or a major discovery — extend and refine the rolling narrative.",
+          "high": "Notable event: a first-time milestone (new companion, new region, a key item) — write a solid paragraph for the narrative.",
+          "medium": "Ordinary progress with something real to record (arrived somewhere, met someone in passing) — write one short accurate sentence.",
+          "low": "Minor detail that still deserves a clause (weather turning, a small resupply) — append a brief clause to the narrative.",
+          "minimal": "Trivial detail with marginal value — make the smallest possible edit.",
+          "none": "Nothing here is worth recording — do not call the narrator; skip the update."
         }
       },
       "record_type": {
         "type": "choice",
         "instructions": "What kind of memory record should be stored?",
         "criteria": {
-          "episode": "A dated event that happened in this campaign.",
-          "fact": "A stable fact about the world, the character or the objective.",
-          "procedure": "A method worth reusing in a later situation.",
-          "skip": "Nothing here is worth storing."
+          "episode": "A dated event of this campaign: a fight, a journey leg, a meeting, a discovery. NOT for: stable truths (fact) or reusable methods (procedure).",
+          "fact": "A stable truth about the world, the character or the objective: a persistent injury, the current objective, a companion's identity. NOT for: things that happened at one moment (episode).",
+          "procedure": "A method worth reusing later: how to cross rivers safely, how to trade with a caravan. NOT for: one-off events (episode) or stable truths (fact).",
+          "skip": "Nothing here is worth storing: routine movement or already recorded elsewhere."
         }
       }
     },

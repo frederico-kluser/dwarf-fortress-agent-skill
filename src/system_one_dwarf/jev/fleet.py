@@ -75,9 +75,12 @@ QUESTION_FORMATS: tuple[str, ...] = ("binary", "multiple", "open")
 
 #: Urgency ruler: concrete situations, never numeric labels.
 DEFAULT_URGENCY_LEVELS: tuple[str, ...] = (
-    "Safe — no time pressure, the situation is stable",
-    "Pressing — act soon, the situation can still get worse",
-    "Critical — act now, delay costs health, position or the objective",
+    "Safe — no time pressure: the situation is stable and delay changes nothing "
+    "(waiting for dawn, standing in a safe place)",
+    "Pressing — act soon: the situation can still get worse if ignored "
+    "(a wounded enemy recovering, supplies running low, daylight fading)",
+    "Critical — act now: delay costs health, position or the objective "
+    "(bleeding, an enemy closing, a trap about to trigger)",
 )
 
 _DEFAULT_EXIT_KEY = "other"
@@ -436,9 +439,12 @@ def build_action(
         "needs_human": noul(
             "needs_human",
             "Does this situation require human help?",
-            "The agent cannot proceed safely alone: information is missing or the risk "
-            "cannot be assessed.",
-            "The agent can decide and act on its own with the information it has.",
+            "A fact the agent cannot observe decides the outcome, or the remaining risk "
+            "can kill the character and no available action reduces it: the agent cannot "
+            "proceed safely alone.",
+            "The visible facts already decide the outcome and an available action "
+            "addresses the risk: the agent can decide and act on its own with the "
+            "information it has.",
         ),
     }
     return _finalise(request)
@@ -493,19 +499,28 @@ def build_memory(
         lines.extend(f"{index}. {_truncate(event, event_chars)}" for index, event in enumerate(kept, 1))
 
     effort_criteria = {
-        "max": "Turning point: rewrite the rolling narrative with maximum care.",
-        "xhigh": "Major event: extend and refine the rolling narrative.",
-        "high": "Notable event: write a solid paragraph for the narrative.",
-        "medium": "Ordinary progress: write one short accurate sentence.",
-        "low": "Minor detail: append a brief clause to the narrative.",
-        "minimal": "Trivial detail: make the smallest possible edit.",
-        "none": "Do not call the narrator; skip the update.",
+        "max": "Turning point: a death, near-death, goal change or permanent party change "
+               "— rewrite the rolling narrative with maximum care.",
+        "xhigh": "Major event: a dangerous fight won or lost, a serious injury, a betrayal "
+                 "or a major discovery — extend and refine the rolling narrative.",
+        "high": "Notable event: a first-time milestone (new companion, new region, a key "
+                "item) — write a solid paragraph for the narrative.",
+        "medium": "Ordinary progress with something real to record (arrived somewhere, met "
+                  "someone in passing) — write one short accurate sentence.",
+        "low": "Minor detail that still deserves a clause (weather turning, a small "
+               "resupply) — append a brief clause to the narrative.",
+        "minimal": "Trivial detail with marginal value — make the smallest possible edit.",
+        "none": "Nothing here is worth recording — do not call the narrator; skip the update.",
     }
     record_criteria = {
-        "episode": "A dated event that happened in this campaign.",
-        "fact": "A stable fact about the world, the character or the objective.",
-        "procedure": "A method worth reusing in a later situation.",
-        "skip": "Nothing here is worth storing.",
+        "episode": "A dated event of this campaign: a fight, a journey leg, a meeting, a "
+                   "discovery. NOT for: stable truths (fact) or reusable methods (procedure).",
+        "fact": "A stable truth about the world, the character or the objective: a persistent "
+                "injury, the current objective, a companion's identity. NOT for: things that "
+                "happened at one moment (episode).",
+        "procedure": "A method worth reusing later: how to cross rivers safely, how to trade "
+                     "with a caravan. NOT for: one-off events (episode) or stable truths (fact).",
+        "skip": "Nothing here is worth storing: routine movement or already recorded elsewhere.",
     }
 
     request: dict[str, Any] = {
@@ -514,10 +529,11 @@ def build_memory(
             "update_memory": noul(
                 "update_memory",
                 "Should the narrative memory be updated now?",
-                "The recent events change what the narrative should say: a milestone, a "
-                "reversal or a decision worth remembering.",
-                "Nothing new is worth recording yet: the narrative already covers the "
-                "recent events.",
+                "A milestone, reversal, injury, death, new companion, objective change, "
+                "location change or reusable lesson happened: the chronicle would be wrong "
+                "or stale without this update.",
+                "Nothing the chronicle must carry changed: routine movement, a repeated "
+                "event already covered, or a detail too small to deserve a clause.",
             ),
             "narrator_effort": choice(
                 "narrator_effort",
@@ -585,9 +601,16 @@ def build_doubt(
         )
 
     criteria = {
-        "binary": "A yes/no question with two options.",
-        "multiple": "A short list of concrete options to choose from.",
-        "open": "A free-text question, when no option list can cover the answer.",
+        "binary": "A yes/no question with two mutually exclusive options, when the decision "
+                  "is genuinely two-way (cross now or turn back). NOT for: situations with "
+                  "three or more real options (use multiple) or answers that are names, "
+                  "values or plans (use open).",
+        "multiple": "A short list of 3-4 concrete options to choose from, when several "
+                    "distinct actions are on the table. NOT for: genuine two-way decisions "
+                    "(use binary) and answers no option list can cover (use open).",
+        "open": "A free-text question, when the answer is a name, a value or a plan that no "
+                "option list can cover. NOT for: decisions whose concrete options can be "
+                "listed (use binary or multiple).",
     }
     request: dict[str, Any] = {
         "state": (
@@ -598,8 +621,14 @@ def build_doubt(
             "ask_human": noul(
                 "ask_human",
                 "Should the agent ask the human for help?",
-                "The agent is missing information or faces a risk it cannot resolve alone.",
-                "The agent can decide and act on its own.",
+                "A fact the agent cannot observe decides the outcome (what an unreadable "
+                "dialog will do, whether a shape in the fog is lethal, which of two "
+                "irreversible routes is survivable), or the remaining risk can kill the "
+                "character and no available action reduces it.",
+                "The visible facts already decide the outcome: the enemy, the terrain and "
+                "the escape route are known, or the situation is routine and reversible. "
+                "Uncertainty the agent can reduce by acting (scouting, waiting one round, "
+                "testing) is NOT a reason to ask.",
             ),
             "question_format": choice(
                 "question_format",

@@ -19,17 +19,17 @@
         "type": "score",
         "instructions": "How urgent is it to act right now?",
         "criteria": [
-          "Safe — no time pressure, the situation is stable",
-          "Pressing — act soon, the situation can still get worse",
-          "Critical — act now, delay costs health, position or the objective"
+          "Safe — no time pressure: the situation is stable and delay changes nothing (waiting for dawn, standing in a safe place)",
+          "Pressing — act soon: the situation can still get worse if ignored (a wounded enemy recovering, supplies running low, daylight fading)",
+          "Critical — act now: delay costs health, position or the objective (bleeding, an enemy closing, a trap about to trigger)"
         ]
       },
       "needs_human": {
         "type": "noul",
         "instructions": "Does this situation require human help?",
         "criteria": {
-          "true": "The agent cannot proceed safely alone: information is missing or the risk cannot be assessed.",
-          "false": "The agent can decide and act on its own with the information it has."
+          "true": "A fact the agent cannot observe decides the outcome, or the remaining risk can kill the character and no available action reduces it: the agent cannot proceed safely alone.",
+          "false": "The visible facts already decide the outcome and an available action addresses the risk: the agent can decide and act on its own with the information it has."
         }
       }
     },
@@ -74,17 +74,17 @@
         "type": "score",
         "instructions": "How urgent is it to act right now?",
         "criteria": [
-          "Safe — no time pressure, the situation is stable",
-          "Pressing — act soon, the situation can still get worse",
-          "Critical — act now, delay costs health, position or the objective"
+          "Safe — no time pressure: the situation is stable and delay changes nothing (waiting for dawn, standing in a safe place)",
+          "Pressing — act soon: the situation can still get worse if ignored (a wounded enemy recovering, supplies running low, daylight fading)",
+          "Critical — act now: delay costs health, position or the objective (bleeding, an enemy closing, a trap about to trigger)"
         ]
       },
       "needs_human": {
         "type": "noul",
         "instructions": "Does this situation require human help?",
         "criteria": {
-          "true": "The agent cannot proceed safely alone: information is missing or the risk cannot be assessed.",
-          "false": "The agent can decide and act on its own with the information it has."
+          "true": "A fact the agent cannot observe decides the outcome, or the remaining risk can kill the character and no available action reduces it: the agent cannot proceed safely alone.",
+          "false": "The visible facts already decide the outcome and an available action addresses the risk: the agent can decide and act on its own with the information it has."
         }
       }
     },
@@ -129,17 +129,17 @@
         "type": "score",
         "instructions": "How urgent is it to act right now?",
         "criteria": [
-          "Safe — no time pressure, the situation is stable",
-          "Pressing — act soon, the situation can still get worse",
-          "Critical — act now, delay costs health, position or the objective"
+          "Safe — no time pressure: the situation is stable and delay changes nothing (waiting for dawn, standing in a safe place)",
+          "Pressing — act soon: the situation can still get worse if ignored (a wounded enemy recovering, supplies running low, daylight fading)",
+          "Critical — act now: delay costs health, position or the objective (bleeding, an enemy closing, a trap about to trigger)"
         ]
       },
       "needs_human": {
         "type": "noul",
         "instructions": "Does this situation require human help?",
         "criteria": {
-          "true": "The agent cannot proceed safely alone: information is missing or the risk cannot be assessed.",
-          "false": "The agent can decide and act on its own with the information it has."
+          "true": "A fact the agent cannot observe decides the outcome, or the remaining risk can kill the character and no available action reduces it: the agent cannot proceed safely alone.",
+          "false": "The visible facts already decide the outcome and an available action addresses the risk: the agent can decide and act on its own with the information it has."
         }
       }
     },
@@ -184,17 +184,17 @@
         "type": "score",
         "instructions": "How urgent is it to act right now?",
         "criteria": [
-          "Safe — no time pressure, the situation is stable",
-          "Pressing — act soon, the situation can still get worse",
-          "Critical — act now, delay costs health, position or the objective"
+          "Safe — no time pressure: the situation is stable and delay changes nothing (waiting for dawn, standing in a safe place)",
+          "Pressing — act soon: the situation can still get worse if ignored (a wounded enemy recovering, supplies running low, daylight fading)",
+          "Critical — act now: delay costs health, position or the objective (bleeding, an enemy closing, a trap about to trigger)"
         ]
       },
       "needs_human": {
         "type": "noul",
         "instructions": "Does this situation require human help?",
         "criteria": {
-          "true": "The agent cannot proceed safely alone: information is missing or the risk cannot be assessed.",
-          "false": "The agent can decide and act on its own with the information it has."
+          "true": "A fact the agent cannot observe decides the outcome, or the remaining risk can kill the character and no available action reduces it: the agent cannot proceed safely alone.",
+          "false": "The visible facts already decide the outcome and an available action addresses the risk: the agent can decide and act on its own with the information it has."
         }
       }
     },
@@ -239,17 +239,17 @@
         "type": "score",
         "instructions": "How urgent is it to act right now?",
         "criteria": [
-          "Safe — no time pressure, the situation is stable",
-          "Pressing — act soon, the situation can still get worse",
-          "Critical — act now, delay costs health, position or the objective"
+          "Safe — no time pressure: the situation is stable and delay changes nothing (waiting for dawn, standing in a safe place)",
+          "Pressing — act soon: the situation can still get worse if ignored (a wounded enemy recovering, supplies running low, daylight fading)",
+          "Critical — act now: delay costs health, position or the objective (bleeding, an enemy closing, a trap about to trigger)"
         ]
       },
       "needs_human": {
         "type": "noul",
         "instructions": "Does this situation require human help?",
         "criteria": {
-          "true": "The agent cannot proceed safely alone: information is missing or the risk cannot be assessed.",
-          "false": "The agent can decide and act on its own with the information it has."
+          "true": "A fact the agent cannot observe decides the outcome, or the remaining risk can kill the character and no available action reduces it: the agent cannot proceed safely alone.",
+          "false": "The visible facts already decide the outcome and an available action addresses the risk: the agent can decide and act on its own with the information it has."
         }
       }
     },
@@ -294,17 +294,17 @@
         "type": "score",
         "instructions": "How urgent is it to act right now?",
         "criteria": [
-          "Safe — no time pressure, the situation is stable",
-          "Pressing — act soon, the situation can still get worse",
-          "Critical — act now, delay costs health, position or the objective"
+          "Safe — no time pressure: the situation is stable and delay changes nothing (waiting for dawn, standing in a safe place)",
+          "Pressing — act soon: the situation can still get worse if ignored (a wounded enemy recovering, supplies running low, daylight fading)",
+          "Critical — act now: delay costs health, position or the objective (bleeding, an enemy closing, a trap about to trigger)"
         ]
       },
       "needs_human": {
         "type": "noul",
         "instructions": "Does this situation require human help?",
         "criteria": {
-          "true": "The agent cannot proceed safely alone: information is missing or the risk cannot be assessed.",
-          "false": "The agent can decide and act on its own with the information it has."
+          "true": "A fact the agent cannot observe decides the outcome, or the remaining risk can kill the character and no available action reduces it: the agent cannot proceed safely alone.",
+          "false": "The visible facts already decide the outcome and an available action addresses the risk: the agent can decide and act on its own with the information it has."
         }
       }
     },
@@ -349,17 +349,17 @@
         "type": "score",
         "instructions": "How urgent is it to act right now?",
         "criteria": [
-          "Safe — no time pressure, the situation is stable",
-          "Pressing — act soon, the situation can still get worse",
-          "Critical — act now, delay costs health, position or the objective"
+          "Safe — no time pressure: the situation is stable and delay changes nothing (waiting for dawn, standing in a safe place)",
+          "Pressing — act soon: the situation can still get worse if ignored (a wounded enemy recovering, supplies running low, daylight fading)",
+          "Critical — act now: delay costs health, position or the objective (bleeding, an enemy closing, a trap about to trigger)"
         ]
       },
       "needs_human": {
         "type": "noul",
         "instructions": "Does this situation require human help?",
         "criteria": {
-          "true": "The agent cannot proceed safely alone: information is missing or the risk cannot be assessed.",
-          "false": "The agent can decide and act on its own with the information it has."
+          "true": "A fact the agent cannot observe decides the outcome, or the remaining risk can kill the character and no available action reduces it: the agent cannot proceed safely alone.",
+          "false": "The visible facts already decide the outcome and an available action addresses the risk: the agent can decide and act on its own with the information it has."
         }
       }
     },
@@ -404,17 +404,17 @@
         "type": "score",
         "instructions": "How urgent is it to act right now?",
         "criteria": [
-          "Safe — no time pressure, the situation is stable",
-          "Pressing — act soon, the situation can still get worse",
-          "Critical — act now, delay costs health, position or the objective"
+          "Safe — no time pressure: the situation is stable and delay changes nothing (waiting for dawn, standing in a safe place)",
+          "Pressing — act soon: the situation can still get worse if ignored (a wounded enemy recovering, supplies running low, daylight fading)",
+          "Critical — act now: delay costs health, position or the objective (bleeding, an enemy closing, a trap about to trigger)"
         ]
       },
       "needs_human": {
         "type": "noul",
         "instructions": "Does this situation require human help?",
         "criteria": {
-          "true": "The agent cannot proceed safely alone: information is missing or the risk cannot be assessed.",
-          "false": "The agent can decide and act on its own with the information it has."
+          "true": "A fact the agent cannot observe decides the outcome, or the remaining risk can kill the character and no available action reduces it: the agent cannot proceed safely alone.",
+          "false": "The visible facts already decide the outcome and an available action addresses the risk: the agent can decide and act on its own with the information it has."
         }
       }
     },
@@ -459,17 +459,17 @@
         "type": "score",
         "instructions": "How urgent is it to act right now?",
         "criteria": [
-          "Safe — no time pressure, the situation is stable",
-          "Pressing — act soon, the situation can still get worse",
-          "Critical — act now, delay costs health, position or the objective"
+          "Safe — no time pressure: the situation is stable and delay changes nothing (waiting for dawn, standing in a safe place)",
+          "Pressing — act soon: the situation can still get worse if ignored (a wounded enemy recovering, supplies running low, daylight fading)",
+          "Critical — act now: delay costs health, position or the objective (bleeding, an enemy closing, a trap about to trigger)"
         ]
       },
       "needs_human": {
         "type": "noul",
         "instructions": "Does this situation require human help?",
         "criteria": {
-          "true": "The agent cannot proceed safely alone: information is missing or the risk cannot be assessed.",
-          "false": "The agent can decide and act on its own with the information it has."
+          "true": "A fact the agent cannot observe decides the outcome, or the remaining risk can kill the character and no available action reduces it: the agent cannot proceed safely alone.",
+          "false": "The visible facts already decide the outcome and an available action addresses the risk: the agent can decide and act on its own with the information it has."
         }
       }
     },
@@ -514,17 +514,17 @@
         "type": "score",
         "instructions": "How urgent is it to act right now?",
         "criteria": [
-          "Safe — no time pressure, the situation is stable",
-          "Pressing — act soon, the situation can still get worse",
-          "Critical — act now, delay costs health, position or the objective"
+          "Safe — no time pressure: the situation is stable and delay changes nothing (waiting for dawn, standing in a safe place)",
+          "Pressing — act soon: the situation can still get worse if ignored (a wounded enemy recovering, supplies running low, daylight fading)",
+          "Critical — act now: delay costs health, position or the objective (bleeding, an enemy closing, a trap about to trigger)"
         ]
       },
       "needs_human": {
         "type": "noul",
         "instructions": "Does this situation require human help?",
         "criteria": {
-          "true": "The agent cannot proceed safely alone: information is missing or the risk cannot be assessed.",
-          "false": "The agent can decide and act on its own with the information it has."
+          "true": "A fact the agent cannot observe decides the outcome, or the remaining risk can kill the character and no available action reduces it: the agent cannot proceed safely alone.",
+          "false": "The visible facts already decide the outcome and an available action addresses the risk: the agent can decide and act on its own with the information it has."
         }
       }
     },
@@ -569,17 +569,17 @@
         "type": "score",
         "instructions": "How urgent is it to act right now?",
         "criteria": [
-          "Safe — no time pressure, the situation is stable",
-          "Pressing — act soon, the situation can still get worse",
-          "Critical — act now, delay costs health, position or the objective"
+          "Safe — no time pressure: the situation is stable and delay changes nothing (waiting for dawn, standing in a safe place)",
+          "Pressing — act soon: the situation can still get worse if ignored (a wounded enemy recovering, supplies running low, daylight fading)",
+          "Critical — act now: delay costs health, position or the objective (bleeding, an enemy closing, a trap about to trigger)"
         ]
       },
       "needs_human": {
         "type": "noul",
         "instructions": "Does this situation require human help?",
         "criteria": {
-          "true": "The agent cannot proceed safely alone: information is missing or the risk cannot be assessed.",
-          "false": "The agent can decide and act on its own with the information it has."
+          "true": "A fact the agent cannot observe decides the outcome, or the remaining risk can kill the character and no available action reduces it: the agent cannot proceed safely alone.",
+          "false": "The visible facts already decide the outcome and an available action addresses the risk: the agent can decide and act on its own with the information it has."
         }
       }
     },
@@ -624,17 +624,17 @@
         "type": "score",
         "instructions": "How urgent is it to act right now?",
         "criteria": [
-          "Safe — no time pressure, the situation is stable",
-          "Pressing — act soon, the situation can still get worse",
-          "Critical — act now, delay costs health, position or the objective"
+          "Safe — no time pressure: the situation is stable and delay changes nothing (waiting for dawn, standing in a safe place)",
+          "Pressing — act soon: the situation can still get worse if ignored (a wounded enemy recovering, supplies running low, daylight fading)",
+          "Critical — act now: delay costs health, position or the objective (bleeding, an enemy closing, a trap about to trigger)"
         ]
       },
       "needs_human": {
         "type": "noul",
         "instructions": "Does this situation require human help?",
         "criteria": {
-          "true": "The agent cannot proceed safely alone: information is missing or the risk cannot be assessed.",
-          "false": "The agent can decide and act on its own with the information it has."
+          "true": "A fact the agent cannot observe decides the outcome, or the remaining risk can kill the character and no available action reduces it: the agent cannot proceed safely alone.",
+          "false": "The visible facts already decide the outcome and an available action addresses the risk: the agent can decide and act on its own with the information it has."
         }
       }
     },
@@ -679,17 +679,17 @@
         "type": "score",
         "instructions": "How urgent is it to act right now?",
         "criteria": [
-          "Safe — no time pressure, the situation is stable",
-          "Pressing — act soon, the situation can still get worse",
-          "Critical — act now, delay costs health, position or the objective"
+          "Safe — no time pressure: the situation is stable and delay changes nothing (waiting for dawn, standing in a safe place)",
+          "Pressing — act soon: the situation can still get worse if ignored (a wounded enemy recovering, supplies running low, daylight fading)",
+          "Critical — act now: delay costs health, position or the objective (bleeding, an enemy closing, a trap about to trigger)"
         ]
       },
       "needs_human": {
         "type": "noul",
         "instructions": "Does this situation require human help?",
         "criteria": {
-          "true": "The agent cannot proceed safely alone: information is missing or the risk cannot be assessed.",
-          "false": "The agent can decide and act on its own with the information it has."
+          "true": "A fact the agent cannot observe decides the outcome, or the remaining risk can kill the character and no available action reduces it: the agent cannot proceed safely alone.",
+          "false": "The visible facts already decide the outcome and an available action addresses the risk: the agent can decide and act on its own with the information it has."
         }
       }
     },
@@ -734,17 +734,17 @@
         "type": "score",
         "instructions": "How urgent is it to act right now?",
         "criteria": [
-          "Safe — no time pressure, the situation is stable",
-          "Pressing — act soon, the situation can still get worse",
-          "Critical — act now, delay costs health, position or the objective"
+          "Safe — no time pressure: the situation is stable and delay changes nothing (waiting for dawn, standing in a safe place)",
+          "Pressing — act soon: the situation can still get worse if ignored (a wounded enemy recovering, supplies running low, daylight fading)",
+          "Critical — act now: delay costs health, position or the objective (bleeding, an enemy closing, a trap about to trigger)"
         ]
       },
       "needs_human": {
         "type": "noul",
         "instructions": "Does this situation require human help?",
         "criteria": {
-          "true": "The agent cannot proceed safely alone: information is missing or the risk cannot be assessed.",
-          "false": "The agent can decide and act on its own with the information it has."
+          "true": "A fact the agent cannot observe decides the outcome, or the remaining risk can kill the character and no available action reduces it: the agent cannot proceed safely alone.",
+          "false": "The visible facts already decide the outcome and an available action addresses the risk: the agent can decide and act on its own with the information it has."
         }
       }
     },
@@ -789,17 +789,17 @@
         "type": "score",
         "instructions": "How urgent is it to act right now?",
         "criteria": [
-          "Safe — no time pressure, the situation is stable",
-          "Pressing — act soon, the situation can still get worse",
-          "Critical — act now, delay costs health, position or the objective"
+          "Safe — no time pressure: the situation is stable and delay changes nothing (waiting for dawn, standing in a safe place)",
+          "Pressing — act soon: the situation can still get worse if ignored (a wounded enemy recovering, supplies running low, daylight fading)",
+          "Critical — act now: delay costs health, position or the objective (bleeding, an enemy closing, a trap about to trigger)"
         ]
       },
       "needs_human": {
         "type": "noul",
         "instructions": "Does this situation require human help?",
         "criteria": {
-          "true": "The agent cannot proceed safely alone: information is missing or the risk cannot be assessed.",
-          "false": "The agent can decide and act on its own with the information it has."
+          "true": "A fact the agent cannot observe decides the outcome, or the remaining risk can kill the character and no available action reduces it: the agent cannot proceed safely alone.",
+          "false": "The visible facts already decide the outcome and an available action addresses the risk: the agent can decide and act on its own with the information it has."
         }
       }
     },
@@ -844,17 +844,17 @@
         "type": "score",
         "instructions": "How urgent is it to act right now?",
         "criteria": [
-          "Safe — no time pressure, the situation is stable",
-          "Pressing — act soon, the situation can still get worse",
-          "Critical — act now, delay costs health, position or the objective"
+          "Safe — no time pressure: the situation is stable and delay changes nothing (waiting for dawn, standing in a safe place)",
+          "Pressing — act soon: the situation can still get worse if ignored (a wounded enemy recovering, supplies running low, daylight fading)",
+          "Critical — act now: delay costs health, position or the objective (bleeding, an enemy closing, a trap about to trigger)"
         ]
       },
       "needs_human": {
         "type": "noul",
         "instructions": "Does this situation require human help?",
         "criteria": {
-          "true": "The agent cannot proceed safely alone: information is missing or the risk cannot be assessed.",
-          "false": "The agent can decide and act on its own with the information it has."
+          "true": "A fact the agent cannot observe decides the outcome, or the remaining risk can kill the character and no available action reduces it: the agent cannot proceed safely alone.",
+          "false": "The visible facts already decide the outcome and an available action addresses the risk: the agent can decide and act on its own with the information it has."
         }
       }
     },
@@ -899,17 +899,17 @@
         "type": "score",
         "instructions": "How urgent is it to act right now?",
         "criteria": [
-          "Safe — no time pressure, the situation is stable",
-          "Pressing — act soon, the situation can still get worse",
-          "Critical — act now, delay costs health, position or the objective"
+          "Safe — no time pressure: the situation is stable and delay changes nothing (waiting for dawn, standing in a safe place)",
+          "Pressing — act soon: the situation can still get worse if ignored (a wounded enemy recovering, supplies running low, daylight fading)",
+          "Critical — act now: delay costs health, position or the objective (bleeding, an enemy closing, a trap about to trigger)"
         ]
       },
       "needs_human": {
         "type": "noul",
         "instructions": "Does this situation require human help?",
         "criteria": {
-          "true": "The agent cannot proceed safely alone: information is missing or the risk cannot be assessed.",
-          "false": "The agent can decide and act on its own with the information it has."
+          "true": "A fact the agent cannot observe decides the outcome, or the remaining risk can kill the character and no available action reduces it: the agent cannot proceed safely alone.",
+          "false": "The visible facts already decide the outcome and an available action addresses the risk: the agent can decide and act on its own with the information it has."
         }
       }
     },
@@ -954,17 +954,17 @@
         "type": "score",
         "instructions": "How urgent is it to act right now?",
         "criteria": [
-          "Safe — no time pressure, the situation is stable",
-          "Pressing — act soon, the situation can still get worse",
-          "Critical — act now, delay costs health, position or the objective"
+          "Safe — no time pressure: the situation is stable and delay changes nothing (waiting for dawn, standing in a safe place)",
+          "Pressing — act soon: the situation can still get worse if ignored (a wounded enemy recovering, supplies running low, daylight fading)",
+          "Critical — act now: delay costs health, position or the objective (bleeding, an enemy closing, a trap about to trigger)"
         ]
       },
       "needs_human": {
         "type": "noul",
         "instructions": "Does this situation require human help?",
         "criteria": {
-          "true": "The agent cannot proceed safely alone: information is missing or the risk cannot be assessed.",
-          "false": "The agent can decide and act on its own with the information it has."
+          "true": "A fact the agent cannot observe decides the outcome, or the remaining risk can kill the character and no available action reduces it: the agent cannot proceed safely alone.",
+          "false": "The visible facts already decide the outcome and an available action addresses the risk: the agent can decide and act on its own with the information it has."
         }
       }
     },
@@ -1009,17 +1009,17 @@
         "type": "score",
         "instructions": "How urgent is it to act right now?",
         "criteria": [
-          "Safe — no time pressure, the situation is stable",
-          "Pressing — act soon, the situation can still get worse",
-          "Critical — act now, delay costs health, position or the objective"
+          "Safe — no time pressure: the situation is stable and delay changes nothing (waiting for dawn, standing in a safe place)",
+          "Pressing — act soon: the situation can still get worse if ignored (a wounded enemy recovering, supplies running low, daylight fading)",
+          "Critical — act now: delay costs health, position or the objective (bleeding, an enemy closing, a trap about to trigger)"
         ]
       },
       "needs_human": {
         "type": "noul",
         "instructions": "Does this situation require human help?",
         "criteria": {
-          "true": "The agent cannot proceed safely alone: information is missing or the risk cannot be assessed.",
-          "false": "The agent can decide and act on its own with the information it has."
+          "true": "A fact the agent cannot observe decides the outcome, or the remaining risk can kill the character and no available action reduces it: the agent cannot proceed safely alone.",
+          "false": "The visible facts already decide the outcome and an available action addresses the risk: the agent can decide and act on its own with the information it has."
         }
       }
     },
