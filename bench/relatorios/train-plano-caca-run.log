@@ -1,0 +1,160 @@
+Custo estimado: $2.2471 – $7.9973 (14 cenários × 5 participantes × até 2 iterações)
+sessão 0fd7af73-05cd-482c-9c97-ad64572bf850 — até 2 iterações
+[train 0fd7af73-05cd-482c-9c97-ad64572bf850] started: 2 iteracoes (minGain=auto max(1; 50/n), gate max-T a 5%, paciencia 2)
+[train 0fd7af73-05cd-482c-9c97-ad64572bf850] iteracao 1/2 -> run 5e4bd3ca-bcc2-4410-ac00-bf228ed332a6 (4 variantes)
+[bench 5e4bd3ca-bcc2-4410-ac00-bf228ed332a6] started {"mode":"variation","stages":14,"contestants":4}
+[datagen] reposicao 1/3 falhou: timeout total (180000ms, papel datagen): a chamada excedeu o teto — a geração pode ter sido cobrada e a chamada fica pendente de conciliação.
+[datagen] reposicao 2/3 falhou: timeout total (180000ms, papel datagen): a chamada excedeu o teto — a geração pode ter sido cobrada e a chamada fica pendente de conciliação.
+[datagen] reposicao 3/3 falhou: timeout total (180000ms, papel datagen): a chamada excedeu o teto — a geração pode ter sido cobrada e a chamada fica pendente de conciliação.
+[bench 5e4bd3ca-bcc2-4410-ac00-bf228ed332a6] datagen: Datagen entregou 10 de 14 cenários (3 chamada(s) do gerador falharam; 3/3 rodada(s) de reposição). Varie o tema/briefing, importe um pacote de cenários ou troque o modelo gerador.
+[competitor xiaomi/mimo-v2.6-pro] tentativa 1 falhou: GatewayTimeoutError: timeout total (60000ms, papel competitor): a chamada excedeu o teto — a geração pode ter sido cobrada e a chamada fica pendente de conciliação.
+    at Timeout._onTimeout (file:///home/ondokai/Projects/prompt-builder/dist/openrouter.js:2067:34)
+    at listOnTimeout (node:internal/timers:635:17)
+    at process.processTimers (node:internal/timers:571:7) {
+  gatewayTimeout: true,
+  timeoutKind: 'total',
+  role: 'competitor',
+  timeoutMs: 60000
+}
+[competitor xiaomi/mimo-v2.6-pro] tentativa 1 falhou: GatewayTimeoutError: timeout total (60000ms, papel competitor): a chamada excedeu o teto — a geração pode ter sido cobrada e a chamada fica pendente de conciliação.
+    at Timeout._onTimeout (file:///home/ondokai/Projects/prompt-builder/dist/openrouter.js:2067:34)
+    at listOnTimeout (node:internal/timers:635:17)
+    at process.processTimers (node:internal/timers:571:7) {
+  gatewayTimeout: true,
+  timeoutKind: 'total',
+  role: 'competitor',
+  timeoutMs: 60000
+}
+[competitor xiaomi/mimo-v2.6-pro] tentativa 1 falhou: GatewayTimeoutError: timeout total (60000ms, papel competitor): a chamada excedeu o teto — a geração pode ter sido cobrada e a chamada fica pendente de conciliação.
+    at Timeout._onTimeout (file:///home/ondokai/Projects/prompt-builder/dist/openrouter.js:2067:34)
+    at listOnTimeout (node:internal/timers:635:17)
+    at process.processTimers (node:internal/timers:571:7) {
+  gatewayTimeout: true,
+  timeoutKind: 'total',
+  role: 'competitor',
+  timeoutMs: 60000
+}
+[competitor xiaomi/mimo-v2.6-pro] tentativa 1 falhou: GatewayTimeoutError: timeout total (60000ms, papel competitor): a chamada excedeu o teto — a geração pode ter sido cobrada e a chamada fica pendente de conciliação.
+    at Timeout._onTimeout (file:///home/ondokai/Projects/prompt-builder/dist/openrouter.js:2067:34)
+    at listOnTimeout (node:internal/timers:635:17)
+    at process.processTimers (node:internal/timers:571:7) {
+  gatewayTimeout: true,
+  timeoutKind: 'total',
+  role: 'competitor',
+  timeoutMs: 60000
+}
+[competitor xiaomi/mimo-v2.6-pro] tentativa 1 falhou: GatewayTimeoutError: timeout total (60000ms, papel competitor): a chamada excedeu o teto — a geração pode ter sido cobrada e a chamada fica pendente de conciliação.
+    at Timeout._onTimeout (file:///home/ondokai/Projects/prompt-builder/dist/openrouter.js:2067:34)
+    at listOnTimeout (node:internal/timers:635:17)
+    at process.processTimers (node:internal/timers:571:7) {
+  gatewayTimeout: true,
+  timeoutKind: 'total',
+  role: 'competitor',
+  timeoutMs: 60000
+}
+[competitor xiaomi/mimo-v2.6-pro] tentativa 1 falhou: GatewayTimeoutError: timeout total (60000ms, papel competitor): a chamada excedeu o teto — a geração pode ter sido cobrada e a chamada fica pendente de conciliação.
+    at Timeout._onTimeout (file:///home/ondokai/Projects/prompt-builder/dist/openrouter.js:2067:34)
+    at listOnTimeout (node:internal/timers:635:17)
+    at process.processTimers (node:internal/timers:571:7) {
+  gatewayTimeout: true,
+  timeoutKind: 'total',
+  role: 'competitor',
+  timeoutMs: 60000
+}
+[competitor xiaomi/mimo-v2.6-pro] tentativa 1 falhou: GatewayTimeoutError: timeout total (60000ms, papel competitor): a chamada excedeu o teto — a geração pode ter sido cobrada e a chamada fica pendente de conciliação.
+    at Timeout._onTimeout (file:///home/ondokai/Projects/prompt-builder/dist/openrouter.js:2067:34)
+    at listOnTimeout (node:internal/timers:635:17)
+    at process.processTimers (node:internal/timers:571:7) {
+  gatewayTimeout: true,
+  timeoutKind: 'total',
+  role: 'competitor',
+  timeoutMs: 60000
+}
+[competitor xiaomi/mimo-v2.6-pro] tentativa 1 falhou: GatewayTimeoutError: timeout total (60000ms, papel competitor): a chamada excedeu o teto — a geração pode ter sido cobrada e a chamada fica pendente de conciliação.
+    at Timeout._onTimeout (file:///home/ondokai/Projects/prompt-builder/dist/openrouter.js:2067:34)
+    at listOnTimeout (node:internal/timers:635:17)
+    at process.processTimers (node:internal/timers:571:7) {
+  gatewayTimeout: true,
+  timeoutKind: 'total',
+  role: 'competitor',
+  timeoutMs: 60000
+}
+[bench 5e4bd3ca-bcc2-4410-ac00-bf228ed332a6] Etapa 1: saída do juiz de duelo cortada em Original (controle) × Restrições/guardrails (teto de tokens), Original (controle) × Persona/papel (teto de tokens), Restrições/guardrails × Persona/papel (teto de tokens) — duelo SEM resultado (fora do placar; nunca vira empate).
+[bench 5e4bd3ca-bcc2-4410-ac00-bf228ed332a6] Etapa 2: saída do juiz de duelo cortada em Original (controle) × Persona/papel (teto de tokens) — duelo SEM resultado (fora do placar; nunca vira empate).
+[bench 5e4bd3ca-bcc2-4410-ac00-bf228ed332a6] Etapa 3: saída do juiz de duelo cortada em Restrições/guardrails × Persona/papel (teto de tokens), Restrições/guardrails × Original (controle) (teto de tokens), Persona/papel × Original (controle) (teto de tokens) — duelo SEM resultado (fora do placar; nunca vira empate).
+[bench 5e4bd3ca-bcc2-4410-ac00-bf228ed332a6] Etapa 5: saída do juiz de duelo cortada em Original (controle) × Restrições/guardrails (teto de tokens) — duelo SEM resultado (fora do placar; nunca vira empate).
+[bench 5e4bd3ca-bcc2-4410-ac00-bf228ed332a6] Etapa 6: saída do juiz de duelo cortada em Persona/papel × Original (controle) (teto de tokens), Persona/papel × Restrições/guardrails (teto de tokens), Original (controle) × Restrições/guardrails (teto de tokens) — duelo SEM resultado (fora do placar; nunca vira empate).
+[bench 5e4bd3ca-bcc2-4410-ac00-bf228ed332a6] Etapa 8: saída do juiz de duelo cortada em Restrições/guardrails × Original (controle) (teto de tokens), Persona/papel × Original (controle) (teto de tokens) — duelo SEM resultado (fora do placar; nunca vira empate).
+[bench 5e4bd3ca-bcc2-4410-ac00-bf228ed332a6] Etapa 7: saída do juiz de duelo cortada em Original (controle) × Restrições/guardrails (teto de tokens) — duelo SEM resultado (fora do placar; nunca vira empate).
+[bench 5e4bd3ca-bcc2-4410-ac00-bf228ed332a6] Etapa 9: saída do juiz de duelo cortada em Restrições/guardrails × Original (controle) (teto de tokens), Restrições/guardrails × Persona/papel (teto de tokens), Original (controle) × Persona/papel (teto de tokens) — duelo SEM resultado (fora do placar; nunca vira empate).
+[bench 5e4bd3ca-bcc2-4410-ac00-bf228ed332a6] Etapa 10: saída do juiz de duelo cortada em Restrições/guardrails × Persona/papel (teto de tokens), Restrições/guardrails × Original (controle) (teto de tokens), Persona/papel × Original (controle) (teto de tokens) — duelo SEM resultado (fora do placar; nunca vira empate).
+[bench 5e4bd3ca-bcc2-4410-ac00-bf228ed332a6] aviso de verbosidade do juiz: verbosidade — legenda descritiva (Pearson agregado, sem efeito fixo de cenário): r=-0.35, n=32, papel=pointwise; correlação score×comprimento NÃO é diagnóstico de viés — quem diagnostica é o verbosityDiag (efeito + incerteza + n por permutação).
+[bench 5e4bd3ca-bcc2-4410-ac00-bf228ed332a6] desfechos dos competidores (bloqueio ≠ recusa ≠ erro) {"blocked":0,"refused":0,"error":8}
+[bench 5e4bd3ca-bcc2-4410-ac00-bf228ed332a6] ALERTA de truncamento: 31 de 122 chamadas (25,4%) saíram truncadas no teto de tokens (duelo 31 de 57) — acima do limite de 2%. Etapas com resposta truncada ficaram fora do placar; aumente o teto (maxTokens/--max-output-tokens) ou baixe o esforço de raciocínio.
+[bench 5e4bd3ca-bcc2-4410-ac00-bf228ed332a6] ALERTA de truncamento: Truncamento acima de 1% por papel × esforço — duelo @ high: 31 de 57 (54,4%). Veredito de juiz/duelo truncado é descartado (sem veredito, nunca 'parcial' nem empate); suba o teto do papel ou baixe o esforço de raciocínio.
+[bench 5e4bd3ca-bcc2-4410-ac00-bf228ed332a6] inconclusiva: papel competitor: 8 de 40 vereditos perdidos = 20% > 10%
+[bench 5e4bd3ca-bcc2-4410-ac00-bf228ed332a6] inconclusiva: papel judge: 32 de 32 vereditos perdidos (32 degradados) = 100% > 10%
+[bench 5e4bd3ca-bcc2-4410-ac00-bf228ed332a6] inconclusiva: papel duel: 20 de 30 vereditos perdidos = 66.7% > 10%
+[bench 5e4bd3ca-bcc2-4410-ac00-bf228ed332a6] inconclusiva: n efetivo < 5 cenários julgados: v2 (2)
+[bench 5e4bd3ca-bcc2-4410-ac00-bf228ed332a6] inconclusive {"totalCostUsd":0.8800126237999999}
+[train 0fd7af73-05cd-482c-9c97-ad64572bf850] confirmação fraca: holdout com n=5 < 10 cenários — sem confirmação contra sobreajuste
+[train 0fd7af73-05cd-482c-9c97-ad64572bf850] iteracao 1 sem promocao (1/2 da paciencia): segue com o campeao atual
+[train 0fd7af73-05cd-482c-9c97-ad64572bf850] dossie de licoes truncado para 4000 tokens: 3 campos encurtados (acerto 2, falha 2, acerto 3) — nenhuma falha foi descartada
+[train 0fd7af73-05cd-482c-9c97-ad64572bf850] iteracao 2/2 -> run ca02b6fe-8101-4f68-8d45-2837f19d2149 (4 variantes)
+[bench ca02b6fe-8101-4f68-8d45-2837f19d2149] started {"mode":"variation","stages":10,"contestants":4}
+[competitor xiaomi/mimo-v2.6-pro] tentativa 1 falhou: GatewayTimeoutError: timeout total (60000ms, papel competitor): a chamada excedeu o teto — a geração pode ter sido cobrada e a chamada fica pendente de conciliação.
+    at Timeout._onTimeout (file:///home/ondokai/Projects/prompt-builder/dist/openrouter.js:2067:34)
+    at listOnTimeout (node:internal/timers:635:17)
+    at process.processTimers (node:internal/timers:571:7) {
+  gatewayTimeout: true,
+  timeoutKind: 'total',
+  role: 'competitor',
+  timeoutMs: 60000
+}
+[competitor xiaomi/mimo-v2.6-pro] tentativa 1 falhou: GatewayTimeoutError: timeout total (60000ms, papel competitor): a chamada excedeu o teto — a geração pode ter sido cobrada e a chamada fica pendente de conciliação.
+    at Timeout._onTimeout (file:///home/ondokai/Projects/prompt-builder/dist/openrouter.js:2067:34)
+    at listOnTimeout (node:internal/timers:635:17)
+    at process.processTimers (node:internal/timers:571:7) {
+  gatewayTimeout: true,
+  timeoutKind: 'total',
+  role: 'competitor',
+  timeoutMs: 60000
+}
+[competitor xiaomi/mimo-v2.6-pro] tentativa 1 falhou: GatewayTimeoutError: timeout total (60000ms, papel competitor): a chamada excedeu o teto — a geração pode ter sido cobrada e a chamada fica pendente de conciliação.
+    at Timeout._onTimeout (file:///home/ondokai/Projects/prompt-builder/dist/openrouter.js:2067:34)
+    at listOnTimeout (node:internal/timers:635:17)
+    at process.processTimers (node:internal/timers:571:7) {
+  gatewayTimeout: true,
+  timeoutKind: 'total',
+  role: 'competitor',
+  timeoutMs: 60000
+}
+[competitor xiaomi/mimo-v2.6-pro] tentativa 1 falhou: GatewayTimeoutError: timeout total (60000ms, papel competitor): a chamada excedeu o teto — a geração pode ter sido cobrada e a chamada fica pendente de conciliação.
+    at Timeout._onTimeout (file:///home/ondokai/Projects/prompt-builder/dist/openrouter.js:2067:34)
+    at listOnTimeout (node:internal/timers:635:17)
+    at process.processTimers (node:internal/timers:571:7) {
+  gatewayTimeout: true,
+  timeoutKind: 'total',
+  role: 'competitor',
+  timeoutMs: 60000
+}
+[bench ca02b6fe-8101-4f68-8d45-2837f19d2149] Etapa 1: saída do juiz de duelo cortada em Restrições/guardrails × Persona/papel (teto de tokens) — duelo SEM resultado (fora do placar; nunca vira empate).
+[bench ca02b6fe-8101-4f68-8d45-2837f19d2149] Etapa 2: saída do juiz de duelo cortada em Formato de saída explícito × Persona/papel (teto de tokens), Restrições/guardrails × Persona/papel (teto de tokens) — duelo SEM resultado (fora do placar; nunca vira empate).
+[bench ca02b6fe-8101-4f68-8d45-2837f19d2149] Etapa 3: saída do juiz de duelo cortada em Restrições/guardrails × Persona/papel (teto de tokens), Restrições/guardrails × Formato de saída explícito (teto de tokens), Persona/papel × Formato de saída explícito (teto de tokens) — duelo SEM resultado (fora do placar; nunca vira empate).
+[bench ca02b6fe-8101-4f68-8d45-2837f19d2149] Etapa 4: saída do juiz de duelo cortada em Formato de saída explícito × Persona/papel (teto de tokens), Persona/papel × Restrições/guardrails (teto de tokens) — duelo SEM resultado (fora do placar; nunca vira empate).
+[bench ca02b6fe-8101-4f68-8d45-2837f19d2149] Etapa 7: saída do juiz de duelo cortada em Restrições/guardrails × Persona/papel (teto de tokens) — duelo SEM resultado (fora do placar; nunca vira empate).
+[bench ca02b6fe-8101-4f68-8d45-2837f19d2149] Etapa 6: saída do juiz de duelo cortada em Persona/papel × Restrições/guardrails (teto de tokens) — duelo SEM resultado (fora do placar; nunca vira empate).
+[bench ca02b6fe-8101-4f68-8d45-2837f19d2149] Etapa 5: saída do juiz de duelo cortada em Persona/papel × Formato de saída explícito (teto de tokens), Formato de saída explícito × Restrições/guardrails (teto de tokens) — duelo SEM resultado (fora do placar; nunca vira empate).
+[bench ca02b6fe-8101-4f68-8d45-2837f19d2149] Etapa 8: saída do juiz de duelo cortada em Restrições/guardrails × Persona/papel (teto de tokens), Restrições/guardrails × Formato de saída explícito (teto de tokens), Persona/papel × Formato de saída explícito (teto de tokens) — duelo SEM resultado (fora do placar; nunca vira empate).
+[bench ca02b6fe-8101-4f68-8d45-2837f19d2149] Etapa 9: saída do juiz de duelo cortada em Restrições/guardrails × Persona/papel (teto de tokens) — duelo SEM resultado (fora do placar; nunca vira empate).
+[bench ca02b6fe-8101-4f68-8d45-2837f19d2149] Etapa 10: saída do juiz de duelo cortada em Restrições/guardrails × Persona/papel (teto de tokens) — duelo SEM resultado (fora do placar; nunca vira empate).
+[bench ca02b6fe-8101-4f68-8d45-2837f19d2149] desfechos dos competidores (bloqueio ≠ recusa ≠ erro) {"blocked":0,"refused":0,"error":4}
+[bench ca02b6fe-8101-4f68-8d45-2837f19d2149] ALERTA de truncamento: 25 de 115 chamadas (21,7%) saíram truncadas no teto de tokens (duelo 25 de 43) — acima do limite de 2%. Etapas com resposta truncada ficaram fora do placar; aumente o teto (maxTokens/--max-output-tokens) ou baixe o esforço de raciocínio.
+[bench ca02b6fe-8101-4f68-8d45-2837f19d2149] ALERTA de truncamento: Truncamento acima de 1% por papel × esforço — duelo @ high: 25 de 43 (58,1%). Veredito de juiz/duelo truncado é descartado (sem veredito, nunca 'parcial' nem empate); suba o teto do papel ou baixe o esforço de raciocínio.
+[bench ca02b6fe-8101-4f68-8d45-2837f19d2149] inconclusiva: papel judge: 36 de 36 vereditos perdidos (36 degradados) = 100% > 10%
+[bench ca02b6fe-8101-4f68-8d45-2837f19d2149] inconclusiva: papel duel: 17 de 22 vereditos perdidos = 77.3% > 10%
+[bench ca02b6fe-8101-4f68-8d45-2837f19d2149] inconclusive {"totalCostUsd":0.7522533672000001}
+[train 0fd7af73-05cd-482c-9c97-ad64572bf850] convergiu na iteracao 2 por paciencia (2 seguidas sem promocao; IC95 do ganho [1.5; 38.5]pp vs minGain 5.0pp; mantida a régua: ganho bruto +20.0pp (máximo entre 3) · corrigido +15.2pp · p ajustado=0.156 (max-T, exato) · margem 5pp (auto) — segurou: p ajustado > 0.05)
+[train 0fd7af73-05cd-482c-9c97-ad64572bf850] campeao NAO declarado: 10 itens curados (ancora humana) < piso 20 — o dataset e sintetico demais para ancorar um campeao (84-89% em sintetico vs 25-34% em tarefas reais); a sessao vale como bootstrap/treino (itens sinteticos entram como apoio). Gabaritos exigem verificacao humana para servir de ancora (gabarito gerado por IA na run nao conta); o piso N e uma PROPOSTA sem fonte (calibrar).
+[train 0fd7af73-05cd-482c-9c97-ad64572bf850] cache de vereditos: 0/236 reusados, 0 re-teste(s) amostral(is), 0 discordancia(s)
+[train 0fd7af73-05cd-482c-9c97-ad64572bf850] finished: custo 1.7021212610000005

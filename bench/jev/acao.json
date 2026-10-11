@@ -1,0 +1,69 @@
+{
+ "format": "jev-config@1",
+ "mode": "compare",
+ "theme": "JEV-A — urgência e necessidade de ajuda humana",
+ "language": "en",
+ "spec": {
+  "label": "original",
+  "questions": {
+   "urgency": {
+    "type": "score",
+    "instructions": "How urgent is it to act right now?",
+    "criteria": [
+     "Safe — no time pressure: the situation is stable and delay changes nothing (waiting for dawn, standing in a safe place)",
+     "Pressing — act soon: the situation can still get worse if ignored (a wounded enemy recovering, supplies running low, daylight fading)",
+     "Critical — act now: delay costs health, position or the objective (bleeding, an enemy closing, a trap about to trigger)"
+    ]
+   },
+   "needs_human": {
+    "type": "noul",
+    "instructions": "Does this situation require human help?",
+    "criteria": {
+     "true": "A fact the agent cannot observe decides the outcome, or the remaining risk can kill the character and no available action reduces it: the agent cannot proceed safely alone.",
+     "false": "The visible facts already decide the outcome and an available action addresses the risk: the agent can decide and act on its own with the information it has."
+    }
+   }
+  }
+ },
+ "cases": {
+  "path": "casos/acao.jsonl"
+ },
+ "models": {
+  "decision": [
+   "typesafe/jev-1.13"
+  ]
+ },
+ "repeats": 2,
+ "variants": [
+  {
+   "label": "criterios-v2",
+   "spec": {
+    "questions": {
+     "urgency": {
+      "type": "score",
+      "instructions": "How urgent is it to act right now?",
+      "criteria": [
+       "Safe — no time pressure: the situation is stable and delay changes nothing (waiting for dawn, standing in a safe place)",
+       "Pressing — act soon: the situation can still get worse if ignored (a wounded enemy recovering, supplies running low, daylight fading)",
+       "Critical — act now: delay costs health, position or the objective (bleeding, an enemy closing, a trap about to trigger)"
+      ]
+     },
+     "needs_human": {
+      "type": "noul",
+      "instructions": "Does this situation require human help?",
+      "criteria": {
+       "true": "A fact the agent cannot observe decides the outcome, or the remaining risk can kill the character and no available action reduces it: the agent cannot proceed safely alone.",
+       "false": "The visible facts already decide the outcome and an available action addresses the risk; the agent can decide and act on its own with the information it has."
+      }
+     }
+    }
+   }
+  }
+ ],
+ "split": {
+  "holdoutRatio": 0.3,
+  "calibrationRatio": 0.2,
+  "seed": 42
+ },
+ "budgetUsd": 10
+}

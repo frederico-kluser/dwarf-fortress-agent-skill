@@ -1,0 +1,99 @@
+{
+ "format": "jev-config@1",
+ "mode": "compare",
+ "theme": "JEV-R — incluir conhecimento recuperado por candidato",
+ "language": "en",
+ "spec": {
+  "label": "original",
+  "questions": {
+   "include_c1": {
+    "type": "noul",
+    "instructions": "[C1] Would including this knowledge improve the next action decision given the situation?",
+    "criteria": {
+     "true": "It would change how the next action is chosen: a relevant risk, constraint, location, resource or method.",
+     "false": "It would not change the next action: irrelevant, already known, or too generic."
+    }
+   },
+   "include_c2": {
+    "type": "noul",
+    "instructions": "[C2] Would including this knowledge improve the next action decision given the situation?",
+    "criteria": {
+     "true": "It would change how the next action is chosen: a relevant risk, constraint, location, resource or method.",
+     "false": "It would not change the next action: irrelevant, already known, or too generic."
+    }
+   },
+   "include_c3": {
+    "type": "noul",
+    "instructions": "[C3] Would including this knowledge improve the next action decision given the situation?",
+    "criteria": {
+     "true": "It would change how the next action is chosen: a relevant risk, constraint, location, resource or method.",
+     "false": "It would not change the next action: irrelevant, already known, or too generic."
+    }
+   },
+   "include_c4": {
+    "type": "noul",
+    "instructions": "[C4] Would including this knowledge improve the next action decision given the situation?",
+    "criteria": {
+     "true": "It would change how the next action is chosen: a relevant risk, constraint, location, resource or method.",
+     "false": "It would not change the next action: irrelevant, already known, or too generic."
+    }
+   }
+  }
+ },
+ "cases": {
+  "path": "casos/recuperacao.jsonl"
+ },
+ "models": {
+  "decision": [
+   "typesafe/jev-1.13"
+  ]
+ },
+ "repeats": 2,
+ "variants": [
+  {
+   "label": "criterios-v2",
+   "spec": {
+    "questions": {
+     "include_c1": {
+      "type": "noul",
+      "instructions": "[C1] Would including this knowledge improve the next action decision given the situation?",
+      "criteria": {
+       "true": "It would change how the next action is chosen: a risk, constraint, location, resource or method the situation actually calls for (combat morale during a fight, first aid while bleeding).",
+       "false": "It would not change the next action: irrelevant to this situation, already reflected in the action candidates, too generic to act on, or about a topic the situation never touches."
+      }
+     },
+     "include_c2": {
+      "type": "noul",
+      "instructions": "[C2] Would including this knowledge improve the next action decision given the situation?",
+      "criteria": {
+       "true": "It would change how the next action is chosen: a risk, constraint, location, resource or method the situation actually calls for (combat morale during a fight, first aid while bleeding).",
+       "false": "It would not change the next action: irrelevant to this situation, already reflected in the action candidates, too generic to act on, or about a topic the situation never touches."
+      }
+     },
+     "include_c3": {
+      "type": "noul",
+      "instructions": "[C3] Would including this knowledge improve the next action decision given the situation?",
+      "criteria": {
+       "true": "It would change how the next action is chosen: a risk, constraint, location, resource or method the situation actually calls for (combat morale during a fight, first aid while bleeding).",
+       "false": "It would not change the next action: irrelevant to this situation, already reflected in the action candidates, too generic to act on, or about a topic the situation never touches."
+      }
+     },
+     "include_c4": {
+      "type": "noul",
+      "instructions": "[C4] Would including this knowledge improve the next action decision given the situation?",
+      "criteria": {
+       "true": "It would change how the next action is chosen: a risk, constraint, location, resource or method the situation actually calls for (combat morale during a fight, first aid while bleeding).",
+       "false": "It would not change the next action: irrelevant to this situation, already reflected in the action candidates, too generic to act on, or about a topic the situation never touches."
+      }
+     }
+    }
+   }
+  }
+ ],
+ "split": {
+  "holdoutRatio": 0.3,
+  "calibrationRatio": 0.2,
+  "seed": 42
+ },
+ "budgetUsd": 10
+}

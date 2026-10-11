@@ -1,0 +1,78 @@
+{
+ "format": "jev-config@1",
+ "mode": "compare",
+ "theme": "JEV-D — pedir ajuda humana e formato da pergunta",
+ "language": "en",
+ "spec": {
+  "label": "original",
+  "questions": {
+   "ask_human": {
+    "type": "noul",
+    "instructions": "Should the agent ask the human for help?",
+    "criteria": {
+     "true": "A fact the agent cannot observe decides the outcome (what an unreadable dialog will do, whether a shape in the fog is lethal, which of two irreversible routes is survivable), or the remaining risk can kill the character and no available action reduces it.",
+     "false": "The visible facts already decide the outcome: the enemy, the terrain and the escape route are known, or the situation is routine and reversible. Uncertainty the agent can reduce by acting (scouting, waiting one round, testing) is NOT a reason to ask."
+    }
+   },
+   "question_format": {
+    "type": "choice",
+    "instructions": "If the human is asked, what question format fits best?",
+    "criteria": {
+     "open": "A free-text question, when the answer is a name, a value or a plan that no option list can cover. NOT for: decisions whose concrete options can be listed (use binary or multiple).",
+     "binary": "A yes/no question with two mutually exclusive options, when the decision is genuinely two-way (cross now or turn back). NOT for: situations with three or more real options (use multiple) or answers that are names, values or plans (use open).",
+     "multiple": "A short list of 3-4 concrete options to choose from, when several distinct actions are on the table. NOT for: genuine two-way decisions (use binary) and answers no option list can cover (use open)."
+    }
+   }
+  }
+ },
+ "cases": {
+  "path": "casos/duvida.jsonl"
+ },
+ "models": {
+  "decision": [
+   "typesafe/jev-1.13"
+  ]
+ },
+ "repeats": 2,
+ "variants": [
+  {
+   "label": "criterios-v2",
+   "spec": {
+    "questions": {
+     "ask_human": {
+      "type": "noul",
+      "instructions": "Should the agent ask the human for help?",
+      "criteria": {
+       "true": "A fact the agent cannot observe decides the outcome (what an unreadable dialog will do, whether a shape in the fog is lethal, which of two irreversible routes is survivable), or the remaining risk can kill the character and no available action reduces it.",
+       "false": "The visible facts already decide the outcome: the enemy, the terrain and the escape route are known, or the situation is routine and reversible. Uncertainty the agent can reduce by acting (scouting, waiting one round, testing) is NOT a reason to ask."
+      }
+     },
+     "question_format": {
+      "type": "choice",
+      "instructions": "If the human is asked, what question format fits best?",
+      "criteria": {
+       "binary": {
+        "what": "A yes/no question with two mutually exclusive options, when the decision is genuinely two-way (cross now or turn back)",
+        "not_for": "situations with three or more real options (use multiple) or answers that are names, values or plans (use open)"
+       },
+       "multiple": {
+        "what": "A short list of 3-4 concrete options to choose from, when several distinct actions are on the table",
+        "not_for": "genuine two-way decisions (use binary) and answers no option list can cover (use open)"
+       },
+       "open": {
+        "what": "A free-text question, when the answer is a name, a value or a plan that no option list can cover",
+        "not_for": "decisions whose concrete options can be listed (use binary or multiple)"
+       }
+      }
+     }
+    }
+   }
+  }
+ ],
+ "split": {
+  "holdoutRatio": 0.3,
+  "calibrationRatio": 0.2,
+  "seed": 42
+ },
+ "budgetUsd": 10
+}

@@ -1,0 +1,1 @@
+{"ok":false,"command":"runs.winner","error":{"code":"usage.invalid","kind":"usage","message":"Run \"88fff9a7-5d18-4cf3-baa4-e125303d03c1\" não encontrada no diretório de dados (confira `prompt-builder runs list` e --data-dir).","hint":"Veja comandos e flags em `prompt-builder --help` (e o fluxo em `prompt-builder docs quickstart`).","details":null}}

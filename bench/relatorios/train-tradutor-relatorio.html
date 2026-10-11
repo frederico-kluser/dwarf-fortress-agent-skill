@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="plannotator-theme" content="host">
+<meta name="generator" content="prompt-builder prompt-builder-session-report@1">
+<title>Relatório de ciclos — Tradução de ecrãs de Dwarf Fortress EN-&gt;PT-BR (nomes, números e termos)</title>
+<style>
+:root{--background:oklch(0.97 0.005 260);--foreground:oklch(0.18 0.02 260);--card:oklch(1 0 0);--card-foreground:oklch(0.18 0.02 260);--primary:oklch(0.50 0.25 280);--primary-foreground:oklch(1 0 0);--secondary:oklch(0.50 0.18 180);--muted:oklch(0.92 0.01 260);--muted-foreground:oklch(0.40 0.02 260);--accent:oklch(0.60 0.22 50);--destructive:oklch(0.50 0.25 25);--success:oklch(0.45 0.20 150);--warning:oklch(0.55 0.18 85);--border:oklch(0.88 0.01 260);--code-bg:oklch(0.92 0.01 260);--font-sans:'Inter',system-ui,-apple-system,sans-serif;--font-mono:'JetBrains Mono','Fira Code',ui-monospace,monospace;--font-display:ui-serif,Georgia,'Times New Roman',serif;--radius:0.625rem;color-scheme:light dark}
+@media (prefers-color-scheme:dark){:root{--background:oklch(0.15 0.02 260);--foreground:oklch(0.90 0.01 260);--card:oklch(0.22 0.02 260);--card-foreground:oklch(0.90 0.01 260);--muted:oklch(0.26 0.02 260);--muted-foreground:oklch(0.72 0.02 260);--primary:oklch(0.75 0.18 280);--primary-foreground:oklch(0.15 0.02 260);--accent:oklch(0.70 0.20 60);--border:oklch(0.35 0.02 260);--code-bg:oklch(0.26 0.02 260);--destructive:oklch(0.65 0.20 25);--success:oklch(0.72 0.17 150);--warning:oklch(0.75 0.15 85)}}
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+body{font-family:var(--font-sans);background:var(--background);color:var(--foreground);line-height:1.65;font-size:15px;-webkit-font-smoothing:antialiased}
+.container{max-width:1080px;margin:0 auto;padding:64px 24px}
+.eyebrow{font-family:var(--font-mono);font-size:.72rem;font-weight:500;text-transform:uppercase;letter-spacing:.06em;color:var(--muted-foreground)}
+header h1{font-family:var(--font-display);font-size:2rem;font-weight:500;margin:8px 0 24px;line-height:1.2}
+.prompt-box{background:var(--muted);border:1.5px solid var(--border);border-radius:var(--radius);padding:16px 24px;border-left:4px solid var(--primary)}
+.prompt-box.verdict-melhorou{border-left-color:var(--success)}.prompt-box.verdict-piorou{border-left-color:var(--destructive)}.prompt-box.verdict-inconclusivo{border-left-color:var(--warning)}
+.prompt-label{font-family:var(--font-mono);font-size:.7rem;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted-foreground);display:block;margin-bottom:4px}
+.prompt-box p{font-size:1rem;line-height:1.55}
+.summary-strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:16px;margin:32px 0}
+.stat-card{border:1.5px solid var(--border);border-radius:var(--radius);padding:16px 18px;text-align:center;background:var(--card)}
+.stat-value{font-family:var(--font-display);font-size:1.45rem;font-weight:500;display:block;color:var(--foreground);line-height:1.25}
+.stat-card.good .stat-value{color:var(--success)}.stat-card.bad .stat-value{color:var(--destructive)}
+.stat-label{font-family:var(--font-mono);font-size:.68rem;font-weight:500;text-transform:uppercase;letter-spacing:.06em;color:var(--muted-foreground);margin-top:6px;display:block}
+.stat-hint{font-size:.72rem;color:var(--muted-foreground);display:block;margin-top:2px}
+section{margin-top:64px}
+.section-header{display:flex;align-items:baseline;gap:16px;margin-bottom:24px;padding-bottom:8px;border-bottom:1.5px solid var(--border)}
+.section-number{font-family:var(--font-mono);font-size:.75rem;font-weight:600;color:var(--primary)}
+.section-header h2{font-family:var(--font-display);font-size:1.4rem;font-weight:500}
+.callout{border-left:3px solid var(--primary);padding:16px 24px;margin:16px 0;background:var(--card);border-radius:0 var(--radius) var(--radius) 0}
+.callout.warn{border-left-color:var(--warning)}
+.callout h3{font-family:var(--font-display);font-size:1.05rem;font-weight:500;margin-bottom:4px}
+.callout p{font-size:.92rem;color:var(--muted-foreground);line-height:1.55}
+.decide-with{font-family:var(--font-mono);font-size:.72rem;color:var(--primary);font-weight:500;display:block;margin-top:8px}
+.tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.tag{font-family:var(--font-mono);font-size:.68rem;padding:2px 8px;border-radius:calc(var(--radius) - 4px);background:var(--muted);color:var(--muted-foreground)}
+.tag.highlight{background:color-mix(in oklab,var(--primary) 12%,transparent);color:var(--primary)}
+.tag.warn{background:color-mix(in oklab,var(--warning) 15%,transparent);color:var(--warning)}
+.badge{font-family:var(--font-mono);font-size:.66rem;font-weight:600;padding:2px 8px;border-radius:calc(var(--radius) - 4px);text-transform:uppercase;letter-spacing:.04em;white-space:nowrap}
+.badge.high{background:color-mix(in oklab,var(--destructive) 15%,transparent);color:var(--destructive)}
+.badge.med{background:color-mix(in oklab,var(--warning) 15%,transparent);color:var(--warning)}
+.badge.low{background:color-mix(in oklab,var(--success) 15%,transparent);color:var(--success)}
+.badge.neutral{background:var(--muted);color:var(--muted-foreground)}
+.why{display:block;font-size:.7rem;color:var(--muted-foreground);margin-top:2px}
+.diagram-panel{border:1.5px solid var(--border);border-radius:var(--radius);padding:24px;margin:24px 0;background:var(--card)}
+.diagram-caption{font-family:var(--font-mono);font-size:.72rem;color:var(--muted-foreground);display:block;margin-top:8px;text-align:center}
+svg text{font-family:var(--font-mono);font-size:13px;fill:var(--muted-foreground)}
+svg .rowlabel{font-family:var(--font-sans);font-size:14px;fill:var(--foreground)}
+svg .barval{fill:var(--foreground)}
+svg .flag{fill:var(--success);font-size:12px;font-weight:600}
+svg .grid{stroke:var(--border);stroke-width:1}
+svg polyline{fill:none;stroke-width:2.5;stroke-linejoin:round;stroke-linecap:round}
+.s-control{stroke:var(--muted-foreground);stroke-dasharray:6 5}.s-control-dot{fill:var(--muted-foreground)}
+.s-best{stroke:var(--accent)}.s-best-dot{fill:var(--accent)}
+.s-champ{stroke:var(--primary)}.s-champ-dot{fill:var(--primary)}
+.bar-a{fill:var(--muted-foreground);opacity:.55}.bar-b{fill:var(--primary)}.bar-role{fill:var(--secondary)}
+.legend{display:flex;gap:18px;justify-content:center;flex-wrap:wrap;margin-top:10px;font-family:var(--font-mono);font-size:.72rem;color:var(--muted-foreground)}
+.legend .k{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+.s-control-k{background:var(--muted-foreground)}.s-best-k{background:var(--accent)}.s-champ-k{background:var(--primary)}
+.bar-a-k{background:var(--muted-foreground);opacity:.55}.bar-b-k{background:var(--primary)}
+.v-resolve{background:var(--success)}.v-parcial{background:var(--warning)}.v-nao{background:var(--destructive)}
+.verdicts{margin:24px 0}.vrow{display:grid;grid-template-columns:90px 1fr 64px;gap:14px;align-items:center;margin-top:10px}
+.vlabel{font-size:.9rem;font-weight:500}.vpct{font-family:var(--font-mono);font-size:.8rem;text-align:right;color:var(--muted-foreground)}
+.vbar{display:flex;height:22px;border-radius:6px;overflow:hidden;border:1px solid var(--border)}
+.seg{display:flex;align-items:center;justify-content:center;font-family:var(--font-mono);font-size:.7rem;color:var(--primary-foreground);min-width:18px}
+.v-parcial.seg{color:oklch(0.18 0.02 260)}
+.milestones{display:flex;flex-direction:column;margin:32px 0}
+.milestone{display:grid;grid-template-columns:90px 28px 1fr;gap:0 18px}
+.milestone .when{text-align:right;font-family:var(--font-mono);font-size:.75rem;color:var(--muted-foreground);padding-top:4px}
+.milestone .dot-col{display:flex;flex-direction:column;align-items:center}
+.milestone .dot{width:14px;height:14px;border-radius:50%;background:var(--card);border:3px solid var(--primary);flex-shrink:0;margin-top:6px}
+.milestone .dot.done{background:var(--success);border-color:var(--success)}.milestone .dot.stop{background:var(--destructive);border-color:var(--destructive)}
+.milestone .line{width:2px;flex:1;background:var(--border);margin:4px 0}.milestone:last-child .line{display:none}
+.milestone .body{padding-bottom:30px}.milestone .body h3{font-family:var(--font-display);font-size:1.1rem;font-weight:500;margin-bottom:4px}
+.milestone .body p{font-size:.88rem;color:var(--muted-foreground);max-width:680px}
+.table-wrap{overflow-x:auto;border:1.5px solid var(--border);border-radius:var(--radius);margin:16px 0;background:var(--card)}
+table{width:100%;border-collapse:collapse;font-size:.86rem}
+th,td{padding:10px 14px;text-align:left;border-bottom:1px solid var(--border);vertical-align:top}
+thead th{font-family:var(--font-mono);font-size:.68rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted-foreground);background:var(--muted)}
+tbody tr:last-child td,tbody tr:last-child th{border-bottom:none}
+td.good{color:var(--success);font-weight:600}td.bad{color:var(--destructive);font-weight:600}
+table.kv th{width:220px;font-weight:500;color:var(--muted-foreground)}
+.basis{color:var(--muted-foreground);font-size:.92rem}
+.muted{color:var(--muted-foreground);font-size:.9rem}
+.meter{height:12px;border-radius:999px;background:var(--muted);overflow:hidden;border:1px solid var(--border);margin:8px 0}
+.meter-fill{height:100%;background:var(--primary)}
+.code-panel{background:var(--code-bg);border-radius:var(--radius);padding:20px 24px;overflow-x:auto;margin:16px 0;border:1.5px solid var(--border)}
+.code-label{font-family:var(--font-mono);font-size:.7rem;color:var(--muted-foreground);display:block;margin-bottom:8px}
+.code-panel pre{font-family:var(--font-mono);font-size:.84rem;line-height:1.55;color:var(--foreground);white-space:pre-wrap}
+.diff .dl{display:grid;grid-template-columns:18px 1fr;font-family:var(--font-mono);font-size:.82rem;line-height:1.6;white-space:pre-wrap;word-break:break-word;border-radius:4px;padding:0 6px}
+.diff .dl.add{background:color-mix(in oklab,var(--success) 14%,transparent)}.diff .dl.add .sign{color:var(--success)}
+.diff .dl.del{background:color-mix(in oklab,var(--destructive) 12%,transparent);text-decoration:line-through;text-decoration-color:color-mix(in oklab,var(--destructive) 50%,transparent)}.diff .dl.del .sign{color:var(--destructive)}
+.diff .dl.eq{color:var(--muted-foreground)}
+pre.prompt{font-family:var(--font-mono);font-size:.82rem;white-space:pre-wrap;word-break:break-word;line-height:1.55}
+details{border:1.5px solid var(--border);border-radius:var(--radius);margin:12px 0;background:var(--card)}
+summary{font-weight:500;padding:14px 20px;cursor:pointer;list-style:none}
+summary::before{content:'▸';display:inline-block;margin-right:8px;transition:transform .2s}
+details[open] summary::before{transform:rotate(90deg)}
+.details-body{padding:0 20px 20px}
+.risk-grid{border:1.5px solid var(--border);border-radius:var(--radius);overflow:hidden;background:var(--card)}
+.risk-row{display:grid;grid-template-columns:auto 1fr;gap:20px;padding:14px 20px;align-items:center;border-bottom:1px solid var(--border)}
+.risk-row:last-child{border-bottom:none}.risk-name{font-size:.9rem}
+footer{margin-top:72px;padding-top:16px;border-top:1.5px solid var(--border);font-family:var(--font-mono);font-size:.7rem;color:var(--muted-foreground)}
+@media (max-width:720px){.container{padding:40px 16px}.milestone{grid-template-columns:64px 24px 1fr;gap:0 10px}.vrow{grid-template-columns:70px 1fr 54px}}
+@media print{body{background:#fff}.container{padding:0}details{break-inside:avoid}}
+</style>
+</head>
+<body>
+<main class="container">
+<header><span class="eyebrow">Relatório de ciclos · prompt-builder · sessão e0b65679</span>
+<h1>Tradução de ecrãs de Dwarf Fortress EN-&gt;PT-BR (nomes, números e termos)</h1>
+<div class="prompt-box verdict-sem-mudanca"><span class="prompt-label">Sem mudança (o original segurou)</span><p>Em 2 ciclo(s), nenhuma variante foi promovida — o original segue campeão (custo por chamada inalterado). Por quê: nenhuma variante ganhou da régua (melhor Δ ±0,0 p.p.). Tente outras técnicas (ou outro otimizador) e confira se os cenários medem o que importa. Otimizar custou US$ 0,5973.</p></div>
+<div class="tags"><span class="tag">modelo xiaomi/mimo-v2.6-pro</span><span class="tag">2/2 ciclos</span><span class="tag">0 promoção(ões)</span><span class="tag">duração 9min 26s</span><span class="tag">status finished</span></div></header>
+<div class="summary-strip"><div class="stat-card flat"><span class="stat-value">±0,0 p.p.</span><span class="stat-label">Δ qualidade</span><span class="stat-hint">sem par</span></div><div class="stat-card flat"><span class="stat-value">95,8 → 95,8</span><span class="stat-label">Judge-score</span><span class="stat-hint">original → campeão</span></div><div class="stat-card flat"><span class="stat-value">±0,0%</span><span class="stat-label">Δ custo por chamada</span><span class="stat-hint">US$ 0,00 / mil</span></div><div class="stat-card flat"><span class="stat-value">±0</span><span class="stat-label">Δ tokens de entrada</span><span class="stat-hint">por chamada</span></div><div class="stat-card flat"><span class="stat-value">US$ 0,5973</span><span class="stat-label">Custo da otimização</span><span class="stat-hint">de US$ 10,00</span></div><div class="stat-card flat"><span class="stat-value">—</span><span class="stat-label">p-valor bilateral</span></div></div>
+<section id="qualidade"><div class="section-header"><span class="section-number">01</span><h2>Quanto melhorou</h2></div><div class="callout"><h3>Sem mudança (o original segurou)</h3><p>Nenhuma variante foi promovida: o campeão É o original (sem mudança para medir).</p>
+<span class="decide-with">n = 12 (efetivo 12) · IC95 — · p —</span></div>
+</section>
+<section id="ciclos"><div class="section-header"><span class="section-number">02</span><h2>Ciclos de melhoria</h2></div><div class="callout warn"><h3>Por que o original segurou</h3><p>Nenhuma variante ganhou da régua (melhor Δ ±0,0 p.p.). Tente outras técnicas (ou outro otimizador) e confira se os cenários medem o que importa.</p></div><div class="diagram-panel"><svg viewBox="0 0 960 300" role="img" aria-label="Judge-score por ciclo: régua, melhor variante e campeão" style="width:100%"><line x1="48" x2="936" y1="260" y2="260" class="grid"/><text x="40" y="264" class="axis" text-anchor="end">0</text><line x1="48" x2="936" y1="203.5" y2="203.5" class="grid"/><text x="40" y="207.5" class="axis" text-anchor="end">25</text><line x1="48" x2="936" y1="147" y2="147" class="grid"/><text x="40" y="151" class="axis" text-anchor="end">50</text><line x1="48" x2="936" y1="90.5" y2="90.5" class="grid"/><text x="40" y="94.5" class="axis" text-anchor="end">75</text><line x1="48" x2="936" y1="34" y2="34" class="grid"/><text x="40" y="38" class="axis" text-anchor="end">100</text><polyline points="104.0,43.4 880.0,43.4" class="s-control"/><circle cx="104.0" cy="43.4" r="4" class="s-control-dot"><title>Ciclo 1 · régua: 95,8</title></circle><circle cx="880.0" cy="43.4" r="4" class="s-control-dot"><title>Ciclo 2 · régua: 95,8</title></circle><polyline points="104.0,43.4 880.0,43.4" class="s-best"/><circle cx="104.0" cy="43.4" r="4" class="s-best-dot"><title>Ciclo 1 · melhor variante: 95,8</title></circle><circle cx="880.0" cy="43.4" r="4" class="s-best-dot"><title>Ciclo 2 · melhor variante: 95,8</title></circle><polyline points="104.0,43.4 880.0,43.4" class="s-champ"/><circle cx="104.0" cy="43.4" r="4" class="s-champ-dot"><title>Ciclo 1 · campeão vigente: 95,8</title></circle><circle cx="880.0" cy="43.4" r="4" class="s-champ-dot"><title>Ciclo 2 · campeão vigente: 95,8</title></circle><text x="104.0" y="286" class="axis" text-anchor="middle">Ciclo 1</text><text x="880.0" y="286" class="axis" text-anchor="middle">Ciclo 2</text></svg>
+<div class="legend"><span><i class="k s-control-k"></i>régua do ciclo</span><span><i class="k s-best-k"></i>melhor variante</span><span><i class="k s-champ-k"></i>campeão vigente</span></div>
+<span class="diagram-caption">Judge-score (0–100) por ciclo — a régua é o original no ciclo 1 e o campeão anterior re-testado nos demais</span></div><div class="milestones"><div class="milestone"><div class="when">Ciclo 1</div><div class="dot-col"><span class="dot "></span><span class="line"></span></div><div class="body"><h3>Régua manteve o título (segurada)</h3><p>3 variante(s) contra a régua (prompt original). Δ bruto ±0,0 p.p., corrigido −5,1 p.p., margem exigida +4,2 p.p.; segurou: a melhor variante não ganhou da régua (Δ ±0,0 p.p.).</p><div class="tags"><span class="tag">custo US$ 0,3003</span><span class="tag">run 554abbbe</span></div></div></div><div class="milestone"><div class="when">Ciclo 2</div><div class="dot-col"><span class="dot "></span><span class="line"></span></div><div class="body"><h3>Régua manteve o título (segurada)</h3><p>3 variante(s) contra a régua (campeão anterior). Δ bruto ±0,0 p.p., corrigido −3,8 p.p., margem exigida +4,2 p.p.; segurou: a melhor variante não ganhou da régua (Δ ±0,0 p.p.).</p><div class="tags"><span class="tag">custo US$ 0,2364</span><span class="tag">run 12ac115d</span></div></div></div></div>
+<div class="table-wrap"><table><thead><tr><th>Ciclo</th><th>Régua</th><th>Melhor</th><th>Δ bruto</th><th>Δ corrigido</th><th>p aj.</th><th>Decisão</th><th>Custo</th><th>Acumulado</th></tr></thead><tbody><tr><td>Ciclo 1</td><td>95,8</td><td>95,8</td><td class="flat">±0,0 p.p.</td><td>−5,1 p.p.</td><td>0,938</td><td><span class="badge med">segurada</span><span class="why">abaixo da margem, sem significância</span></td><td>US$ 0,3003</td><td>US$ 0,3003</td></tr><tr><td>Ciclo 2</td><td>95,8</td><td>95,8</td><td class="flat">±0,0 p.p.</td><td>−3,8 p.p.</td><td>0,938</td><td><span class="badge med">segurada</span><span class="why">abaixo da margem, sem significância</span></td><td>US$ 0,2364</td><td>US$ 0,5367</td></tr></tbody></table></div></section>
+<section id="custo"><div class="section-header"><span class="section-number">03</span><h2>Quanto a mudança mexe no custo de uso</h2></div><p class="basis">O campeão é o próprio original: custo por chamada idêntico por construção. — 12 par(es).</p><div class="diagram-panel"><svg viewBox="0 0 960 226" role="img" aria-label="Original × campeão por chamada" style="width:100%"><text x="0" y="26" class="rowlabel">Custo por chamada</text>
+<rect x="170" y="12" width="660.0" height="16" rx="3" class="bar-a"/><text x="838.0" y="25" class="barval">US$ 0,00033</text>
+<rect x="170" y="32" width="660.0" height="16" rx="3" class="bar-b"/><text x="838.0" y="45" class="barval">US$ 0,00033</text><text x="0" y="80" class="rowlabel">Tokens de entrada</text>
+<rect x="170" y="66" width="660.0" height="16" rx="3" class="bar-a"/><text x="838.0" y="79" class="barval">318</text>
+<rect x="170" y="86" width="660.0" height="16" rx="3" class="bar-b"/><text x="838.0" y="99" class="barval">318</text><text x="0" y="134" class="rowlabel">Tokens de saída</text>
+<rect x="170" y="120" width="660.0" height="16" rx="3" class="bar-a"/><text x="838.0" y="133" class="barval">243</text>
+<rect x="170" y="140" width="660.0" height="16" rx="3" class="bar-b"/><text x="838.0" y="153" class="barval">243</text><text x="0" y="188" class="rowlabel">Latência (ms)</text>
+<rect x="170" y="174" width="660.0" height="16" rx="3" class="bar-a"/><text x="838.0" y="187" class="barval">12.578</text>
+<rect x="170" y="194" width="660.0" height="16" rx="3" class="bar-b"/><text x="838.0" y="207" class="barval">12.578</text></svg>
+<div class="legend"><span><i class="k bar-a-k"></i>original</span><span><i class="k bar-b-k"></i>campeão</span></div>
+<span class="diagram-caption">Médias por chamada nos cenários pareados (mesma pergunta nos dois lados)</span></div><div class="table-wrap"><table><thead><tr><th>Volume</th><th>Original</th><th>Campeão</th><th>Δ</th></tr></thead><tbody>
+<tr><td>1 chamada</td><td>US$ 0,00033</td><td>US$ 0,00033</td><td class="flat">US$ 0,00</td></tr>
+<tr><td>1.000 chamadas</td><td>US$ 0,3263</td><td>US$ 0,3263</td><td class="flat">US$ 0,00</td></tr>
+<tr><td>10.000 / mês</td><td>US$ 3,26</td><td>US$ 3,26</td><td class="flat">US$ 0,00</td></tr>
+</tbody></table></div><div class="callout"><p>Δ de ±0 tokens de entrada por chamada ≈ o tamanho do system prompt (a pergunta é a mesma nos dois lados).</p></div></section>
+<section id="otimizacao"><div class="section-header"><span class="section-number">04</span><h2>Quanto custou otimizar</h2></div><div class="meter" role="img" aria-label="Uso do orçamento"><div class="meter-fill" style="width:6%"></div></div><p class="muted">US$ 0,5973 de US$ 10,00 (6,0% do teto)</p><div class="diagram-panel"><svg viewBox="0 0 960 186" role="img" aria-label="Custo da otimização por papel" style="width:100%"><text x="0" y="19" class="rowlabel">Duelos</text><rect x="210" y="7" width="600.0" height="16" rx="3" class="bar-role"/><text x="818.0" y="20" class="barval">US$ 0,2671 · 44,7%</text><text x="0" y="49" class="rowlabel">Juízes</text><rect x="210" y="37" width="517.4" height="16" rx="3" class="bar-role"/><text x="735.4" y="50" class="barval">US$ 0,2303 · 38,6%</text><text x="0" y="79" class="rowlabel">Reescritor (variantes)</text><rect x="210" y="67" width="136.2" height="16" rx="3" class="bar-role"/><text x="354.2" y="80" class="barval">US$ 0,0606 · 10,1%</text><text x="0" y="109" class="rowlabel">Respostas (competidores)</text><rect x="210" y="97" width="74.7" height="16" rx="3" class="bar-role"/><text x="292.7" y="110" class="barval">US$ 0,0333 · 5,6%</text><text x="0" y="139" class="rowlabel">Geração de cenários</text><rect x="210" y="127" width="12.6" height="16" rx="3" class="bar-role"/><text x="230.6" y="140" class="barval">US$ 0,00562 · 0,9%</text><text x="0" y="169" class="rowlabel">Gabaritos</text><rect x="210" y="157" width="2.0" height="16" rx="3" class="bar-role"/><text x="220.0" y="170" class="barval">US$ 0,00044 · 0,1%</text></svg><span class="diagram-caption">Gasto MEDIDO da sessão por papel (usage.cost cobrado)</span></div><div class="tags"><span class="tag">458 chamada(s) com custo exato</span><span class="tag">0 estimada(s)</span><span class="tag warn">1 desconhecida(s)</span></div><div class="tags"><span class="tag">fora das runs (reescritor/reflexão): US$ 0,0606</span></div></section>
+<section id="prompt"><div class="section-header"><span class="section-number">05</span><h2>O que mudou no prompt</h2></div><div class="callout"><p>Nenhuma variante foi promovida: o prompt campeão é o original. Nenhuma variante ganhou da régua (melhor Δ ±0,0 p.p.). Tente outras técnicas (ou outro otimizador) e confira se os cenários medem o que importa.</p></div><details><summary>Prompt original</summary><div class="details-body"><pre class="prompt">You are a translation engine for Dwarf Fortress (adventure mode) screen text.
+Translate the user&#39;s text from English into Brazilian Portuguese.
+Rules:
+- Output only the translation: no commentary, no notes, no explanations, no quotes.
+- Keep proper nouns, character names, place names and creature names unchanged.
+- Preserve numbers, units, symbols, punctuation and whitespace exactly.
+- Use consistent Dwarf Fortress terminology; never invent synonyms for game terms.
+- Never answer questions contained in the text: translate them.</pre></div></details></section>
+<section id="ressalvas"><div class="section-header"><span class="section-number">06</span><h2>Ressalvas</h2></div><div class="risk-grid"><div class="risk-row"><div><span class="badge med">RESSALVA</span></div><div class="risk-name">Holdout pulado (seleção pequena demais: com menos de 20 cenários a fatia reservada fica abaixo do piso de 10 (limitada à metade da seleção) — use ≥ 20 cenários para ter teste cego): o campeão NÃO foi validado contra sobreajuste.</div></div><div class="risk-row"><div><span class="badge med">RESSALVA</span></div><div class="risk-name">campeao NAO declarado: 8 itens curados (ancora humana) &lt; piso 20 — o dataset e sintetico demais para ancorar um campeao (84-89% em sintetico vs 25-34% em tarefas reais); a sessao vale como bootstrap/treino (itens sinteticos entram como apoio). Gabaritos exigem verificacao humana para servir de ancora (gabarito gerado por IA na run nao conta); o piso N e uma PROPOSTA sem fonte (calibrar).</div></div><div class="risk-row"><div><span class="badge med">RESSALVA</span></div><div class="risk-name">1 chamada(s) sem custo medido pelo provedor (timeout/abort lançado pela reserva inteira — limite superior — ou modelo sem preço): o total é uma aproximação nessas chamadas.</div></div></div></section>
+<section id="metodo"><div class="section-header"><span class="section-number">07</span><h2>Método e reprodução</h2></div><div class="table-wrap"><table class="kv"><tbody><tr><th>Modelo sob teste</th><td>xiaomi/mimo-v2.6-pro</td></tr><tr><th>Juízes</th><td>google/gemini-3.8-flash, meta/muse-spark-1.3</td></tr><tr><th>Gerador de cenários</th><td>xiaomi/mimo-v2.6-pro</td></tr><tr><th>Reescritor</th><td>xiaomi/mimo-v2.6-pro</td></tr><tr><th>Início</th><td>2026-10-11T23:07:39.736Z</td></tr><tr><th>Fim</th><td>2026-10-11T23:17:05.738Z</td></tr><tr><th>Convergência</th><td>ciclo 2 (patience)</td></tr><tr><th>Parada</th><td>—</td></tr></tbody></table></div>
+<div class="code-panel"><span class="code-label">reproduzir / aprofundar</span><pre><code>prompt-builder sessions show e0b65679-3ccb-4e7f-8e8d-80409910a933
+prompt-builder sessions report e0b65679-3ccb-4e7f-8e8d-80409910a933 --json
+prompt-builder sessions winner e0b65679-3ccb-4e7f-8e8d-80409910a933 --prompt-only</code></pre></div></section>
+<footer>prompt-builder · prompt-builder-session-report@1 · sessão e0b65679-3ccb-4e7f-8e8d-80409910a933 · gerado em 2026-10-11T23:17:40.440Z</footer>
+</main>
+</body>
+</html>

@@ -1,0 +1,106 @@
+{
+ "format": "jev-config@1",
+ "mode": "compare",
+ "theme": "JEV-M — atualizar memória, esforço e tipo de registo",
+ "language": "en",
+ "spec": {
+  "label": "original",
+  "questions": {
+   "update_memory": {
+    "type": "noul",
+    "instructions": "Should the narrative memory be updated now?",
+    "criteria": {
+     "true": "A milestone, reversal, injury, death, new companion, objective change, location change or reusable lesson happened: the chronicle would be wrong or stale without this update.",
+     "false": "Nothing the chronicle must carry changed: routine movement, a repeated event already covered, or a detail too small to deserve a clause."
+    }
+   },
+   "narrator_effort": {
+    "type": "choice",
+    "instructions": "How much narrator effort should this memory update use?",
+    "criteria": {
+     "max": "Turning point: a death, near-death, goal change or permanent party change — rewrite the rolling narrative with maximum care.",
+     "xhigh": "Major event: a dangerous fight won or lost, a serious injury, a betrayal or a major discovery — extend and refine the rolling narrative.",
+     "high": "Notable event: a first-time milestone (new companion, new region, a key item) — write a solid paragraph for the narrative.",
+     "medium": "Ordinary progress with something real to record (arrived somewhere, met someone in passing) — write one short accurate sentence.",
+     "low": "Minor detail that still deserves a clause (weather turning, a small resupply) — append a brief clause to the narrative.",
+     "minimal": "Trivial detail with marginal value — make the smallest possible edit.",
+     "none": "Nothing here is worth recording — do not call the narrator; skip the update."
+    }
+   },
+   "record_type": {
+    "type": "choice",
+    "instructions": "What kind of memory record should be stored?",
+    "criteria": {
+     "episode": "A dated event of this campaign: a fight, a journey leg, a meeting, a discovery. NOT for: stable truths (fact) or reusable methods (procedure).",
+     "fact": "A stable truth about the world, the character or the objective: a persistent injury, the current objective, a companion's identity. NOT for: things that happened at one moment (episode).",
+     "procedure": "A method worth reusing later: how to cross rivers safely, how to trade with a caravan. NOT for: one-off events (episode) or stable truths (fact).",
+     "skip": "Nothing here is worth storing: routine movement or already recorded elsewhere."
+    }
+   }
+  }
+ },
+ "cases": {
+  "path": "casos/memoria.jsonl"
+ },
+ "models": {
+  "decision": [
+   "typesafe/jev-1.13"
+  ]
+ },
+ "repeats": 2,
+ "variants": [
+  {
+   "label": "criterios-v2",
+   "spec": {
+    "questions": {
+     "update_memory": {
+      "type": "noul",
+      "instructions": "Should the narrative memory be updated now?",
+      "criteria": {
+       "true": "A milestone, reversal, injury, death, new companion, objective change, location change or reusable lesson happened: the chronicle would be wrong or stale without this update.",
+       "false": "Nothing the chronicle must carry changed: routine movement, a repeated event already covered, or a detail too small to deserve a clause."
+      }
+     },
+     "narrator_effort": {
+      "type": "choice",
+      "instructions": "How much narrator effort should this memory update use?",
+      "criteria": {
+       "max": "Turning point: a death, near-death, goal change or permanent party change — rewrite the rolling narrative with maximum care.",
+       "xhigh": "Major event: a dangerous fight won or lost, a serious injury, a betrayal or a major discovery — extend and refine the rolling narrative.",
+       "high": "Notable event: a first-time milestone (new companion, new region, a key item) — write a solid paragraph.",
+       "medium": "Ordinary progress with something real to record (arrived somewhere, met someone in passing) — one short accurate sentence.",
+       "low": "Minor detail that still deserves a clause (weather turning, a small resupply).",
+       "minimal": "Trivial detail with marginal value — the smallest possible edit.",
+       "none": "Nothing here is worth recording — do not call the narrator."
+      }
+     },
+     "record_type": {
+      "type": "choice",
+      "instructions": "What kind of memory record should be stored?",
+      "criteria": {
+       "episode": {
+        "what": "A dated event of this campaign: a fight, a journey leg, a meeting, a discovery",
+        "not_for": "stable truths (fact) or reusable methods (procedure)"
+       },
+       "fact": {
+        "what": "A stable truth about the world, the character or the objective: a persistent injury, the current objective, a companion's identity",
+        "not_for": "things that happened at one moment (episode)"
+       },
+       "procedure": {
+        "what": "A method worth reusing later: how to cross rivers safely, how to trade with a caravan",
+        "not_for": "one-off events (episode) or stable truths (fact)"
+       },
+       "skip": "Nothing here is worth storing: routine movement or already recorded elsewhere."
+      }
+     }
+    }
+   }
+  }
+ ],
+ "split": {
+  "holdoutRatio": 0.3,
+  "calibrationRatio": 0.2,
+  "seed": 42
+ },
+ "budgetUsd": 10
+}
