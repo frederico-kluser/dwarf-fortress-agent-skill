@@ -1,0 +1,1123 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="plannotator-theme" content="host">
+<title>Prompts: o que evoluiu, o que regrediu, e os tradeoffs — prompt-builder</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%235537eb'/%3E%3Crect x='14' y='38' width='8' height='12' rx='2' fill='%23ffffff' opacity='0.55'/%3E%3Crect x='28' y='28' width='8' height='22' rx='2' fill='%23ffffff' opacity='0.75'/%3E%3Crect x='42' y='16' width='8' height='34' rx='2' fill='%23ffffff'/%3E%3C/svg%3E">
+<style>
+  /* ============ THEME — Plannotator tokens (standalone light defaults) ============ */
+  :root {
+    /* Surfaces */
+    --background: oklch(0.97 0.005 260);
+    --foreground: oklch(0.18 0.02 260);
+    --card: oklch(1 0 0);
+    --card-foreground: oklch(0.18 0.02 260);
+    --muted: oklch(0.92 0.01 260);
+    --muted-foreground: oklch(0.40 0.02 260);
+
+    /* Accents */
+    --primary: oklch(0.50 0.25 280);
+    --primary-foreground: oklch(1 0 0);
+    --secondary: oklch(0.50 0.18 180);
+    --accent: oklch(0.60 0.22 50);
+    --accent-foreground: oklch(0.18 0.02 260);
+
+    /* Semantic */
+    --destructive: oklch(0.50 0.25 25);
+    --success: oklch(0.45 0.20 150);
+    --warning: oklch(0.55 0.18 85);
+
+    /* Structure */
+    --border: oklch(0.88 0.01 260);
+    --code-bg: oklch(0.92 0.01 260);
+    --ring: oklch(0.50 0.25 280);
+    --radius: 0.625rem;
+
+    /* Typography */
+    --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+    --font-mono: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
+    --font-display: ui-serif, Georgia, 'Times New Roman', serif;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --background: oklch(0.15 0.02 260);
+      --foreground: oklch(0.90 0.01 260);
+      --card: oklch(0.22 0.02 260);
+      --card-foreground: oklch(0.90 0.01 260);
+      --muted: oklch(0.26 0.02 260);
+      --muted-foreground: oklch(0.72 0.02 260);
+      --primary: oklch(0.75 0.18 280);
+      --primary-foreground: oklch(0.15 0.02 260);
+      --secondary: oklch(0.70 0.15 180);
+      --accent: oklch(0.70 0.20 60);
+      --accent-foreground: oklch(0.15 0.02 260);
+      --border: oklch(0.35 0.02 260);
+      --code-bg: oklch(0.26 0.02 260);
+      --destructive: oklch(0.65 0.20 25);
+      --success: oklch(0.72 0.17 150);
+      --warning: oklch(0.75 0.15 85);
+    }
+  }
+
+  /* ============ RESET + BASE ============ */
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: var(--font-sans);
+    background: var(--background);
+    color: var(--foreground);
+    line-height: 1.65;
+    font-size: 15px;
+    -webkit-font-smoothing: antialiased;
+    padding: 48px 20px 72px;
+  }
+
+  .container {
+    max-width: 1060px;
+    margin: 0 auto;
+  }
+
+  /* ============ ANIMATION ============ */
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .animate {
+    animation: fadeUp 0.35s ease-out both;
+    animation-delay: calc(var(--i, 0) * 0.05s);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-delay: 0ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+
+  /* ============ HEADER ============ */
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted-foreground);
+    display: block;
+    margin-bottom: 10px;
+  }
+
+  h1 {
+    font-family: var(--font-display);
+    font-size: 2.15rem;
+    font-weight: 500;
+    line-height: 1.18;
+    letter-spacing: -0.01em;
+    text-wrap: balance;
+    margin-bottom: 14px;
+    max-width: 22ch;
+  }
+
+  .subtitle {
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    line-height: 1.8;
+    color: var(--muted-foreground);
+    max-width: 72ch;
+  }
+  .subtitle code {
+    font-family: var(--font-mono);
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 1px 6px;
+    font-size: 0.74rem;
+    color: var(--foreground);
+    overflow-wrap: break-word;
+  }
+
+  header { margin-bottom: 44px; }
+
+  /* ============ KPI SUMMARY STRIP ============ */
+  .kpi-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 14px;
+    margin: 36px 0 8px;
+  }
+
+  .kpi-card {
+    background: var(--card);
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px 20px;
+    min-width: 0;
+  }
+  .kpi-card--elevated {
+    background: color-mix(in oklab, var(--primary) 5%, var(--card));
+    border-color: color-mix(in oklab, var(--primary) 30%, var(--border));
+  }
+  .kpi-card__value {
+    font-family: var(--font-display);
+    font-size: 1.9rem;
+    font-weight: 500;
+    line-height: 1.1;
+    font-variant-numeric: tabular-nums;
+    display: block;
+  }
+  .kpi-card__value--success { color: var(--success); }
+  .kpi-card__value--destructive { color: var(--destructive); }
+  .kpi-card__value--muted { color: var(--muted-foreground); }
+  .kpi-card__value--warning { color: var(--warning); }
+  .kpi-card__label {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted-foreground);
+    margin-top: 6px;
+    display: block;
+  }
+
+  /* ============ SECTIONS ============ */
+  section { margin-top: 72px; }
+
+  .section-header {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 14px;
+    margin-bottom: 10px;
+    padding-bottom: 10px;
+    border-bottom: 1.5px solid var(--border);
+  }
+  .section-number {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--primary);
+  }
+  .section-header h2 {
+    font-family: var(--font-display);
+    font-size: 1.5rem;
+    font-weight: 500;
+    text-wrap: balance;
+  }
+  .section-claim {
+    font-size: 0.92rem;
+    color: var(--muted-foreground);
+    max-width: 68ch;
+    margin-bottom: 26px;
+  }
+
+  /* ============ CHIPS / BADGES ============ */
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 3px 10px;
+    border-radius: calc(var(--radius) - 4px);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+  }
+  .chip::before {
+    content: '';
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: currentColor;
+    flex-shrink: 0;
+  }
+  .chip--success {
+    background: color-mix(in oklab, var(--success) 13%, transparent);
+    color: var(--success);
+  }
+  .chip--destructive {
+    background: color-mix(in oklab, var(--destructive) 13%, transparent);
+    color: var(--destructive);
+  }
+  .chip--warning {
+    background: color-mix(in oklab, var(--warning) 15%, transparent);
+    color: var(--warning);
+  }
+  .chip--muted {
+    background: var(--muted);
+    color: var(--muted-foreground);
+  }
+  .chip--plain {
+    background: color-mix(in oklab, var(--primary) 10%, transparent);
+    color: var(--primary);
+    text-transform: none;
+    letter-spacing: 0.02em;
+  }
+  .chip--plain::before { display: none; }
+
+  .tag {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    padding: 2px 8px;
+    border-radius: calc(var(--radius) - 4px);
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    color: var(--muted-foreground);
+    overflow-wrap: break-word;
+  }
+  .tag-row { display: flex; flex-wrap: wrap; gap: 6px; }
+
+  code, .mono {
+    font-family: var(--font-mono);
+    font-size: 0.82em;
+  }
+  code {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 1px 6px;
+    overflow-wrap: break-word;
+  }
+
+  /* ============ VE-CARDS ============ */
+  .ve-card {
+    background: var(--card);
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius);
+    padding: 22px 24px;
+    min-width: 0;
+  }
+  .ve-card--elevated {
+    box-shadow: 0 2px 10px color-mix(in oklab, var(--foreground) 6%, transparent);
+  }
+  .ve-card--hero {
+    background: color-mix(in oklab, var(--primary) 5%, var(--card));
+    border-color: color-mix(in oklab, var(--primary) 35%, var(--border));
+    box-shadow: 0 4px 24px color-mix(in oklab, var(--primary) 10%, transparent);
+  }
+  .ve-card--recessed {
+    background: var(--muted);
+    border-color: transparent;
+  }
+  .ve-card--success {
+    border-left: 4px solid var(--success);
+  }
+  .ve-card--destructive {
+    border-left: 4px solid var(--destructive);
+  }
+  .ve-card--muted {
+    border-left: 4px solid var(--muted-foreground);
+  }
+
+  .card-top {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 6px;
+  }
+  .card-top h3 {
+    font-family: var(--font-display);
+    font-size: 1.18rem;
+    font-weight: 500;
+    margin: 0;
+  }
+  .card-top h3 .role {
+    font-family: var(--font-sans);
+    font-size: 0.85rem;
+    color: var(--muted-foreground);
+    font-weight: 400;
+  }
+  .run-id {
+    margin-left: auto;
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    color: var(--muted-foreground);
+    white-space: nowrap;
+  }
+
+  /* ============ BEFORE→AFTER MINI BARS ============ */
+  .metrics {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    margin: 18px 0 14px;
+  }
+  .metric { min-width: 0; }
+  .metric-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 4px;
+  }
+  .metric-name {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--muted-foreground);
+  }
+  .metric-delta {
+    font-family: var(--font-mono);
+    font-size: 0.82rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+  .metric-delta--up { color: var(--success); }
+  .metric-delta--down { color: var(--destructive); }
+  .metric-delta--flat { color: var(--muted-foreground); }
+
+  figure.delta-figure { margin: 0; }
+  figure.delta-figure figcaption {
+    font-family: var(--font-sans);
+    font-size: 0.88rem;
+    color: var(--muted-foreground);
+    line-height: 1.55;
+    margin-top: 12px;
+    max-width: 62ch;
+  }
+  figure.delta-figure figcaption strong { color: var(--foreground); font-weight: 600; }
+
+  svg.delta-svg {
+    display: block;
+    width: 100%;
+    max-width: 360px;
+    height: auto;
+  }
+  .s-lab {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    letter-spacing: 0.06em;
+    fill: var(--muted-foreground);
+  }
+  .s-val {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 600;
+    fill: var(--foreground);
+  }
+  .s-track {
+    fill: var(--muted);
+  }
+  .s-bar--before { fill: var(--muted-foreground); opacity: 0.38; }
+  .s-bar--after { fill: var(--success); }
+  .s-bar--after-bad { fill: var(--destructive); }
+  .s-bar--after-flat { fill: var(--muted-foreground); opacity: 0.75; }
+
+  /* ============ GRID LAYOUTS ============ */
+  .grid-3 {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 18px;
+  }
+  .grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 18px;
+  }
+  @media (max-width: 900px) {
+    .grid-3, .grid-2 { grid-template-columns: 1fr; }
+    .run-id { margin-left: 0; }
+    h1 { font-size: 1.75rem; }
+    body { padding: 32px 16px 56px; }
+    section { margin-top: 56px; }
+  }
+
+  /* ============ ROLE FLAT ROWS (MIMO) ============ */
+  .role-list { display: flex; flex-direction: column; gap: 0; margin-top: 14px; }
+  .role-row {
+    display: grid;
+    grid-template-columns: minmax(140px, 1.1fr) auto minmax(150px, 1fr) minmax(120px, auto);
+    gap: 6px 18px;
+    align-items: baseline;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .role-row:last-child { border-bottom: none; }
+  .role-name { font-weight: 600; font-size: 0.95rem; min-width: 0; overflow-wrap: break-word; }
+  .role-score {
+    font-family: var(--font-mono);
+    font-size: 0.88rem;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    color: var(--foreground);
+  }
+  .role-note {
+    font-family: var(--font-mono);
+    font-size: 0.74rem;
+    color: var(--muted-foreground);
+    overflow-wrap: break-word;
+    min-width: 0;
+  }
+  @media (max-width: 720px) {
+    .role-row { grid-template-columns: 1fr; gap: 2px; }
+    .role-row .chip { justify-self: start; margin-top: 4px; }
+  }
+
+  /* ============ TABLE (tradeoffs) ============ */
+  .table-wrap {
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    background: var(--card);
+  }
+  .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.88rem;
+    line-height: 1.55;
+    min-width: 780px;
+  }
+  .data-table th {
+    background: var(--muted);
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted-foreground);
+    text-align: left;
+    padding: 13px 18px;
+    border-bottom: 1.5px solid var(--border);
+    white-space: nowrap;
+  }
+  .data-table td {
+    padding: 15px 18px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  .data-table tbody tr:last-child td { border-bottom: none; }
+  .data-table tbody tr:nth-child(even) {
+    background: color-mix(in oklab, var(--primary) 3%, transparent);
+  }
+  .data-table .col-decisao { min-width: 220px; }
+  .data-table .col-ganho { min-width: 160px; }
+  .data-table .col-custo { min-width: 230px; }
+  .data-table .col-veredito { white-space: nowrap; }
+  .data-table td small {
+    display: block;
+    color: var(--muted-foreground);
+    font-size: 0.78rem;
+    margin-top: 4px;
+  }
+  .num-cell {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-size: 0.82rem;
+  }
+
+  /* ============ CALL OUTS / NUMBERED STEPS ============ */
+  .callout {
+    border-left: 3px solid var(--primary);
+    padding: 18px 24px;
+    background: var(--card);
+    border-radius: 0 var(--radius) var(--radius) 0;
+    border-top: 1px solid var(--border);
+    border-right: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    min-width: 0;
+  }
+  .callout--warning { border-left-color: var(--warning); }
+  .callout h3 {
+    font-family: var(--font-display);
+    font-size: 1.08rem;
+    font-weight: 500;
+    margin-bottom: 6px;
+  }
+  .callout h3 .step-num {
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--primary);
+    margin-right: 10px;
+  }
+  .callout p {
+    font-size: 0.9rem;
+    color: var(--muted-foreground);
+    line-height: 1.6;
+    max-width: 62ch;
+  }
+  .callout p code { font-size: 0.78rem; }
+  .callout .then {
+    display: block;
+    margin-top: 8px;
+    font-family: var(--font-mono);
+    font-size: 0.74rem;
+    color: var(--primary);
+    font-weight: 500;
+  }
+
+  /* ============ LIMITS ============ */
+  .limits-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 14px;
+  }
+  .limit-item {
+    border: 1.5px solid var(--border);
+    border-left: 4px solid var(--warning);
+    border-radius: var(--radius);
+    padding: 16px 20px;
+    background: var(--card);
+    min-width: 0;
+  }
+  .limit-item h3 {
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--foreground);
+    margin-bottom: 6px;
+    overflow-wrap: break-word;
+  }
+  .limit-item p {
+    font-size: 0.85rem;
+    color: var(--muted-foreground);
+    line-height: 1.55;
+  }
+
+  /* ============ FOOTER ============ */
+  footer {
+    margin-top: 72px;
+    padding-top: 22px;
+    border-top: 1.5px solid var(--border);
+  }
+  .footer-line {
+    font-family: var(--font-mono);
+    font-size: 0.74rem;
+    line-height: 2;
+    color: var(--muted-foreground);
+    overflow-wrap: break-word;
+  }
+  .footer-line strong { color: var(--foreground); font-weight: 600; }
+
+  a { color: var(--primary); text-decoration: underline; text-underline-offset: 2px; }
+  a:focus-visible, summary:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- ================= HEADER ================= -->
+  <header>
+    <span class="eyebrow animate" style="--i:0">PROMPT-BUILDER · RODADA DE EVOLUÇÃO</span>
+    <h1 class="animate" style="--i:1">Prompts: o que evoluiu, o que regrediu, e os tradeoffs</h1>
+    <p class="subtitle animate" style="--i:2">
+      72 cenários do domínio · 4 arenas + 4 comparativos JEV · juiz <code>typesafe/jev-1.13</code> ·
+      gasto $6.92 (do teto $10/corrída) · suite 3597 verde.
+    </p>
+  </header>
+
+  <!-- ================= SUMMARY STRIP ================= -->
+  <div class="kpi-row animate" style="--i:3" role="group" aria-label="Resumo numérico da rodada">
+    <div class="kpi-card kpi-card--elevated">
+      <span class="kpi-card__value">72</span>
+      <span class="kpi-card__label">Cenários</span>
+    </div>
+    <div class="kpi-card">
+      <span class="kpi-card__value">$6.92</span>
+      <span class="kpi-card__label">Gastos</span>
+    </div>
+    <div class="kpi-card">
+      <span class="kpi-card__value kpi-card__value--success">3</span>
+      <span class="kpi-card__label">Papéis JEV melhorados</span>
+    </div>
+    <div class="kpi-card">
+      <span class="kpi-card__value kpi-card__value--destructive">1</span>
+      <span class="kpi-card__label">Regressão bloqueada</span>
+    </div>
+    <div class="kpi-card">
+      <span class="kpi-card__value kpi-card__value--muted">4</span>
+      <span class="kpi-card__label">Papéis MIMO sem promoção</span>
+    </div>
+    <div class="kpi-card">
+      <span class="kpi-card__value kpi-card__value--warning">2</span>
+      <span class="kpi-card__label">Falhas pré-existentes corrigidas</span>
+    </div>
+  </div>
+
+  <!-- ================= 01 EVOLUIRAM ================= -->
+  <section aria-labelledby="sec-evoluiram">
+    <div class="section-header animate" style="--i:4">
+      <span class="section-number">01</span>
+      <h2 id="sec-evoluiram">EVOLUIRAM ✅</h2>
+      <span class="chip chip--success">criterios-v2 aplicado</span>
+    </div>
+    <p class="section-claim animate" style="--i:5">
+      Três papéis de decisão do JEV ganharam sobretudo na <strong>banda auto</strong> — menos
+      <em>abstention</em>, mais decisões seguras — sem perder precisão. Cada gráfico mostra
+      antes → depois, pareado por caso.
+    </p>
+
+    <div class="grid-3">
+
+      <!-- JEV-A -->
+      <article class="ve-card ve-card--elevated ve-card--success animate" style="--i:6" aria-labelledby="card-jev-a">
+        <div class="card-top">
+          <span class="chip chip--success">Evolution</span>
+          <h3 id="card-jev-a">JEV-A <span class="role">(ação)</span></h3>
+          <span class="run-id">run 6ae8cb92</span>
+        </div>
+        <div class="metrics">
+          <div class="metric">
+            <div class="metric-head">
+              <span class="metric-name">ECE <span aria-hidden="true">(menor é melhor)</span></span>
+              <span class="metric-delta metric-delta--up">0.165 → 0.136</span>
+            </div>
+            <svg class="delta-svg" viewBox="0 0 320 46" role="img"
+                 aria-label="ECE: antes 0.165, depois 0.136. Menor é melhor — o erro de calibração desceu.">
+              <text class="s-lab" x="0" y="13">ANTES</text>
+              <rect class="s-track" x="56" y="3" width="200" height="11" rx="5.5"></rect>
+              <rect class="s-bar--before" x="56" y="3" width="200" height="11" rx="5.5"></rect>
+              <text class="s-val" x="264" y="13">0.165</text>
+              <text class="s-lab" x="0" y="35">DEPOIS</text>
+              <rect class="s-track" x="56" y="25" width="200" height="11" rx="5.5"></rect>
+              <rect class="s-bar--after" x="56" y="25" width="165" height="11" rx="5.5"></rect>
+              <text class="s-val" x="264" y="35">0.136</text>
+            </svg>
+          </div>
+          <div class="metric">
+            <div class="metric-head">
+              <span class="metric-name">Cobertura auto <span aria-hidden="true">(mais é melhor)</span></span>
+              <span class="metric-delta metric-delta--up">0.29 → 0.47</span>
+            </div>
+            <svg class="delta-svg" viewBox="0 0 320 46" role="img"
+                 aria-label="Cobertura auto: antes 0.29, depois 0.47. Mais é melhor — quase dobro dos casos decididos sozinho.">
+              <text class="s-lab" x="0" y="13">ANTES</text>
+              <rect class="s-track" x="56" y="3" width="200" height="11" rx="5.5"></rect>
+              <rect class="s-bar--before" x="56" y="3" width="123" height="11" rx="5.5"></rect>
+              <text class="s-val" x="264" y="13">0.29</text>
+              <text class="s-lab" x="0" y="35">DEPOIS</text>
+              <rect class="s-track" x="56" y="25" width="200" height="11" rx="5.5"></rect>
+              <rect class="s-bar--after" x="56" y="25" width="200" height="11" rx="5.5"></rect>
+              <text class="s-val" x="264" y="35">0.47</text>
+            </svg>
+          </div>
+          <div class="metric">
+            <div class="metric-head">
+              <span class="metric-name">Precisão auto <span aria-hidden="true">(mais é melhor)</span></span>
+              <span class="metric-delta metric-delta--up">0.91 → 0.94</span>
+            </div>
+            <svg class="delta-svg" viewBox="0 0 320 46" role="img"
+                 aria-label="Precisão auto: antes 0.91, depois 0.94. Mais é melhor — a precisão subiu com a cobertura.">
+              <text class="s-lab" x="0" y="13">ANTES</text>
+              <rect class="s-track" x="56" y="3" width="200" height="11" rx="5.5"></rect>
+              <rect class="s-bar--before" x="56" y="3" width="194" height="11" rx="5.5"></rect>
+              <text class="s-val" x="264" y="13">0.91</text>
+              <text class="s-lab" x="0" y="35">DEPOIS</text>
+              <rect class="s-track" x="56" y="25" width="200" height="11" rx="5.5"></rect>
+              <rect class="s-bar--after" x="56" y="25" width="200" height="11" rx="5.5"></rect>
+              <text class="s-val" x="264" y="35">0.94</text>
+            </svg>
+          </div>
+        </div>
+        <div class="tag-row" style="margin-bottom:12px">
+          <span class="tag">acc 0.921 estável</span>
+        </div>
+        <figure class="delta-figure">
+          <figcaption><strong>«menos abstention, mais decisões seguras»</strong> — a cobertura auto
+          sobe de 0.29 para 0.47 com precisão superior (0.94 vs 0.91) e acurácia estável.</figcaption>
+        </figure>
+      </article>
+
+      <!-- JEV-M -->
+      <article class="ve-card ve-card--elevated ve-card--success animate" style="--i:7" aria-labelledby="card-jev-m">
+        <div class="card-top">
+          <span class="chip chip--success">Evolution</span>
+          <h3 id="card-jev-m">JEV-M <span class="role">(memória)</span></h3>
+          <span class="run-id">run 4214a991</span>
+        </div>
+        <div class="metrics">
+          <div class="metric">
+            <div class="metric-head">
+              <span class="metric-name">Acurácia <span aria-hidden="true">(mais é melhor)</span></span>
+              <span class="metric-delta metric-delta--up">0.667 → 0.700</span>
+            </div>
+            <svg class="delta-svg" viewBox="0 0 320 46" role="img"
+                 aria-label="Acurácia: antes 0.667, depois 0.700. Mais é melhor — subiu 3.3 pontos percentuais.">
+              <text class="s-lab" x="0" y="13">ANTES</text>
+              <rect class="s-track" x="56" y="3" width="200" height="11" rx="5.5"></rect>
+              <rect class="s-bar--before" x="56" y="3" width="191" height="11" rx="5.5"></rect>
+              <text class="s-val" x="264" y="13">0.667</text>
+              <text class="s-lab" x="0" y="35">DEPOIS</text>
+              <rect class="s-track" x="56" y="25" width="200" height="11" rx="5.5"></rect>
+              <rect class="s-bar--after" x="56" y="25" width="200" height="11" rx="5.5"></rect>
+              <text class="s-val" x="264" y="35">0.700</text>
+            </svg>
+          </div>
+          <div class="metric">
+            <div class="metric-head">
+              <span class="metric-name">Precisão auto <span aria-hidden="true">(mais é melhor)</span></span>
+              <span class="metric-delta metric-delta--up">0.80 → 1.00</span>
+            </div>
+            <svg class="delta-svg" viewBox="0 0 320 46" role="img"
+                 aria-label="Precisão auto: antes 0.80, depois 1.00. Mais é melhor — passou a decisões automáticas sem erro.">
+              <text class="s-lab" x="0" y="13">ANTES</text>
+              <rect class="s-track" x="56" y="3" width="200" height="11" rx="5.5"></rect>
+              <rect class="s-bar--before" x="56" y="3" width="160" height="11" rx="5.5"></rect>
+              <text class="s-val" x="264" y="13">0.80</text>
+              <text class="s-lab" x="0" y="35">DEPOIS</text>
+              <rect class="s-track" x="56" y="25" width="200" height="11" rx="5.5"></rect>
+              <rect class="s-bar--after" x="56" y="25" width="200" height="11" rx="5.5"></rect>
+              <text class="s-val" x="264" y="35">1.00</text>
+            </svg>
+          </div>
+        </div>
+        <figure class="delta-figure">
+          <figcaption><strong>Decisões de memória mais confiáveis:</strong> a acurácia sobe
+          (0.667 → 0.700) e a precisão da banda auto torna-se perfeita (1.00).</figcaption>
+        </figure>
+      </article>
+
+      <!-- JEV-D -->
+      <article class="ve-card ve-card--elevated ve-card--success animate" style="--i:8" aria-labelledby="card-jev-d">
+        <div class="card-top">
+          <span class="chip chip--success">Evolution</span>
+          <h3 id="card-jev-d">JEV-D <span class="role">(dúvida)</span></h3>
+          <span class="run-id">run 88fff9a7</span>
+        </div>
+        <div class="metrics">
+          <div class="metric">
+            <div class="metric-head">
+              <span class="metric-name">Cobertura auto <span aria-hidden="true">(mais é melhor)</span></span>
+              <span class="metric-delta metric-delta--up">0.40 → 0.47</span>
+            </div>
+            <svg class="delta-svg" viewBox="0 0 320 46" role="img"
+                 aria-label="Cobertura auto: antes 0.40, depois 0.47, mantendo precisão 1.00. Mais é melhor.">
+              <text class="s-lab" x="0" y="13">ANTES</text>
+              <rect class="s-track" x="56" y="3" width="200" height="11" rx="5.5"></rect>
+              <rect class="s-bar--before" x="56" y="3" width="170" height="11" rx="5.5"></rect>
+              <text class="s-val" x="264" y="13">0.40</text>
+              <text class="s-lab" x="0" y="35">DEPOIS</text>
+              <rect class="s-track" x="56" y="25" width="200" height="11" rx="5.5"></rect>
+              <rect class="s-bar--after" x="56" y="25" width="200" height="11" rx="5.5"></rect>
+              <text class="s-val" x="264" y="35">0.47</text>
+            </svg>
+          </div>
+          <div class="metric">
+            <div class="metric-head">
+              <span class="metric-name">Brier 100·(1−B) <span aria-hidden="true">(mais é melhor)</span></span>
+              <span class="metric-delta metric-delta--up">93.5 → 94.0</span>
+            </div>
+            <svg class="delta-svg" viewBox="0 0 320 46" role="img"
+                 aria-label="Brier transformado: antes 93.5, depois 94.0. Mais é melhor — ganho ligeiro na calibração.">
+              <text class="s-lab" x="0" y="13">ANTES</text>
+              <rect class="s-track" x="56" y="3" width="200" height="11" rx="5.5"></rect>
+              <rect class="s-bar--before" x="56" y="3" width="199" height="11" rx="5.5"></rect>
+              <text class="s-val" x="264" y="13">93.5</text>
+              <text class="s-lab" x="0" y="35">DEPOIS</text>
+              <rect class="s-track" x="56" y="25" width="200" height="11" rx="5.5"></rect>
+              <rect class="s-bar--after" x="56" y="25" width="200" height="11" rx="5.5"></rect>
+              <text class="s-val" x="264" y="35">94.0</text>
+            </svg>
+          </div>
+        </div>
+        <div class="tag-row" style="margin-bottom:12px">
+          <span class="tag">precisão auto 1.00 mantida</span>
+        </div>
+        <figure class="delta-figure">
+          <figcaption><strong>Mais decisões autónomas sem custo:</strong> a cobertura sobe
+          (0.40 → 0.47) mantendo a precisão em 1.00, com Brier ligeiramente melhor.</figcaption>
+        </figure>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- ================= 02 REGREDIU / NÃO PROMOVIDO ================= -->
+  <section aria-labelledby="sec-regrediu">
+    <div class="section-header animate" style="--i:9">
+      <span class="section-number">02</span>
+      <h2 id="sec-regrediu">REGREDIU / NÃO PROMOVIDO ⛔</h2>
+      <span class="chip chip--destructive">decisão por dados</span>
+      <span class="chip chip--muted">n pequeno</span>
+    </div>
+    <p class="section-claim animate" style="--i:10">
+      Nem tudo evoluiu. Onde houve regressão, o prompt novo foi <strong>bloqueado</strong>;
+      onde os ganhos não foram estatisticamente significativos, <strong>nada foi promovido</strong>.
+    </p>
+
+    <div class="grid-2">
+
+      <!-- JEV-R -->
+      <article class="ve-card ve-card--destructive animate" style="--i:11" aria-labelledby="card-jev-r">
+        <div class="card-top">
+          <span class="chip chip--destructive">Regressão</span>
+          <h3 id="card-jev-r">JEV-R <span class="role">(recuperação)</span></h3>
+          <span class="run-id">run 0422582e</span>
+        </div>
+        <div class="metrics">
+          <div class="metric">
+            <div class="metric-head">
+              <span class="metric-name">Acurácia <span aria-hidden="true">(mais é melhor)</span></span>
+              <span class="metric-delta metric-delta--down">0.938 → 0.917</span>
+            </div>
+            <svg class="delta-svg" viewBox="0 0 320 46" role="img"
+                 aria-label="Acurácia: antes 0.938, depois 0.917. A variante piorou 2.1 pontos percentuais — regressão.">
+              <text class="s-lab" x="0" y="13">V1</text>
+              <rect class="s-track" x="56" y="3" width="200" height="11" rx="5.5"></rect>
+              <rect class="s-bar--before" x="56" y="3" width="200" height="11" rx="5.5"></rect>
+              <text class="s-val" x="264" y="13">0.938</text>
+              <text class="s-lab" x="0" y="35">V2</text>
+              <rect class="s-track" x="56" y="25" width="200" height="11" rx="5.5"></rect>
+              <rect class="s-bar--after-bad" x="56" y="25" width="196" height="11" rx="5.5"></rect>
+              <text class="s-val" x="264" y="35">0.917</text>
+            </svg>
+          </div>
+        </div>
+        <figure class="delta-figure">
+          <figcaption><strong>REGRESSÃO → prompt v1 mantido.</strong> Decisão por dados:
+          o <code>criterios-v2</code> não foi aplicado a este papel.</figcaption>
+        </figure>
+      </article>
+
+      <!-- MIMO -->
+      <article class="ve-card ve-card--muted animate" style="--i:12" aria-labelledby="card-mimo">
+        <div class="card-top">
+          <span class="chip chip--muted">Sem promoção</span>
+          <h3 id="card-mimo">MIMO v2.6 Pro</h3>
+          <span class="run-id">arena train</span>
+        </div>
+        <div class="role-list">
+          <div class="role-row">
+            <span class="role-name">Narrador</span>
+            <span class="role-score">82.1 → 82.1</span>
+            <span class="role-note">ciclo-2 +11.5pp mas p=0.156</span>
+            <span class="chip chip--muted">sem promoção</span>
+          </div>
+          <div class="role-row">
+            <span class="role-name">Perguntas-PT</span>
+            <span class="role-score">90.6 → 90.6</span>
+            <span class="role-note">+3.1pp p=0.563</span>
+            <span class="chip chip--muted">sem promoção</span>
+          </div>
+          <div class="role-row">
+            <span class="role-name">Plano-de-caça</span>
+            <span class="role-score">85.0 → 85.0</span>
+            <span class="role-note">+20pp p=0.156!</span>
+            <span class="chip chip--muted">sem promoção</span>
+          </div>
+          <div class="role-row">
+            <span class="role-name">Tradutor</span>
+            <span class="role-score">95.8 → 95.8</span>
+            <span class="role-note">nenhum ganho medido</span>
+            <span class="chip chip--muted">sem promoção</span>
+          </div>
+        </div>
+        <figure class="delta-figure">
+          <figcaption><strong>Sem promoção:</strong> nada estatisticamente significativo em
+          n=8–16 — o campeão de cada papel continua a ser o prompt original.</figcaption>
+        </figure>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- ================= 03 TRADEOFFS ================= -->
+  <section aria-labelledby="sec-tradeoffs">
+    <div class="section-header animate" style="--i:13">
+      <span class="section-number">03</span>
+      <h2 id="sec-tradeoffs">TRADEOFFS DAS DECISÕES</h2>
+      <span class="chip chip--warning">6 decisões</span>
+    </div>
+    <p class="section-claim animate" style="--i:14">
+      Cada decisão trouxe um ganho e um custo. O veredito é o que ficou aplicado no código.
+    </p>
+
+    <div class="table-wrap animate" style="--i:15">
+      <div class="table-scroll">
+        <table class="data-table">
+          <caption class="mono" style="text-align:left; padding:12px 18px; color:var(--muted-foreground); font-size:0.72rem; text-transform:uppercase; letter-spacing:0.06em;">
+            Decisão · ganho · custo/risco · veredito
+          </caption>
+          <thead>
+            <tr>
+              <th class="col-decisao" scope="col">Decisão</th>
+              <th class="col-ganho" scope="col">Ganho</th>
+              <th class="col-custo" scope="col">Custo / risco</th>
+              <th class="col-veredito" scope="col">Veredito</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="col-decisao">
+                <strong>1. Aplicar <code>criterios-v2</code> em JEV-A/M/D</strong>
+                <small>definition-not-label, situações simétricas, anti-abstention</small>
+              </td>
+              <td class="col-ganho num-cell">+cobertura com precisão mantida</td>
+              <td class="col-custo">
+                Prompts mais longos (tokens) + risco de overfit
+                <small>Mitigado com <code>freeze-holdout</code> (mesmos ids/labels) e <code>bless</code> → check OK</small>
+              </td>
+              <td class="col-veredito"><span class="chip chip--success">Aplicado</span></td>
+            </tr>
+            <tr>
+              <td class="col-decisao">
+                <strong>2. NÃO aplicar o prompt v2 do JEV-R</strong>
+              </td>
+              <td class="col-ganho num-cell">Evita −2.1pp de acurácia</td>
+              <td class="col-custo">
+                Fica-se sem possíveis ganhos não medidos
+                <small>Re-avaliar com mais casos</small>
+              </td>
+              <td class="col-veredito"><span class="chip chip--muted">V1 mantido</span></td>
+            </tr>
+            <tr>
+              <td class="col-decisao">
+                <strong>3. NÃO promover os prompts do MIMO</strong>
+              </td>
+              <td class="col-ganho num-cell">Mantém-se baseline estável</td>
+              <td class="col-custo">
+                O +20pp do plano-de-caça pode ser real mas p=0.156 (amostra pequena)
+                <small>Decisão conservadora</small>
+              </td>
+              <td class="col-veredito"><span class="chip chip--muted">Baseline mantida</span></td>
+            </tr>
+            <tr>
+              <td class="col-decisao">
+                <strong>4. Regenerar espelhos de evals + holdout congelado</strong>
+              </td>
+              <td class="col-ganho num-cell">Proteção contra overfitting</td>
+              <td class="col-custo">
+                Manter espelhos sincronizados é trabalho manual
+                <small>Automatizado com <code>--sync-evals</code></small>
+              </td>
+              <td class="col-veredito"><span class="chip chip--success">Feito</span></td>
+            </tr>
+            <tr>
+              <td class="col-decisao">
+                <strong>5. Budget: iterações de treino 3→2</strong>
+                <small>para caber em $10/corrída</small>
+              </td>
+              <td class="col-ganho num-cell">Economia</td>
+              <td class="col-custo">Menos profundidade de evolução por papel</td>
+              <td class="col-veredito"><span class="chip chip--warning">Desvio</span></td>
+            </tr>
+            <tr>
+              <td class="col-decisao">
+                <strong>6. Amostras 10–19 casos/papel</strong>
+              </td>
+              <td class="col-ganho num-cell">Conclusões fracas</td>
+              <td class="col-custo">
+                <code>jev train</code> (mais forte) exige ≥20
+                <small>Usar <code>jev compare</code> como alternativa</small>
+              </td>
+              <td class="col-veredito"><span class="chip chip--warning">Limitação</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 04 LIMITES DA FERRAMENTA ================= -->
+  <section aria-labelledby="sec-limites">
+    <div class="section-header animate" style="--i:16">
+      <span class="section-number">04</span>
+      <h2 id="sec-limites">LIMITES DA FERRAMENTA (honesto)</h2>
+      <span class="chip chip--warning">registado</span>
+    </div>
+    <p class="section-claim animate" style="--i:17">
+      O que a ferramenta não conseguiu medir nesta rodada — para não confundir
+      «sem efeito» com «sem poder estatístico».
+    </p>
+
+    <div class="limits-grid">
+      <div class="limit-item animate" style="--i:18">
+        <h3><code>jev-config@1</code> — 1 definição de pergunta por corrida</h3>
+        <p>JEV-A com opções por caso não roda em modo <code>jev</code> → coberto por arena com
+        juiz por label.</p>
+      </div>
+      <div class="limit-item animate" style="--i:19">
+        <h3><code>jev train</code> exige ≥20 casos/papel</h3>
+        <p>O gold actual tem 10–19 casos por pergunta — abaixo do mínimo do treino por operadores.</p>
+      </div>
+      <div class="limit-item animate" style="--i:20">
+        <h3>Holdouts pulados</h3>
+        <p>&lt;20 cenários de seleção ⇒ «confirmação fraca»: sem teste cego, nada é chamado
+        de validado.</p>
+      </div>
+      <div class="limit-item animate" style="--i:21">
+        <h3>Datagen timeout 180s em 3/4 sessões</h3>
+        <p>Os cenários suplementares falharam a gerar; as runs prosseguiram com os cenários pinados.</p>
+      </div>
+      <div class="limit-item animate" style="--i:22">
+        <h3>flipRate 0 (A 0.026) · 2 reps</h3>
+        <p>Poucas repetições: 1 inversão em 38 células no JEV-A, zero nos restantes papéis.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 05 PRÓXIMO PASSO ================= -->
+  <section aria-labelledby="sec-proximo">
+    <div class="section-header animate" style="--i:23">
+      <span class="section-number">05</span>
+      <h2 id="sec-proximo">PRÓXIMO PASSO</h2>
+      <span class="chip chip--plain">próxima rodada</span>
+    </div>
+
+    <div class="grid-3">
+      <div class="callout animate" style="--i:24">
+        <h3><span class="step-num" aria-hidden="true">01</span>Expandir gold para ≥20 casos/papel</h3>
+        <p>Destrava <code>jev train</code> (evolução por operadores) e os holdouts do arena.</p>
+        <span class="then">→ menos conclusões fracas</span>
+      </div>
+      <div class="callout animate" style="--i:25">
+        <h3><span class="step-num" aria-hidden="true">02</span>Mais cenários MIMO</h3>
+        <p>O +20pp do plano-de-caça merece poder estatístico antes de ser descartado.</p>
+        <span class="then">→ decidir o p=0.156 com dados</span>
+      </div>
+      <div class="callout callout--warning animate" style="--i:26">
+        <h3><span class="step-num" aria-hidden="true">03</span>Re-rodar com 3+ iterações</h3>
+        <p>Quando o orçamento permitir: a evolução ficou cortada em 2 iterações por causa
+        do teto de $10/corrída.</p>
+        <span class="then">→ evolução mais profunda por papel</span>
+      </div>
+    </div>
+
+    <div class="ve-card ve-card--recessed animate" style="--i:27; margin-top:22px;">
+      <div class="card-top" style="margin-bottom:10px">
+        <h3 style="font-family:var(--font-mono); font-size:0.78rem; text-transform:uppercase; letter-spacing:0.06em; color:var(--muted-foreground);">Runs desta rodada</h3>
+      </div>
+      <div class="tag-row">
+        <span class="tag">jev compare 88fff9a7</span>
+        <span class="tag">jev compare 4214a991</span>
+        <span class="tag">jev compare 6ae8cb92</span>
+        <span class="tag">jev compare 0422582e</span>
+        <span class="tag">arena train 2181e1aa (narrador $2.52)</span>
+        <span class="tag">arena train c04f317a (perguntas $2.09)</span>
+        <span class="tag">arena train 0fd7af73 (plano $1.70)</span>
+        <span class="tag">arena train e0b65679 (tradutor $0.60)</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= FOOTER ================= -->
+  <footer>
+    <p class="footer-line">
+      <strong>Commits</strong> <code>63f205d</code> / <code>d32ba01</code> / <code>d5f13ff</code> ·
+      <strong>Documento</strong> <code>docs/prompt-builder-evolucao.md</code> ·
+      <strong>Cenários</strong> <code>bench/cenarios</code> (72)
+    </p>
+    <p class="footer-line">
+      System One Dwarf · benchmark de prompts com prompt-builder · juiz <code>typesafe/jev-1.13</code> ·
+      respondedor <code>xiaomi/mimo-v2.6-pro</code>
+    </p>
+  </footer>
+
+</div>
+</body>
+</html>
