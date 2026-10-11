@@ -203,7 +203,11 @@ def build_plan(
         fallback_fn=lambda: fallback_plan(digest),
     )
     result = planner.plan(digest, context=context, knowledge=knowledge_context(),
-                          stuck_round=stuck_escalations, first_plan=True)
+                          stuck_round=stuck_escalations,
+                          # Contexto de feedback = já houve plano nesta missão:
+                          # só a chamada sem contexto é o 1.º plano (esforço
+                          # máximo quando não há conhecimento do mapa).
+                          first_plan=not context.strip())
     plan = result.plan.to_dict()
     plan["planning"] = result.summary()
     return plan
