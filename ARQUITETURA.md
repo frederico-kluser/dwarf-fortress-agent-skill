@@ -136,8 +136,8 @@ Macro-ações geradas deterministicamente (nunca pelo modelo) em DSL: `goto`/`mo
 
 | Camada | Onde | Conteúdo |
 |---|---|---|
-| **CoALA por campanha** | `campanhas/<slug>/.agents/<slug>-agent-skill/memory/coala.sqlite` (+ `chaves.sqlite`, `gastos.sqlite`, `meta.json`, `objetivo.json`) | Episódica + semântica + procedural, working memory orçamentada, supersessão; memória canónica guardada **em EN**, exibida traduzida em PT (edições do utilizador traduzidas PT→EN) |
-| **Conhecimento partilhado** | `conhecimento/.agents/conhecimento-dwarf-agent-skill/memory/coala.sqlite` (só-leitura para o agente) | **30 129 registos** (30 111 semânticos): `df/skills/<domínio>/…` = 30 020 + `df/essencia/<domínio>` = **40 chaves / 16 domínios** (resumos curados). **Nunca existem chaves `knowledge/*`** |
+| **CoALA por campanha** | `campanhas/<slug>/.agents/<slug>-coala-agent-skill/memory/coala.sqlite` (o nome legado `<slug>-agent-skill` também resolve) (+ `chaves.sqlite`, `gastos.sqlite`, `meta.json`, `objetivo.json`) | Episódica + semântica + procedural, working memory orçamentada, supersessão; memória canónica guardada **em EN**, exibida traduzida em PT (edições do utilizador traduzidas PT→EN) |
+| **Conhecimento partilhado** | `conhecimento/.agents/conhecimento-dwarf-coala-agent-skill/memory/coala.sqlite` (só-leitura para o agente) | **30 129 registos** (30 111 semânticos): `df/skills/<domínio>/…` = 30 020 + `df/essencia/<domínio>` = **40 chaves / 16 domínios** (resumos curados). **Nunca existem chaves `knowledge/*`** |
 | **Narrativa rolante** | Sempre no prompt | `narrative_chars=2000` + últimos `max_events=20` episódios × `event_chars=300` + `summary_chars=400` por candidato |
 | **Padrões de navegação** | `docs/padroes-navegacao.json` (v1, `updated` 2026-10-09) | **21 padrões** (`p-title-create-world` … `p-attack-menu-kill`), cadeia de combate, mecânicas de navegação, overlays, **200 `stuck_events`** |
 | **Stores rotativos** | Backend (anel em memória) | `decisions` **5000** / `questions` **2000** (evicção de *answered* primeiro) + paginação `?limit=&before=` (cursor `ts` exclusivo; `before` inválido → 422); `approvals` pendentes com **cap 20** (drop oldest) |
@@ -274,6 +274,6 @@ Prioridades: **alta 5** (01, 02, 03, 04, 07) = mudam o comportamento visível ·
 1. **Ciclo "6 passos"** do HTML é a versão conceptual; o loop operacional canónico (`docs/arquitetura.md`) tem os **10 passos** da §3 deste documento.
 2. **Suíte "1 175 verdes"**: exato como **1175 passed + 1 skipped** (1176 recolhidos).
 3. **"≈ $0,30 por sessão"** só para sessão leve; missões completas custam **$2,65–$3,52** (`caca-2`: $3,52 em 27 556 registos).
-4. **Caminho da memória**: o layout real é `campanhas/<slug>/.agents/<slug>-agent-skill/memory/coala.sqlite` (o `docs/api.md` abrevia para `.agents/<campanha>-agent-skill/...`).
+4. **Caminho da memória**: o layout real é `campanhas/<slug>/.agents/<slug>-coala-agent-skill/memory/coala.sqlite` (nome canónico do `coala-install.py` v3+; o `<slug>-agent-skill` legado também resolve, e o `docs/api.md` abrevia para `.agents/<campanha>-…-agent-skill/...`).
 5. **Auditoria v2** começou a **43/100 (7 achados)** e só depois fechou em 100/100 (o HTML resume "→ 100").
 6. **Mudança 12** não tem URLs de fonte no HTML (só citações em texto) — assim registado na §8.

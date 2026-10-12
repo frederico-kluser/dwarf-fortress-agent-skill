@@ -21,10 +21,25 @@ class TestLayout:
 
     def test_paths_follow_the_coala_layout(self, tmp_path, monkeypatch):
         monkeypatch.setenv("SOD_KNOWLEDGE_DIR", str(tmp_path / "conhecimento"))
-        skill = tmp_path / "conhecimento" / ".agents" / "conhecimento-dwarf-agent-skill"
+        skill = tmp_path / "conhecimento" / ".agents" / "conhecimento-dwarf-coala-agent-skill"
         assert knowledge_dir() == tmp_path / "conhecimento"
         assert knowledge_script() == skill / "scripts" / "coala.py"
         assert knowledge_memory_db() == skill / "memory" / "coala.sqlite"
+
+    def test_legacy_skill_dir_is_still_resolved(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("SOD_KNOWLEDGE_DIR", str(tmp_path / "conhecimento"))
+        legacy = tmp_path / "conhecimento" / ".agents" / "conhecimento-dwarf-agent-skill"
+        (legacy / "scripts").mkdir(parents=True)
+        assert knowledge_script() == legacy / "scripts" / "coala.py"
+
+    def test_canonical_skill_dir_wins_when_both_exist(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("SOD_KNOWLEDGE_DIR", str(tmp_path / "conhecimento"))
+        agents = tmp_path / "conhecimento" / ".agents"
+        canonical = agents / "conhecimento-dwarf-coala-agent-skill"
+        legacy = agents / "conhecimento-dwarf-agent-skill"
+        (canonical / "scripts").mkdir(parents=True)
+        (legacy / "scripts").mkdir(parents=True)
+        assert knowledge_script() == canonical / "scripts" / "coala.py"
 
     def test_default_knowledge_dir_is_inside_the_repo(self):
         from system_one_dwarf.campaign.paths import DEFAULT_KNOWLEDGE_DIR, REPO_ROOT

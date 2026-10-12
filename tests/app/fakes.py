@@ -196,7 +196,9 @@ class FakeInstaller:
 
             raise CampaignError("fake installer failure")
         if self.create_layout:
-            skill = Path(project) / ".agents" / f"{name}-agent-skill"
+            from system_one_dwarf.campaign.paths import skill_dirname
+
+            skill = Path(project) / ".agents" / skill_dirname(name)
             (skill / "scripts").mkdir(parents=True, exist_ok=True)
             (skill / "memory").mkdir(parents=True, exist_ok=True)
             (skill / "scripts" / "coala.py").write_text("# fake coala cli\n", encoding="utf-8")

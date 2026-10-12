@@ -133,7 +133,8 @@ quando o JEV decide avançar.
 ## Memória
 
 - **Uma base SQLite CoALA POR CAMPANHA**, seguindo o padrão `coala-agent-skill`:
-  `.agents/<campanha>-agent-skill/memory/coala.sqlite`, com memória
+  `.agents/<campanha>-coala-agent-skill/memory/coala.sqlite` (o nome legado
+  `<campanha>-agent-skill` também resolve), com memória
   **episódica + semântica + procedural**, **working memory** e **supersessão**.
 - Ao arrancar, o sistema **pergunta se é jogo novo ou existente** e carrega a memória
   dessa gameplay.

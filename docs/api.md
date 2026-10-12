@@ -110,7 +110,8 @@ Lista as campanhas conhecidas (memórias CoALA por campanha).
 ### `POST /api/campaigns`
 
 Cria (ou abre) a campanha, a que corresponde **uma base SQLite CoALA própria**
-(`.agents/<campanha>-agent-skill/memory/coala.sqlite`).
+(`.agents/<campanha>-coala-agent-skill/memory/coala.sqlite`; o nome legado
+`<campanha>-agent-skill` também resolve).
 
 **Body**
 
