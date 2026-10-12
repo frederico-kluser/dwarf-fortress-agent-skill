@@ -1,8 +1,10 @@
 """Thin wrapper over a campaign's CoALA CLI (``coala.py``, subprocess + JSON).
 
 Layout decision: the CLI lives at
-``<campaign>/.agents/<slug>-agent-skill/scripts/coala.py`` and its database at
-``<campaign>/.agents/<slug>-agent-skill/memory/coala.sqlite``.  Everything here
+``<campaign>/.agents/<slug>-coala-agent-skill/scripts/coala.py`` and its database at
+``<campaign>/.agents/<slug>-coala-agent-skill/memory/coala.sqlite`` (canonical
+``coala-install.py`` v3+ naming; the legacy ``<slug>-agent-skill`` dir is still
+resolved — see :func:`paths.skill_dir`).  Everything here
 is a *subprocess call with ``--json``*; we never read the SQLite file directly.
 
 Record conventions used by the rest of the system (kept in one place so the
@@ -50,6 +52,7 @@ from .paths import (
     coala_python,
     knowledge_dir,
     knowledge_memory_db,
+    memory_db,
     skill_script,
 )
 
@@ -281,7 +284,7 @@ class MemoryStore:
 
     @property
     def db_path(self) -> Path:
-        return self.project / ".agents" / f"{self.name}-agent-skill" / "memory" / "coala.sqlite"
+        return memory_db(self.project, self.name)
 
     def exists(self) -> bool:
         return self.script.exists() and self.db_path.exists()

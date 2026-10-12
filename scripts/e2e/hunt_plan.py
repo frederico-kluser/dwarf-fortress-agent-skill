@@ -53,7 +53,7 @@ from typing import Any, Callable, Mapping
 ROOT = Path(__file__).resolve().parents[2]
 BRIDGE = ROOT / "dfhack" / "df_bridge.py"
 DEFAULT_DF = str(Path.home() / "Games" / "dwarf-fortress-53.16")
-COALA = ROOT / ".agents" / "dwarf-fortress-game-coala-memory-agent-skill" / "scripts" / "coala.py"
+COALA = ROOT / ".agents" / "dwarf-fortress-game-coala-agent-skill" / "scripts" / "coala.py"
 
 if str(ROOT / "src") not in sys.path:  # o pacote não está instalado no venv
     sys.path.insert(0, str(ROOT / "src"))

@@ -3,7 +3,9 @@
 Decisions (authoritative, from the project brief):
 
 * A campaign lives at ``campanhas/<slug>/`` and is itself a CoALA project root:
-  its memory is ``campanhas/<slug>/.agents/<slug>-agent-skill/memory/coala.sqlite``.
+  its memory is ``campanhas/<slug>/.agents/<slug>-coala-agent-skill/memory/coala.sqlite``
+  (canonical ``coala-install.py`` v3+ naming; the legacy ``<slug>-agent-skill`` dir
+  kept by older installs is still resolved, see :func:`skill_dir`).
 * The shared game-knowledge base lives at ``conhecimento/`` (own CoALA install,
   name ``conhecimento-dwarf``); it is read-only for us.
 * Campaign secrets live in ``campanhas/<slug>/chaves.sqlite`` (file 0600, dir 0700).
@@ -78,18 +80,48 @@ def coala_installer_path() -> Path:
     return Path(override).expanduser() if override else DEFAULT_COALA_INSTALLER
 
 
+#: Canonical basename of a local CoALA skill (``coala-install.py`` v3+):
+#: ``<name>-coala-agent-skill`` — the technique is always part of the name.
+SKILL_SUFFIX = "-coala-agent-skill"
+#: Legacy basename created by older installers (still resolved for old campaigns
+#: and compat symlinks): ``<name>-agent-skill``.
+LEGACY_SKILL_SUFFIX = "-agent-skill"
+
+
+def skill_dirname(name: str) -> str:
+    """Canonical skill-dir basename for ``name``: ``<name>-coala-agent-skill``."""
+    return f"{name}{SKILL_SUFFIX}"
+
+
+def legacy_skill_dirname(name: str) -> str:
+    """Legacy skill-dir basename for ``name``: ``<name>-agent-skill``."""
+    return f"{name}{LEGACY_SKILL_SUFFIX}"
+
+
 def skill_dir(project: Path, name: str) -> Path:
-    """``<project>/.agents/<name>-agent-skill`` — the local CoALA skill."""
-    return Path(project) / ".agents" / f"{name}-agent-skill"
+    """``<project>/.agents/<skill>`` — the local CoALA skill dir.
+
+    Resolves both naming generations: prefers the canonical
+    ``<name>-coala-agent-skill`` when it exists on disk, falls back to the legacy
+    ``<name>-agent-skill`` (older installs and compat symlinks left by upgrades),
+    and reports the canonical path when nothing exists yet (what the installer
+    will create).
+    """
+    base = Path(project) / ".agents"
+    for dirname in (skill_dirname(name), legacy_skill_dirname(name)):
+        candidate = base / dirname
+        if candidate.exists():
+            return candidate
+    return base / skill_dirname(name)
 
 
 def skill_script(project: Path, name: str) -> Path:
-    """``<project>/.agents/<name>-agent-skill/scripts/coala.py``."""
+    """``<project>/.agents/<skill>/scripts/coala.py`` (resolved, see :func:`skill_dir`)."""
     return skill_dir(project, name) / "scripts" / "coala.py"
 
 
 def memory_db(project: Path, name: str) -> Path:
-    """``<project>/.agents/<name>-agent-skill/memory/coala.sqlite``."""
+    """``<project>/.agents/<skill>/memory/coala.sqlite`` (resolved, see :func:`skill_dir`)."""
     return skill_dir(project, name) / "memory" / "coala.sqlite"
 
 
