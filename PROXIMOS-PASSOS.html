@@ -1,0 +1,1422 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="plannotator-theme" content="host">
+<title>Próximos Passos — System One Dwarf</title>
+<style>
+  :root {
+    --background: oklch(0.97 0.005 260);
+    --foreground: oklch(0.18 0.02 260);
+    --card: oklch(1 0 0);
+    --card-foreground: oklch(0.18 0.02 260);
+    --primary: oklch(0.50 0.25 280);
+    --primary-foreground: oklch(1 0 0);
+    --secondary: oklch(0.50 0.18 180);
+    --secondary-foreground: oklch(1 0 0);
+    --muted: oklch(0.92 0.01 260);
+    --muted-foreground: oklch(0.40 0.02 260);
+    --accent: oklch(0.60 0.22 50);
+    --accent-foreground: oklch(0.18 0.02 260);
+    --destructive: oklch(0.50 0.25 25);
+    --destructive-foreground: oklch(1 0 0);
+    --success: oklch(0.45 0.20 150);
+    --success-foreground: oklch(1 0 0);
+    --warning: oklch(0.55 0.18 85);
+    --warning-foreground: oklch(0.18 0.02 260);
+    --border: oklch(0.88 0.01 260);
+    --input: oklch(0.92 0.01 260);
+    --ring: oklch(0.50 0.25 280);
+    --code-bg: oklch(0.92 0.01 260);
+
+    --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+    --font-mono: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
+    --font-display: ui-serif, Georgia, 'Times New Roman', serif;
+    --radius: 0.625rem;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --background: oklch(0.15 0.02 260);
+      --foreground: oklch(0.90 0.01 260);
+      --card: oklch(0.22 0.02 260);
+      --card-foreground: oklch(0.90 0.01 260);
+      --muted: oklch(0.26 0.02 260);
+      --muted-foreground: oklch(0.72 0.02 260);
+      --primary: oklch(0.75 0.18 280);
+      --primary-foreground: oklch(0.15 0.02 260);
+      --secondary: oklch(0.70 0.15 180);
+      --accent: oklch(0.70 0.20 60);
+      --accent-foreground: oklch(0.15 0.02 260);
+      --border: oklch(0.35 0.02 260);
+      --code-bg: oklch(0.26 0.02 260);
+      --destructive: oklch(0.65 0.20 25);
+      --success: oklch(0.72 0.17 150);
+      --warning: oklch(0.75 0.15 85);
+    }
+  }
+
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: var(--font-sans);
+    background: var(--background);
+    color: var(--foreground);
+    line-height: 1.65;
+    font-size: 15px;
+    -webkit-font-smoothing: antialiased;
+    padding: 56px 20px 80px;
+  }
+
+  .container { max-width: 1080px; margin: 0 auto; }
+
+  p { max-width: 68ch; }
+
+  code {
+    font-family: var(--font-mono);
+    font-size: 0.82em;
+    background: var(--code-bg);
+    padding: 1px 6px;
+    border-radius: calc(var(--radius) - 4px);
+  }
+
+  /* ============ HEADER ============ */
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted-foreground);
+  }
+
+  header h1 {
+    font-family: var(--font-display);
+    font-size: 2.6rem;
+    font-weight: 500;
+    margin: 10px 0 24px;
+    line-height: 1.15;
+  }
+
+  .prompt-box {
+    background: var(--muted);
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px 26px;
+    max-width: 860px;
+  }
+
+  .prompt-label {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted-foreground);
+    display: block;
+    margin-bottom: 6px;
+  }
+
+  .prompt-box p {
+    font-size: 0.95rem;
+    color: var(--muted-foreground);
+    line-height: 1.6;
+  }
+
+  .prompt-box strong { color: var(--foreground); font-weight: 600; }
+
+  /* ============ SUMMARY STRIP ============ */
+  .summary-strip {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 16px;
+    margin: 40px 0 8px;
+  }
+
+  .stat-card {
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px 16px 14px;
+    text-align: center;
+    background: var(--card);
+  }
+
+  .stat-value {
+    font-family: var(--font-display);
+    font-size: 1.75rem;
+    font-weight: 500;
+    display: block;
+    color: var(--foreground);
+    line-height: 1.25;
+  }
+
+  .stat-value.accent { color: var(--primary); }
+  .stat-value.warn { color: var(--warning); }
+
+  .stat-label {
+    font-family: var(--font-mono);
+    font-size: 0.66rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--muted-foreground);
+    margin-top: 6px;
+    display: block;
+    line-height: 1.45;
+  }
+
+  /* ============ SECTIONS ============ */
+  section { margin-top: 72px; }
+
+  .section-header {
+    display: flex;
+    align-items: baseline;
+    gap: 16px;
+    margin-bottom: 10px;
+    padding-bottom: 8px;
+    border-bottom: 1.5px solid var(--border);
+  }
+
+  .section-number {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--primary);
+  }
+
+  .section-header h2 {
+    font-family: var(--font-display);
+    font-size: 1.45rem;
+    font-weight: 500;
+  }
+
+  .lede {
+    color: var(--muted-foreground);
+    font-size: 0.93rem;
+    margin: 14px 0 8px;
+    max-width: 72ch;
+  }
+
+  .sub-h {
+    font-family: var(--font-display);
+    font-size: 1.12rem;
+    font-weight: 500;
+    margin: 48px 0 16px;
+  }
+
+  /* ============ MILESTONE TIMELINE ============ */
+  .milestones { display: flex; flex-direction: column; margin-top: 28px; }
+
+  .milestone {
+    display: grid;
+    grid-template-columns: 148px 28px 1fr;
+    gap: 0 18px;
+  }
+
+  .milestone .when {
+    text-align: right;
+    font-family: var(--font-mono);
+    font-size: 0.74rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--muted-foreground);
+    padding-top: 6px;
+    line-height: 1.45;
+  }
+
+  .milestone .dot-col { display: flex; flex-direction: column; align-items: center; }
+
+  .milestone .dot {
+    width: 14px; height: 14px; border-radius: 50%;
+    background: var(--card);
+    border: 3px solid var(--primary);
+    flex-shrink: 0;
+    margin-top: 5px;
+  }
+
+  .milestone .dot.now { background: var(--primary); }
+  .milestone .dot.next { border-color: var(--border); background: var(--card); }
+
+  .milestone .line { width: 2px; flex: 1; background: var(--border); margin: 6px 0; }
+  .milestone:last-child .line { display: none; }
+
+  .milestone .body { padding-bottom: 44px; }
+
+  .milestone .body h3 {
+    font-family: var(--font-display);
+    font-size: 1.18rem;
+    font-weight: 500;
+    margin-bottom: 8px;
+    line-height: 1.35;
+  }
+
+  .step-chain {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+
+  .step-chip {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    font-weight: 500;
+    padding: 4px 10px;
+    border-radius: calc(var(--radius) - 2px);
+    background: var(--card);
+    border: 1.5px solid var(--border);
+    color: var(--foreground);
+    white-space: nowrap;
+  }
+
+  .step-chip b { color: var(--primary); font-weight: 600; }
+  .chain-arrow { color: var(--muted-foreground); font-family: var(--font-mono); font-size: 0.85rem; }
+
+  .milestone .body p {
+    font-size: 0.92rem;
+    color: var(--muted-foreground);
+    max-width: 660px;
+    margin-bottom: 6px;
+    line-height: 1.62;
+  }
+
+  .unlocks {
+    font-family: var(--font-mono);
+    font-size: 0.76rem;
+    color: var(--primary);
+    font-weight: 500;
+    display: block;
+    margin-top: 10px;
+  }
+
+  /* ============ FICHA CARDS ============ */
+  .ficha-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    margin-top: 28px;
+  }
+
+  .ficha-card {
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--card);
+    padding: 24px 26px 20px;
+  }
+
+  .ficha-card.wide { grid-column: 1 / -1; }
+
+  .ficha-eyebrow {
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--primary);
+    display: block;
+    margin-bottom: 6px;
+  }
+
+  .ficha-card h3 {
+    font-family: var(--font-display);
+    font-size: 1.22rem;
+    font-weight: 500;
+    line-height: 1.3;
+    margin-bottom: 10px;
+  }
+
+  .ficha-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; }
+
+  .chip {
+    font-family: var(--font-mono);
+    font-size: 0.66rem;
+    font-weight: 600;
+    padding: 2px 9px;
+    border-radius: calc(var(--radius) - 4px);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .chip.effort { background: var(--muted); color: var(--muted-foreground); }
+  .chip.alta   { background: color-mix(in oklab, var(--destructive) 14%, transparent); color: var(--destructive); }
+  .chip.media  { background: color-mix(in oklab, var(--warning) 16%, transparent); color: var(--warning); }
+  .chip.baixa  { background: color-mix(in oklab, var(--success) 14%, transparent); color: var(--success); }
+  .chip.tag    { background: color-mix(in oklab, var(--primary) 12%, transparent); color: var(--primary); }
+
+  .f { margin-bottom: 11px; }
+
+  .f-label {
+    font-family: var(--font-mono);
+    font-size: 0.66rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--muted-foreground);
+    display: block;
+    margin-bottom: 2px;
+  }
+
+  .f-text { font-size: 0.885rem; line-height: 1.58; color: var(--foreground); }
+  .f-text.dim { color: var(--muted-foreground); }
+
+  .plain-note {
+    border-left: 3px solid var(--accent);
+    background: var(--muted);
+    border-radius: 0 calc(var(--radius) - 2px) calc(var(--radius) - 2px) 0;
+    padding: 12px 16px;
+    margin: 14px 0;
+    font-size: 0.855rem;
+    color: var(--muted-foreground);
+    line-height: 1.55;
+    max-width: none;
+  }
+
+  .plain-note b { color: var(--foreground); }
+
+  .pair {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 28px;
+  }
+
+  .pair .pair-col + .pair-col {
+    border-left: 1.5px solid var(--border);
+    padding-left: 28px;
+  }
+
+  .pair h4 {
+    font-family: var(--font-display);
+    font-size: 1.05rem;
+    font-weight: 500;
+    margin-bottom: 4px;
+    line-height: 1.35;
+  }
+
+  /* ============ DENSE TABLE ============ */
+  .dense-wrap {
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius);
+    overflow-x: auto;
+    margin-top: 18px;
+    background: var(--card);
+  }
+
+  table { border-collapse: collapse; width: 100%; }
+
+  .dense th {
+    font-family: var(--font-mono);
+    font-size: 0.66rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--muted-foreground);
+    text-align: left;
+    padding: 12px 16px;
+    border-bottom: 1.5px solid var(--border);
+    background: var(--muted);
+    white-space: nowrap;
+  }
+
+  .dense td {
+    padding: 13px 16px;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.855rem;
+    vertical-align: top;
+    line-height: 1.55;
+  }
+
+  .dense tr:last-child td { border-bottom: none; }
+  .dense .num-col { font-family: var(--font-mono); font-weight: 600; color: var(--primary); white-space: nowrap; }
+  .dense .unl-col { color: var(--muted-foreground); }
+  .dense .chips { display: flex; flex-wrap: wrap; gap: 5px; }
+
+  /* ============ DIAGRAM ============ */
+  .diagram-panel {
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius);
+    padding: 24px 20px 16px;
+    margin: 24px 0;
+    background: var(--card);
+  }
+
+  .diagram-caption {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    color: var(--muted-foreground);
+    display: block;
+    margin-top: 10px;
+    text-align: center;
+  }
+
+  /* ============ RISK GRID ============ */
+  .risk-grid {
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    margin-top: 24px;
+    background: var(--card);
+  }
+
+  .risk-row {
+    display: grid;
+    grid-template-columns: 1.1fr auto 1.6fr;
+    gap: 24px;
+    padding: 17px 22px;
+    align-items: start;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .risk-row:last-child { border-bottom: none; }
+  .risk-name { font-weight: 500; font-size: 0.92rem; line-height: 1.5; }
+  .risk-mitigation { font-size: 0.865rem; color: var(--muted-foreground); line-height: 1.55; }
+
+  .badge {
+    font-family: var(--font-mono);
+    font-size: 0.66rem;
+    font-weight: 600;
+    padding: 3px 9px;
+    border-radius: calc(var(--radius) - 4px);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+  }
+
+  .badge.high { background: color-mix(in oklab, var(--destructive) 15%, transparent); color: var(--destructive); }
+  .badge.med  { background: color-mix(in oklab, var(--warning) 15%, transparent); color: var(--warning); }
+  .badge.low  { background: color-mix(in oklab, var(--success) 15%, transparent); color: var(--success); }
+
+  /* ============ TOP-3 CALLOUTS ============ */
+  .three-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 22px;
+    margin-top: 26px;
+  }
+
+  .callout {
+    border-left: 3px solid var(--primary);
+    padding: 18px 22px;
+    background: var(--card);
+    border-radius: 0 var(--radius) var(--radius) 0;
+    border-top: 1.5px solid var(--border);
+    border-right: 1.5px solid var(--border);
+    border-bottom: 1.5px solid var(--border);
+  }
+
+  .callout .c-num {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--primary);
+    display: block;
+    margin-bottom: 6px;
+    letter-spacing: 0.05em;
+  }
+
+  .callout h3 {
+    font-family: var(--font-display);
+    font-size: 1.08rem;
+    font-weight: 500;
+    margin-bottom: 8px;
+    line-height: 1.35;
+  }
+
+  .callout p { font-size: 0.885rem; color: var(--muted-foreground); line-height: 1.58; }
+
+  /* ============ DETAILS ============ */
+  details {
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius);
+    margin: 16px 0;
+    background: var(--card);
+  }
+
+  summary {
+    font-family: var(--font-sans);
+    font-weight: 500;
+    font-size: 0.92rem;
+    padding: 15px 22px;
+    cursor: pointer;
+    list-style: none;
+    color: var(--foreground);
+  }
+
+  summary::before {
+    content: '\25B8';
+    display: inline-block;
+    margin-right: 9px;
+    transition: transform 0.2s;
+    color: var(--muted-foreground);
+  }
+
+  details[open] summary::before { transform: rotate(90deg); }
+
+  .details-body { padding: 0 22px 20px; overflow-x: auto; }
+
+  .dep-table th {
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--muted-foreground);
+    text-align: left;
+    padding: 10px 14px 10px 0;
+    border-bottom: 1.5px solid var(--border);
+    white-space: nowrap;
+  }
+
+  .dep-table td {
+    padding: 11px 14px 11px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.855rem;
+    vertical-align: top;
+    line-height: 1.55;
+  }
+
+  .dep-table tr:last-child td { border-bottom: none; }
+
+  /* ============ FOOTER ============ */
+  footer {
+    margin-top: 88px;
+    padding-top: 26px;
+    border-top: 1.5px solid var(--border);
+    display: grid;
+    grid-template-columns: 1.4fr 1fr;
+    gap: 32px;
+  }
+
+  footer ul { list-style: none; }
+
+  footer li {
+    font-family: var(--font-mono);
+    font-size: 0.76rem;
+    color: var(--muted-foreground);
+    line-height: 1.9;
+    word-break: break-word;
+  }
+
+  footer li b { color: var(--foreground); font-weight: 600; }
+
+  .foot-note {
+    font-family: var(--font-display);
+    font-style: italic;
+    font-size: 0.95rem;
+    color: var(--muted-foreground);
+    line-height: 1.6;
+  }
+
+  /* ============ RESPONSIVE ============ */
+  @media (max-width: 860px) {
+    .ficha-grid, .pair { grid-template-columns: 1fr; }
+    .pair .pair-col + .pair-col { border-left: none; padding-left: 0; border-top: 1.5px solid var(--border); padding-top: 24px; }
+    .risk-row { grid-template-columns: 1fr; gap: 8px; }
+    footer { grid-template-columns: 1fr; }
+  }
+
+  @media (max-width: 640px) {
+    .milestone { grid-template-columns: 24px 1fr; }
+    .milestone .when { display: none; }
+    header h1 { font-size: 2.05rem; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- ============ 01 · HEADER ============ -->
+  <header>
+    <span class="eyebrow">Rota · System One Dwarf</span>
+    <h1>Próximos Passos</h1>
+    <div class="prompt-box">
+      <span class="prompt-label">Onde estamos · o que vem a seguir</span>
+      <p>O MVP caçou de verdade — corrida <strong>caca-2</strong>: <strong>KILL_CONFIRMED</strong>, 1&nbsp;980 decisões JEV, suíte <strong>3597 testes</strong> verde. O que falta não é mais código: é <strong>poder estatístico</strong> (o benchmark tem de voltar a decidir) e depois as <strong>4 ondas do sistema</strong> — 19 passos ordenados por dependência, sem estimativas de tempo.</p>
+    </div>
+  </header>
+
+  <!-- ============ SUMMARY STRIP ============ -->
+  <div class="summary-strip" role="group" aria-label="Números-chave da rota">
+    <div class="stat-card">
+      <span class="stat-value">19</span>
+      <span class="stat-label">passos no total</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-value accent">4</span>
+      <span class="stat-label">ondas de dependência</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-value accent">3</span>
+      <span class="stat-label">rota imediata</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-value warn">10–19</span>
+      <span class="stat-label">gold atual casos/papel · meta ≥20</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-value warn">349/415</span>
+      <span class="stat-label">decisões de movimento em abstain</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-value warn">+20 p.p.</span>
+      <span class="stat-label">MIMO plano-de-caça · p=0,156</span>
+    </div>
+  </div>
+
+  <!-- ============ 02 · ONDAS ============ -->
+  <section id="ondas">
+    <div class="section-header">
+      <span class="section-number">01</span>
+      <h2>Onda a onda — a sequência</h2>
+    </div>
+    <p class="lede">Duas rotas: a <b>rota imediata</b> (3 passos — dar poder estatístico ao benchmark) e a <b>rota do sistema</b> (16 passos — as 12 mudanças de <code>ARQUITETURA.md</code> §8 mais 4 de infraestrutura, em 4 ondas). As fases mostram sequência e dependências — nunca duração.</p>
+
+    <div class="milestones">
+
+      <div class="milestone">
+        <div class="when">Rota imediata</div>
+        <div class="dot-col"><span class="dot now"></span><span class="line"></span></div>
+        <div class="body">
+          <h3>🚦 Rota imediata — o benchmark volta a decidir</h3>
+          <div class="step-chain">
+            <span class="step-chip"><b>1</b> · Gold ≥20 casos/papel</span>
+            <span class="chain-arrow">→</span>
+            <span class="step-chip"><b>2</b> · Re-rodar arena, 3+ iterações</span>
+            <span class="chain-arrow">→</span>
+            <span class="step-chip"><b>3</b> · A/B shadow em produção</span>
+          </div>
+          <p>A rodada de 2026-10-11 mediu tudo com honestidade e mostrou o limite: com 10–19 casos por papel nenhuma diferença é significativa — o +20 p.p. do plano-de-caça ficou em p=0,156 e nada foi promovido. Sem poder estatístico, cada decisão de prompt é opinião.</p>
+          <p>Dados → re-rodar → confirmar no jogo: primeiro a amostra, depois a regra de promoção (p&lt;0,05 ou efeito grande consistente) e só então o teste cego na sessão real.</p>
+          <span class="unlocks">Desbloqueia: jev train · holdouts válidos · decisões sobre o +20 p.p. e o JEV-R · baseline para o A/B.</span>
+        </div>
+      </div>
+
+      <div class="milestone">
+        <div class="when">Onda 1</div>
+        <div class="dot-col"><span class="dot next"></span><span class="line"></span></div>
+        <div class="body">
+          <h3>🌊 Onda 1 — Destrava o resto (decidir bem no terreno)</h3>
+          <div class="step-chain">
+            <span class="step-chip"><b>4</b> · Skills de combate</span>
+            <span class="chain-arrow">→</span>
+            <span class="step-chip"><b>5</b> · Movimento como macro-ação</span>
+            <span class="chain-arrow">→</span>
+            <span class="step-chip"><b>6</b> · Evidência antes de abstain</span>
+          </div>
+          <p>As duas maiores dívidas medidas estão aqui: decisões de vida e morte que ignoram as skills do aventureiro (5 estocadas numa mula <i>tame</i>) e 415 decisões de micro-movimento com 349 abstensões — o humano carrega o loop.</p>
+          <p>Esta onda é independente do resto e destrava-o: decisões melhores no terreno são pré-condição para memória, robustez e processo fazerem sentido.</p>
+          <span class="unlocks">Desbloqueia: combate eficaz · plano de caça (13) · treino antes de caçar (14) · fim do micro-movimento no log.</span>
+        </div>
+      </div>
+
+      <div class="milestone">
+        <div class="when">Onda 2</div>
+        <div class="dot-col"><span class="dot next"></span><span class="line"></span></div>
+        <div class="body">
+          <h3>🌊 Onda 2 — Memória viva</h3>
+          <div class="step-chain">
+            <span class="step-chip"><b>7</b> · Diálogos retrieváveis</span>
+            <span class="chain-arrow">→</span>
+            <span class="step-chip"><b>8</b> · State com histórico</span>
+            <span class="chain-arrow">→</span>
+            <span class="step-chip"><b>9</b> · Eventos como diário de bordo</span>
+          </div>
+          <p>Hoje cada sessão começa sem saber o que foi dito antes: as conversas com NPCs desaparecem quando a sessão morre, e o agente repete ações que já falharam porque o estado só mostra o presente. Os 13 episódios do narrador são texto corrido sem índice.</p>
+          <p>Transcrever, vetorizar e recuperar — por recência + importância + similaridade — resolve a continuidade; o event-sourcing resolve o aproveitamento.</p>
+          <span class="unlocks">Desbloqueia: NPCs que lembram · fim de laços de repetição · memória que alimenta o narrador e o state.</span>
+        </div>
+      </div>
+
+      <div class="milestone">
+        <div class="when">Onda 3</div>
+        <div class="dot-col"><span class="dot next"></span><span class="line"></span></div>
+        <div class="body">
+          <h3>🌊 Onda 3 — Robustez das decisões e dos planos</h3>
+          <div class="step-chain">
+            <span class="step-chip"><b>10</b> · Shuffle + voto</span>
+            <span class="chain-arrow">→</span>
+            <span class="step-chip"><b>11</b> · Limiares por risco</span>
+            <span class="chain-arrow">→</span>
+            <span class="step-chip"><b>12</b> · Gerar→testar→criticar</span>
+            <span class="chain-arrow">→</span>
+            <span class="step-chip"><b>13</b> · Schema + waypoints</span>
+            <span class="chain-arrow">→</span>
+            <span class="step-chip"><b>14</b> · Treinar antes de caçar</span>
+          </div>
+          <p>Modelos escolhem a 1.ª opção mais vezes do que deviam; um único limiar <code>auto = 0,90</code> trata "olhar para o lado" e "atacar" igual; planos falhados repetem os mesmos erros de formato; e sparring só a partir de <code>Proficient</code>.</p>
+          <p>Cada decisão passa a ter piso de risco medido e cada plano passa a ter críticos — a calibragem sobe de prioridade logo que o gold entregue suporte.</p>
+          <span class="unlocks">Desbloqueia: cobertura auto com risco medido · decisões auditáveis · planos que sobrevivem ao contacto com o jogo.</span>
+        </div>
+      </div>
+
+      <div class="milestone">
+        <div class="when">Onda 4</div>
+        <div class="dot-col"><span class="dot next"></span><span class="line"></span></div>
+        <div class="body">
+          <h3>🌊 Onda 4 — Processo e infraestrutura</h3>
+          <div class="step-chain">
+            <span class="step-chip"><b>15</b> · Golden set em CI</span>
+            <span class="chain-arrow">→</span>
+            <span class="step-chip"><b>16</b> · Stores em SQLite</span>
+            <span class="chain-arrow">→</span>
+            <span class="step-chip"><b>17</b> · CI no GitHub</span>
+            <span class="chain-arrow">→</span>
+            <span class="step-chip"><b>18</b> · Watchdog de sessão</span>
+            <span class="chain-arrow">→</span>
+            <span class="step-chip"><b>19</b> · Cache de planos</span>
+          </div>
+          <p>Os anéis em memória apagam a auditoria num restart; o repo está publicado sem CI (2 falhas do pytest passaram despercebidas semanas); o <code>StuckDetector</code> protege o personagem mas ninguém protege a sessão; e o custo vive nos tokens DeepSeek.</p>
+          <p>É a onda que fixa tudo em processo: regressão de prompts, persistência, gate automático, vigilância e economia.</p>
+          <span class="unlocks">Desbloqueia: gate para todos os passos · auditoria persistente · sessões autónomas longas · orçamento para as rodadas.</span>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ============ 03 · FICHAS ============ -->
+  <section id="fichas">
+    <div class="section-header">
+      <span class="section-number">02</span>
+      <h2>Fichas dos passos decisivos</h2>
+    </div>
+    <p class="lede">Os passos que concentram o impacto — cada um com a ficha completa de sete campos: <b>O quê</b> · <b>Porquê</b> · <b>Como</b> · <b>Desbloqueia</b> · <b>Tradeoff</b> · <b>Esforço · Prioridade</b> · <b>Definição de pronto</b>. Os restantes passos seguem em vista densa por onda.</p>
+
+    <div class="ficha-grid">
+
+      <!-- FICHA 1 -->
+      <div class="ficha-card">
+        <span class="ficha-eyebrow">Passo 1 · Rota imediata</span>
+        <h3>Expandir o gold para ≥20 casos rotulados por papel</h3>
+        <div class="ficha-tags">
+          <span class="chip effort">Esforço M–L</span>
+          <span class="chip alta">Prioridade ALTA</span>
+          <span class="chip tag">destrava 2 · 11</span>
+        </div>
+        <div class="f">
+          <span class="f-label">O quê</span>
+          <div class="f-text">Levar o gold de <b>10–19 para ≥20 casos rotulados por papel</b>: JEV-A/M/D/R (por pergunta tipada) e os 4 papéis MIMO (narrador, perguntas-PT, plano-de-caça, tradutor).</div>
+        </div>
+        <div class="f">
+          <span class="f-label">Porquê</span>
+          <div class="f-text">Com 10–19 casos/papel só se detetam efeitos enormes (Δ ≈ 30–40 p.p.): o +20 p.p. do plano-de-caça ficou em <b>p=0,156</b> — inconclusivo por falta de dados, não por falta de efeito. O <code>jev train</code> recusa &lt;20 casos/papel (<code>cases.too_few</code>) e o arena pula os holdouts — "confirmação fraca", sem teste cego.</div>
+        </div>
+        <div class="plain-note">
+          <b>A estatística à letra:</b> p&lt;0,05 quer dizer "menos de 5% de hipóteses de ver este ganho por sorte" — mas só com amostra suficiente. Com pares de menos, o teste não tem poder e a resposta honesta é "não sei". Regra de bolso: ≥20 pares/papel dão hipótese a efeitos de ~20 p.p.; o número exato sai de uma <i>power analysis</i> na primeira re-rodada <b>[por medir]</b>. E o que o <code>jev train</code> destrava não é só métrica: é a evolução automática por operadores — mais forte do que o <code>jev compare</code> usado até agora.
+        </div>
+        <div class="f">
+          <span class="f-label">Como</span>
+          <div class="f-text">Seed dos 66 casos de <code>evals/</code> (217 respostas: JEV-A 19 · JEV-R 13 · JEV-M 10 · JEV-D 10 · injeção 14) → completar com os gaps da missão real <code>caca-2</code>: navegação (21 padrões + 200 <code>stuck_events</code>), combate (<code>p-attack-menu-kill</code>, mira neck/head, fugas HP&lt;60%), oportunismo e re-exploração → rótulos por regra derivada (<code>scripts/golden.py</code>) com revisão humana no resto → ≥20 cenários/papel MIMO em <code>bench/cenarios/</code> (hoje 8–14) → espelho obrigatório: <code>gerar.py --sync-evals</code> → <code>golden.py build</code> → <code>freeze-holdout</code> → <code>bless</code> → <code>check</code> → pytest.</div>
+        </div>
+        <div class="f">
+          <span class="f-label">Desbloqueia</span>
+          <div class="f-text"><code>jev train</code> em vez de só <code>jev compare</code>; holdouts válidos (teste cego); conclusões reais sobre o +20 p.p. e sobre a regressão do JEV-R; suporte n≥30/classe para a calibragem (Passo 11).</div>
+        </div>
+        <div class="f">
+          <span class="f-label">Tradeoff</span>
+          <div class="f-text dim">Horas de autorar e validar rótulos (o custo é humano, não de API) e corridas mais caras <i>versus</i> confiança das decisões; risco de ruído de rótulo — mitigado com regras derivadas + dupla revisão dos casos manuais.</div>
+        </div>
+        <div class="f">
+          <span class="f-label">Esforço · Prioridade</span>
+          <div class="f-text">M–L · <b>ALTA</b> — é o destravamento dos Passos 2 e 11.</div>
+        </div>
+        <div class="f">
+          <span class="f-label">Definição de pronto</span>
+          <div class="f-text"><code>prompt-builder jev train</code> corre sem <code>cases.too_few</code> em todos os papéis; holdout ≥20 casos/papel, intocado e pinado (<code>HOLDOUT.sha256</code>); relatório com p-values para todas as comparações.</div>
+        </div>
+      </div>
+
+      <!-- FICHA 2 -->
+      <div class="ficha-card">
+        <span class="ficha-eyebrow">Passo 4 · Onda 1 (mudança 02)</span>
+        <h3>Skills de combate nas decisões de ataque/fuga</h3>
+        <div class="ficha-tags">
+          <span class="chip effort">Esforço M</span>
+          <span class="chip alta">Prioridade ALTA</span>
+          <span class="chip tag">destrava 13 · 14</span>
+        </div>
+        <div class="f">
+          <span class="f-label">O quê</span>
+          <div class="f-text">Um <b>retrato de prontidão de combate</b> (~10 números por entidade: skill efetiva da arma via <code>dfhack.units.getEffectiveSkill</code>, Fighter/Dodger/Shield User/Armor User, atributos relevantes, dor, exaustão) injetado no estado que o JEV-A vê — para decidir atacar / fugir / mirar com vantagem real, incluindo a regra de fuga <b>HP &lt; 60%</b>.</div>
+        </div>
+        <div class="f">
+          <span class="f-label">Porquê</span>
+          <div class="f-text">Dwarf Fortress é <i>skill-driven</i>: a diferença entre um golpe que mata ("fracturing the skull and tearing the brain") e um desviado está nas skills do aventureiro — e as decisões atuais ignoram-nas completamente. Na <code>caca-2</code> foram precisas 5 estocadas numa mula <i>tame</i>; contra presa selvagem não há margem. Os agentes de jogos da literatura (PokéLLMon, PokéChamp, NetHack Challenge) leem todos a capacidade antes de escolher.</div>
+        </div>
+        <div class="f">
+          <span class="f-label">Como</span>
+          <div class="f-text">Snapshot Lua por entidade → normalização para um bloco compacto no state (orçamento ~2K) → candidatos gerados por código e condicionados pela vantagem (atacar com skill≥limiar; <code>flee</code> sob dano/dor; mira letal quando a skill compensa — <code>c neck</code> → paralisia, <code>d head</code> → morte) → JEV-A escolhe entre eles com as bandas normais.</div>
+        </div>
+        <div class="f">
+          <span class="f-label">Desbloqueia</span>
+          <div class="f-text">Kills eficazes e fugas certas; valida o plano de caça (Passo 13) e destrava o treino antes de caçar (Passo 14); menos golpes desperdiçados por combate.</div>
+        </div>
+        <div class="f">
+          <span class="f-label">Tradeoff</span>
+          <div class="f-text dim">State maior para o decisor + parsing da saída Lua (pode quebrar com updates do DFHack — mitigar com os 42 testes de snapshot em <code>dfhack/test_snapshot.py</code>) <i>versus</i> sobrevivência e eficácia.</div>
+        </div>
+        <div class="f">
+          <span class="f-label">Esforço · Prioridade</span>
+          <div class="f-text">M · <b>ALTA</b> (mudança 02 de <code>ARQUITETURA.md</code> §8).</div>
+        </div>
+        <div class="f">
+          <span class="f-label">Definição de pronto</span>
+          <div class="f-text">Snapshot de skills testado (unit tests + leitura real) e a decisão de ataque/fuga usa a vantagem de skill — caso de teste que mostra um ataque rejeitado por desvantagem e uma fuga disparada abaixo de 60% HP.</div>
+        </div>
+      </div>
+
+      <!-- FICHA 3 (par 5+6) -->
+      <div class="ficha-card wide">
+        <span class="ficha-eyebrow">Passos 5 + 6 · Onda 1 (mudanças 04 + 03) — o par que fecha as 349/415 abstensões</span>
+        <h3>Movimento como macro-ação + evidência antes de abstain</h3>
+        <div class="ficha-tags">
+          <span class="chip effort">Esforço M + S</span>
+          <span class="chip alta">Prioridade ALTA</span>
+          <span class="chip tag">independentes</span>
+          <span class="chip tag">amplifica 11</span>
+        </div>
+        <div class="pair">
+          <div class="pair-col">
+            <h4>Passo 5 — Movimento como macro-ação</h4>
+            <div class="f">
+              <span class="f-label">O quê</span>
+              <div class="f-text">O JEV-A decide <b>destino + urgência</b> (ex.: <code>navigate_to:&lt;zona&gt;</code>, <code>Safe</code>/<code>Pressing</code>/<code>Critical</code>) e o código faz o pathing passo a passo (BFS planar <code>dfb-nav.lua</code>, <code>move DIR times=N</code>).</div>
+            </div>
+            <div class="f">
+              <span class="f-label">Porquê</span>
+              <div class="f-text">A maior dívida medida: a <code>caca-2</code> gastou <b>415 decisões JEV-A</b> só em micro-movimento e <b>349 acabaram em abstain</b> — o humano carrega o loop. O Jev deve decidir <i>para onde</i> e <i>com que urgência</i>; o código sabe andar.</div>
+            </div>
+            <div class="f">
+              <span class="f-label">Como</span>
+              <div class="f-text">Candidatos de macro-ação gerados do estado → <code>MacroExecutor</code> percorre o caminho com os guards já existentes (<code>guard:focus_changed</code>, <code>guard:threat_appeared</code>, <code>guard:adventurer_dead</code>) → <code>StuckDetector</code> cobre paragens (3 passos sem mudança → exploração forçada). Movimento avança o tempo do jogo — manter <code>--stop-on-threat</code>.</div>
+            </div>
+            <div class="f">
+              <span class="f-label">Desbloqueia</span>
+              <div class="f-text">Fim do domínio do micro-movimento no log; decisões passam a ser gastas em combate, oportunismo e exploração; com o Passo 6 ataca diretamente as 349/415 abstensões.</div>
+            </div>
+            <div class="f">
+              <span class="f-label">Tradeoff</span>
+              <div class="f-text dim">Menos controlo granular por passo (uma rota má só é corrigida por guard/stuck) <i>versus</i> muito menos indecisão, custo e tempo de sessão.</div>
+            </div>
+            <div class="f">
+              <span class="f-label">Esforço · Prioridade</span>
+              <div class="f-text">M · <b>ALTA</b> (mudança 04)</div>
+            </div>
+            <div class="f">
+              <span class="f-label">Definição de pronto</span>
+              <div class="f-text">Movimento passa a ser macro-ações (destino+urgência) no log; a contagem de decisões JEV-A por missão cai drasticamente face a 415 <b>[por medir na próxima sessão]</b>; cobertura auto sobe sem perder precisão.</div>
+            </div>
+          </div>
+
+          <div class="pair-col">
+            <h4>Passo 6 — Evidência antes de abstain</h4>
+            <div class="f">
+              <span class="f-label">O quê</span>
+              <div class="f-text">Quando a confiança cai abaixo do limiar <code>auto</code>, o agente recolhe <b>mais estado</b> (unidades próximas, terreno, inventário, gamelog), monta um "state round 2" e <b>re-decide UMA vez</b>; só depois escala (abstain/pergunta).</div>
+            </div>
+            <div class="f">
+              <span class="f-label">Porquê</span>
+              <div class="f-text">Muitas abstensões não são indecisão — são <b>falta de evidência</b>. Cada abstain trava a missão, e o over-abstention é a fraqueza conhecida do sistema: o <code>criterios-v2</code> já mostrou o caminho (cobertura auto 0,29→0,47 com precisão 0,91→0,94).</div>
+            </div>
+            <div class="f">
+              <span class="f-label">Como</span>
+              <div class="f-text">No despacho por banda: se <code>band == abstain</code> (ou <code>hitl</code> sem humano disponível), injetar evidência extra num re-prompt compacto → nova chamada JEV-A (JEV custa $0,042/Mtok entrada, saída grátis) → se continuar incerto, escala normalmente. <b>Máx. 1 re-decisão por passo</b> — nunca um laço; registar <code>evidence_recollected</code> nos <code>issues</code>.</div>
+            </div>
+            <div class="f">
+              <span class="f-label">Desbloqueia</span>
+              <div class="f-text">Amplifica o ganho da calibragem (Passo 11: confianças calibradas tornam a re-decisão segura); menos perguntas ao humano; converte o estado extra (Passos 4 e 5) em decisões <code>auto</code>.</div>
+            </div>
+            <div class="f">
+              <span class="f-label">Tradeoff</span>
+              <div class="f-text dim">+1 chamada Jev por passo incerto + um ciclo de atraso <i>versus</i> muito menos escaladas; re-decidir sobre o mesmo estado não muda nada — a evidência nova tem de ser real.</div>
+            </div>
+            <div class="f">
+              <span class="f-label">Esforço · Prioridade</span>
+              <div class="f-text">S · <b>ALTA</b> (mudança 03)</div>
+            </div>
+            <div class="f">
+              <span class="f-label">Definição de pronto</span>
+              <div class="f-text">Cobertura auto sobe sem perder precisão (em <code>evals/</code> e na sessão real); cada abstain restante traz registo da evidência recolhida; zero laços de re-decisão (máx. 1 por passo, testado).</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- FICHA 4 -->
+      <div class="ficha-card">
+        <span class="ficha-eyebrow">Passo 7 · Onda 2 (mudança 01)</span>
+        <h3>Diálogos retrieváveis</h3>
+        <div class="ficha-tags">
+          <span class="chip effort">Esforço M</span>
+          <span class="chip alta">Prioridade ALTA</span>
+          <span class="chip tag">alimenta 8</span>
+        </div>
+        <div class="f">
+          <span class="f-label">O quê</span>
+          <div class="f-text"><b>Memória conversacional</b>: cada mensagem é transcrita (quem, quando, vetor, importância) e recuperada por <b>recência + importância + similaridade</b>, com <i>namespace</i> por interlocutor e cartão de perfil por NPC; a extração de factos/palavras dadas é assíncrona.</div>
+        </div>
+        <div class="f">
+          <span class="f-label">Porquê</span>
+          <div class="f-text">As conversas com NPCs (dicas de caça, preços, avisos) desaparecem quando a sessão morre — cada sessão recomeça sem saber o que foi dito antes. Continuidade real: o agente passa a poder cumprir o que prometeu e evitar o que já disse. É o padrão da indústria (Letta, Mem0, MS Agent Framework).</div>
+        </div>
+        <div class="f">
+          <span class="f-label">Como</span>
+          <div class="f-text">Transcript → embedding → retrieval: schema de transcrição por mensagem na memória CoALA (busca híbrida FTS5+vetor com RRF já existe em <code>coala.py</code>) → score combinado (recência, importância, similaridade) no top-K do JEV-R → namespace por interlocutor + cartão de perfil → extração de factos em background (narrador/JEV-M). <b>Nunca apagar a transcrição bruta</b> — a extração é derivada e pode estar errada.</div>
+        </div>
+        <div class="f">
+          <span class="f-label">Desbloqueia</span>
+          <div class="f-text">NPCs que "lembram"; perguntas ao humano informadas; base de conteúdo para o histórico de estado (Passo 8); dados para o cartão de perfil na UI.</div>
+        </div>
+        <div class="f">
+          <span class="f-label">Tradeoff</span>
+          <div class="f-text dim">Mais armazenamento, <b>PII no disco</b> (diálogos com humanos) e custo de extração por mensagem <i>versus</i> continuidade real — exigir mascaramento de chaves e política de retenção.</div>
+        </div>
+        <div class="f">
+          <span class="f-label">Esforço · Prioridade</span>
+          <div class="f-text">M · <b>ALTA</b> (mudança 01).</div>
+        </div>
+        <div class="f">
+          <span class="f-label">Definição de pronto</span>
+          <div class="f-text">Conversar com alguém puxa automaticamente o contexto da conversa anterior (teste: nova conversa com o mesmo NPC menciona tema dito antes); a transcrição bruta persiste e as extrações são citáveis.</div>
+        </div>
+      </div>
+
+      <!-- FICHA 5 -->
+      <div class="ficha-card">
+        <span class="ficha-eyebrow">Passo 11 · Onda 3 (mudança 06)</span>
+        <h3>Calibragem de limiares por risco (risco-cobertura)</h3>
+        <div class="ficha-tags">
+          <span class="chip effort">Esforço M</span>
+          <span class="chip media">Prioridade MÉDIA</span>
+          <span class="chip tag">sobe com o Passo 1</span>
+        </div>
+        <div class="f">
+          <span class="f-label">O quê</span>
+          <div class="f-text">Curvas <b>risco-cobertura</b> sobre cenários rotulados + dados reais; um limiar por classe de ação, guardado por snapshot do modelo; regra: <b>primeiro calibrar, depois mexer no prompt</b>.</div>
+        </div>
+        <div class="f">
+          <span class="f-label">Porquê</span>
+          <div class="f-text">"Olhar para o lado" não é "atacar" — e um único limiar <code>auto = 0,90</code> trata as duas coisas igual. A política por classe já está implementada (<code>src/system_one_dwarf/jev/risk.py</code>: <code>reversible</code> 0,90 · <code>costly</code> ≥0,95 · <code>irreversible</code> ≥0,95 · <code>destructive</code> com <code>auto</code> desligado), mas a maioria das classes tem <code>threshold: null</code>: há ~25 respostas <code>action</code> no total (mínimo honesto: n≥30 por classe, limite de Wilson 95%).</div>
+        </div>
+        <div class="f">
+          <span class="f-label">Como</span>
+          <div class="f-text"><code>scripts/calibrate.py online</code> → <code>report --evals … --table calibration.json</code> (aceita as <code>rows</code> do <code>jev.mjs eval</code> e amostras do log via <code>from-decisions</code>) → <code>thresholds</code> para ver os limiares efetivos → <code>--mark-verified</code> só com ato humano explícito e suporte ≥100 (nunca em <code>destructive</code>).</div>
+        </div>
+        <div class="f">
+          <span class="f-label">Desbloqueia</span>
+          <div class="f-text">Cobertura automática real e mensurável; base para subir limiares com segurança; re-avaliação informada da regressão do JEV-R (0,938→0,917); alimenta o A/B do Passo 3.</div>
+        </div>
+        <div class="f">
+          <span class="f-label">Tradeoff</span>
+          <div class="f-text dim">Trabalho de calibragem e <b>manutenção contínua</b> (snapshot novo ⇒ recalibrar); o proxy do log real é enviesado (só o que passou o limiar executa) — complementa os cenários, nunca os substitui.</div>
+        </div>
+        <div class="f">
+          <span class="f-label">Esforço · Prioridade</span>
+          <div class="f-text">M · <b>MÉDIA</b> (mudança 06; sobe de prioridade logo que o Passo 1 entregue suporte).</div>
+        </div>
+        <div class="f">
+          <span class="f-label">Definição de pronto</span>
+          <div class="f-text">Tabela de calibração com entradas por classe (n≥30 aceite), relatório risco-cobertura por classe/papel, e <code>calibrate.py thresholds</code> confirma os limiares efetivos carregados pelo loop.</div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- DENSE TABLE -->
+    <h3 class="sub-h">Os restantes passos — vista densa por onda</h3>
+    <p class="lede">Uma linha por passo, com a prioridade de <code>ARQUITETURA.md</code> §8. Os Passos 1, 4, 5, 6, 7 e 11 estão em ficha completa acima.</p>
+    <div class="dense-wrap">
+      <table class="dense" aria-label="Passos restantes por onda">
+        <thead>
+          <tr>
+            <th>Onda</th>
+            <th>Passo</th>
+            <th>O quê (uma linha)</th>
+            <th>Desbloqueia</th>
+            <th>Esforço · Prioridade</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="chip tag">Imediata</span></td>
+            <td class="num-col">2</td>
+            <td>Re-rodar a arena com 3+ iterações e regra de promoção escrita: só promove com p&lt;0,05 (gate max-T a 5%) ou efeito grande e consistente.</td>
+            <td class="unl-col">Decisão sobre o +20 p.p. do plano-de-caça; re-avaliação do JEV-R; baseline para o A/B.</td>
+            <td><div class="chips"><span class="chip effort">M</span><span class="chip alta">ALTA</span></div></td>
+          </tr>
+          <tr>
+            <td><span class="chip tag">Imediata</span></td>
+            <td class="num-col">3</td>
+            <td>A/B em produção: variante decide em sombra (regista, nunca executa) e compara-se com o que a versão ativa executou.</td>
+            <td class="unl-col">Confirmação no jogo dos ganhos do bench; amostras reais para a calibragem (<code>from-decisions</code>).</td>
+            <td><div class="chips"><span class="chip effort">S–M</span><span class="chip alta">ALTA</span></div></td>
+          </tr>
+          <tr>
+            <td><span class="chip tag">Onda 2</span></td>
+            <td class="num-col">8</td>
+            <td>Estado com histórico e anti-repetição: últimas decisões + resultado, lista "falhados — não repetir", janela 3–5, ordem U-curve.</td>
+            <td class="unl-col">Fim dos laços de repetição; menos <code>stuck_events</code>; decisões informadas sem chamadas extra.</td>
+            <td><div class="chips"><span class="chip effort">S</span><span class="chip alta">ALTA</span></div></td>
+          </tr>
+          <tr>
+            <td><span class="chip tag">Onda 2</span></td>
+            <td class="num-col">9</td>
+            <td>Eventos como diário de bordo: append-only com etiqueta de importância, recuperação composta e reflexões periódicas.</td>
+            <td class="unl-col">Memória consultável que alimenta o Passo 8 e o narrador; auditoria temporal da missão.</td>
+            <td><div class="chips"><span class="chip effort">M</span><span class="chip media">MÉDIA</span></div></td>
+          </tr>
+          <tr>
+            <td><span class="chip tag">Onda 3</span></td>
+            <td class="num-col">10</td>
+            <td>Shuffle + voto nas opções de decisão: 2–3 permutações dos candidatos + maioria; divergência = sinal de baixa estabilidade.</td>
+            <td class="unl-col">Decisões estáveis e auditáveis (<code>flipRate</code>) em <code>costly</code>/<code>irreversible</code>.</td>
+            <td><div class="chips"><span class="chip effort">S</span><span class="chip media">MÉDIA</span></div></td>
+          </tr>
+          <tr>
+            <td><span class="chip tag">Onda 3</span></td>
+            <td class="num-col">12</td>
+            <td>Ciclo gerar → testar → criticar: crítico de formato (schema) + críticos de restrições em código, re-gerar com feedback completo.</td>
+            <td class="unl-col">Planos robustos e verificáveis; menos re-planos cegos; os erros passam a ser sinal.</td>
+            <td><div class="chips"><span class="chip effort">M</span><span class="chip media">MÉDIA</span></div></td>
+          </tr>
+          <tr>
+            <td><span class="chip tag">Onda 3</span></td>
+            <td class="num-col">13</td>
+            <td>Planos com schema fixo (onde estamos → zonas → rota → oportunismo), waypoints (coordenadas) e effort <code>medium</code> por omissão.</td>
+            <td class="unl-col">Handoff plano→JEV-A confiável; planos comparáveis no bench; menos tokens por plano.</td>
+            <td><div class="chips"><span class="chip effort">M</span><span class="chip media">MÉDIA</span></div></td>
+          </tr>
+          <tr>
+            <td><span class="chip tag">Onda 3</span></td>
+            <td class="num-col">14</td>
+            <td>Treinar antes de caçar: skill da arma &lt; <code>Proficient</code> → candidatos <code>train:sparring</code> / <code>hunt:low_risk</code> primeiro.</td>
+            <td class="unl-col">Caça real com margem de segurança; menos mortes estúpidas.</td>
+            <td><div class="chips"><span class="chip effort">S</span><span class="chip baixa">BAIXA</span></div></td>
+          </tr>
+          <tr>
+            <td><span class="chip tag">Onda 4</span></td>
+            <td class="num-col">15</td>
+            <td>Regressão de prompts com golden set em CI + hold-out ~20 casos/papel intocável (anti-overfit, <code>HOLDOUT.sha256</code>).</td>
+            <td class="unl-col">Gate automático para os Passos 2–3; proteção contra deriva de prompt/modelo.</td>
+            <td><div class="chips"><span class="chip effort">M</span><span class="chip media">MÉDIA</span></div></td>
+          </tr>
+          <tr>
+            <td><span class="chip tag">Onda 4</span></td>
+            <td class="num-col">16</td>
+            <td>Persistir os stores em SQLite (<code>decisions</code>, <code>questions</code>, <code>approvals</code>), mantendo a API REST exatamente igual.</td>
+            <td class="unl-col">Auditoria persistente; amostras reais para o Passo 11; base para o watchdog.</td>
+            <td><div class="chips"><span class="chip effort">S–M</span><span class="chip media">MÉDIA</span></div></td>
+          </tr>
+          <tr>
+            <td><span class="chip tag">Onda 4</span></td>
+            <td class="num-col">17</td>
+            <td>CI no GitHub: <code>pytest -q</code> (3597 testes offline), lint Python, web gates e <code>golden.py check</code> em cada PR e <code>main</code>.</td>
+            <td class="unl-col">Gate para todos os outros passos; releases SemVer + changelog.</td>
+            <td><div class="chips"><span class="chip effort">S–M</span><span class="chip media">MÉDIA</span></div></td>
+          </tr>
+          <tr>
+            <td><span class="chip tag">Onda 4</span></td>
+            <td class="num-col">18</td>
+            <td>Watchdog global de sessão: sem progresso em N min → re-plano → escala para humano → kill-switch (o StuckDetector do loop inteiro).</td>
+            <td class="unl-col">Sessões autónomas longas com recuperação; menos babysitting.</td>
+            <td><div class="chips"><span class="chip effort">S</span><span class="chip media">MÉDIA</span></div></td>
+          </tr>
+          <tr>
+            <td><span class="chip tag">Onda 4</span></td>
+            <td class="num-col">19</td>
+            <td>Cache de planos (chave: estado normalizado + objetivo) e de padrões de menu; narrativas em <code>none</code> quando nada mudou.</td>
+            <td class="unl-col">Sessões mais baratas; menos latência; margem de orçamento para as rodadas do Passo 2.</td>
+            <td><div class="chips"><span class="chip effort">S</span><span class="chip baixa">BAIXA</span></div></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ============ 04 · DEPENDÊNCIAS ============ -->
+  <section id="dependencias">
+    <div class="section-header">
+      <span class="section-number">03</span>
+      <h2>Mapa de dependências</h2>
+    </div>
+    <p class="lede">O que precisa de quê — e porquê. Os três nós destacados são os de "se só fizer 3 coisas".</p>
+
+    <div class="diagram-panel">
+      <svg viewBox="0 0 1040 620" xmlns="http://www.w3.org/2000/svg" style="width:100%" role="img"
+           aria-label="Diagrama de dependências em três faixas: dados levam a decisão (gold ≥20 e re-run arena → jev train + holdouts → calibragem por risco → macro-ação e anti-abstention → mais decisões auto); capacidade leva a plano (skills de combate → combate eficaz → plano de caça validado → treinar antes de caçar); memória leva a contexto (diálogos retrieváveis → conversa com contexto → eventos e state histórico → NPCs que lembram). Os nós Gold, Skills e Macro-ação + anti-abstention estão destacados como os três passos de 'se só fizer 3 coisas'.">
+        <title>Mapa de dependências entre os 19 passos</title>
+        <style>
+          .nbox   { fill: var(--card); stroke: var(--border); stroke-width: 1.5; }
+          .nhi    { fill: color-mix(in oklab, var(--primary) 10%, transparent); stroke: var(--primary); stroke-width: 2; }
+          .nok    { fill: color-mix(in oklab, var(--success) 10%, transparent); stroke: var(--success); stroke-width: 1.5; }
+          .nlabel { font-family: var(--font-sans); font-size: 13px; font-weight: 600; fill: var(--foreground); }
+          .nsub   { font-family: var(--font-mono); font-size: 10.5px; fill: var(--muted-foreground); }
+          .nsubhi { font-family: var(--font-mono); font-size: 10.5px; fill: var(--primary); }
+          .edge   { stroke: var(--muted-foreground); stroke-width: 1.5; }
+          .edged  { stroke: var(--primary); stroke-width: 1.5; stroke-dasharray: 5 4; }
+          .elabel { font-family: var(--font-mono); font-size: 9.5px; fill: var(--muted-foreground); }
+          .elabh  { font-family: var(--font-mono); font-size: 9.5px; fill: var(--primary); }
+          .lane   { font-family: var(--font-mono); font-size: 10px; fill: var(--muted-foreground);
+                    text-transform: uppercase; letter-spacing: 0.08em; }
+          .legend { font-family: var(--font-mono); font-size: 10px; fill: var(--muted-foreground); }
+        </style>
+        <defs>
+          <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="var(--muted-foreground)"/>
+          </marker>
+          <marker id="arr-p" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="var(--primary)"/>
+          </marker>
+          <marker id="arr-s" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="var(--success)"/>
+          </marker>
+        </defs>
+
+        <!-- ===== FAIXA 1 · dados → decisão ===== -->
+        <text x="20" y="34" class="lane">Faixa 1 · dados → decisão</text>
+
+        <!-- A/B shadow pill (dashed, assíncrono) -->
+        <rect x="560" y="2" width="200" height="28" rx="14" class="nbox"/>
+        <text x="660" y="21" text-anchor="middle" class="nsub">A/B shadow · Passo 3</text>
+        <line x1="660" y1="30" x2="660" y2="56" class="edged" marker-end="url(#arr-p)"/>
+        <text x="672" y="48" class="elabh">from-decisions</text>
+
+        <!-- N1 (★) -->
+        <rect x="20" y="56" width="200" height="76" rx="10" class="nhi"/>
+        <text x="120" y="84" text-anchor="middle" class="nlabel">★ Gold ≥20 + re-run arena</text>
+        <text x="120" y="104" text-anchor="middle" class="nsubhi">Passos 1+2 · ALTA</text>
+        <text x="120" y="120" text-anchor="middle" class="nsub">p&lt;0,05 ou efeito grande</text>
+
+        <line x1="220" y1="94" x2="288" y2="94" class="edge" marker-end="url(#arr)"/>
+        <text x="254" y="84" text-anchor="middle" class="elabel">20+ casos/papel</text>
+
+        <!-- N2 -->
+        <rect x="290" y="56" width="200" height="76" rx="10" class="nbox"/>
+        <text x="390" y="84" text-anchor="middle" class="nlabel">jev train + holdouts</text>
+        <text x="390" y="104" text-anchor="middle" class="nsub">evolução por operadores</text>
+        <text x="390" y="120" text-anchor="middle" class="nsub">holdout cego e pinado</text>
+
+        <line x1="490" y1="94" x2="558" y2="94" class="edge" marker-end="url(#arr)"/>
+        <text x="524" y="84" text-anchor="middle" class="elabel">n≥30 por classe</text>
+
+        <!-- N3 -->
+        <rect x="560" y="56" width="200" height="76" rx="10" class="nbox"/>
+        <text x="660" y="84" text-anchor="middle" class="nlabel">Calibragem por risco</text>
+        <text x="660" y="104" text-anchor="middle" class="nsub">Passo 11 · limiares por classe</text>
+        <text x="660" y="120" text-anchor="middle" class="nsub">risco-cobertura por snapshot</text>
+
+        <line x1="760" y1="94" x2="828" y2="94" class="edge" marker-end="url(#arr)"/>
+        <text x="794" y="84" text-anchor="middle" class="elabel">confiança calibrada</text>
+
+        <!-- N4 (★) -->
+        <rect x="830" y="56" width="190" height="76" rx="10" class="nhi"/>
+        <text x="925" y="84" text-anchor="middle" class="nlabel">★ Macro-ação + anti-abstention</text>
+        <text x="925" y="104" text-anchor="middle" class="nsubhi">Passos 5+6 · ALTA</text>
+        <text x="925" y="120" text-anchor="middle" class="nsub">destino+urgência · 2.ª decisão</text>
+
+        <!-- endpoint: mais decisões auto -->
+        <line x1="925" y1="132" x2="925" y2="182" class="edge" marker-end="url(#arr-s)"/>
+        <rect x="800" y="184" width="250" height="38" rx="19" class="nok"/>
+        <text x="925" y="208" text-anchor="middle" class="nsub" fill="var(--success)">mais decisões auto · 349/415 abstensões ↓</text>
+
+        <!-- ===== FAIXA 2 · capacidade → plano ===== -->
+        <text x="20" y="268" class="lane">Faixa 2 · capacidade → plano</text>
+
+        <!-- M1 (★) -->
+        <rect x="20" y="286" width="200" height="76" rx="10" class="nhi"/>
+        <text x="120" y="314" text-anchor="middle" class="nlabel">★ Skills de combate</text>
+        <text x="120" y="334" text-anchor="middle" class="nsubhi">Passo 4 · getEffectiveSkill</text>
+        <text x="120" y="350" text-anchor="middle" class="nsub">~10 números por entidade</text>
+
+        <line x1="220" y1="324" x2="288" y2="324" class="edge" marker-end="url(#arr)"/>
+        <text x="254" y="314" text-anchor="middle" class="elabel">capacidade no state</text>
+
+        <!-- M2 -->
+        <rect x="290" y="286" width="200" height="76" rx="10" class="nbox"/>
+        <text x="390" y="314" text-anchor="middle" class="nlabel">Combate eficaz</text>
+        <text x="390" y="334" text-anchor="middle" class="nsub">atacar / fugir / mirar</text>
+        <text x="390" y="350" text-anchor="middle" class="nsub">regra de fuga HP&lt;60%</text>
+
+        <line x1="490" y1="324" x2="558" y2="324" class="edge" marker-end="url(#arr)"/>
+        <text x="524" y="314" text-anchor="middle" class="elabel">valida o plano de caça</text>
+
+        <!-- M3 -->
+        <rect x="560" y="286" width="200" height="76" rx="10" class="nbox"/>
+        <text x="660" y="314" text-anchor="middle" class="nlabel">Plano de caça validado</text>
+        <text x="660" y="334" text-anchor="middle" class="nsub">Passo 13 · schema + waypoints</text>
+        <text x="660" y="350" text-anchor="middle" class="nsub">handoff plano → JEV-A</text>
+
+        <line x1="760" y1="324" x2="828" y2="324" class="edge" marker-end="url(#arr)"/>
+        <text x="794" y="314" text-anchor="middle" class="elabel">skill ≥ Proficient</text>
+
+        <!-- M4 -->
+        <rect x="830" y="286" width="190" height="76" rx="10" class="nbox"/>
+        <text x="925" y="314" text-anchor="middle" class="nlabel">Treinar antes de caçar</text>
+        <text x="925" y="334" text-anchor="middle" class="nsub">Passo 14 · gate Proficient</text>
+        <text x="925" y="350" text-anchor="middle" class="nsub">sparring / alvos de baixo risco</text>
+
+        <!-- ===== FAIXA 3 · memória → contexto ===== -->
+        <text x="20" y="428" class="lane">Faixa 3 · memória → contexto</text>
+
+        <!-- L1 -->
+        <rect x="20" y="446" width="200" height="76" rx="10" class="nbox"/>
+        <text x="120" y="474" text-anchor="middle" class="nlabel">Diálogos retrieváveis</text>
+        <text x="120" y="494" text-anchor="middle" class="nsub">Passo 7 · transcrição + vetor</text>
+        <text x="120" y="510" text-anchor="middle" class="nsub">recência+importância+similaridade</text>
+
+        <line x1="220" y1="484" x2="288" y2="484" class="edge" marker-end="url(#arr)"/>
+        <text x="254" y="474" text-anchor="middle" class="elabel">embedding → retrieval</text>
+
+        <!-- L2 -->
+        <rect x="290" y="446" width="200" height="76" rx="10" class="nbox"/>
+        <text x="390" y="474" text-anchor="middle" class="nlabel">Conversa com contexto</text>
+        <text x="390" y="494" text-anchor="middle" class="nsub">top-K do JEV-R</text>
+        <text x="390" y="510" text-anchor="middle" class="nsub">namespace por interlocutor</text>
+
+        <line x1="490" y1="484" x2="558" y2="484" class="edge" marker-end="url(#arr)"/>
+        <text x="524" y="474" text-anchor="middle" class="elabel">alimenta o state</text>
+
+        <!-- L3 -->
+        <rect x="560" y="446" width="200" height="76" rx="10" class="nbox"/>
+        <text x="660" y="474" text-anchor="middle" class="nlabel">Eventos + state histórico</text>
+        <text x="660" y="494" text-anchor="middle" class="nsub">Passos 9 → 8</text>
+        <text x="660" y="510" text-anchor="middle" class="nsub">diário de bordo (append-only)</text>
+
+        <line x1="760" y1="484" x2="828" y2="484" class="edge" marker-end="url(#arr)"/>
+        <text x="794" y="474" text-anchor="middle" class="elabel">histórico comprimido</text>
+
+        <!-- L4 -->
+        <rect x="830" y="446" width="190" height="76" rx="10" class="nok"/>
+        <text x="925" y="474" text-anchor="middle" class="nlabel">NPCs que lembram · sem laços</text>
+        <text x="925" y="494" text-anchor="middle" class="nsub" fill="var(--success)">anti-repetição (janela 3–5)</text>
+        <text x="925" y="510" text-anchor="middle" class="nsub">menos stuck_events</text>
+
+        <!-- ===== LEGENDA ===== -->
+        <rect x="20" y="580" width="12" height="12" rx="3" class="nhi"/>
+        <text x="40" y="590" class="legend">★ = um dos 3 passos de «se só fizer 3 coisas»</text>
+        <line x1="360" y1="586" x2="396" y2="586" class="edge" marker-end="url(#arr)"/>
+        <text x="404" y="590" class="legend">dependência direta</text>
+        <line x1="560" y1="586" x2="596" y2="586" class="edged" marker-end="url(#arr-p)"/>
+        <text x="604" y="590" class="legend">dados assíncronos (shadow → calibragem)</text>
+      </svg>
+      <span class="diagram-caption">Três faixas de dependência: dados → decisão · capacidade → plano · memória → contexto. A tabela completa com o porquê de cada aresta está por baixo.</span>
+    </div>
+
+    <details>
+      <summary>Tabela completa de dependências (14 arestas, com o porquê)</summary>
+      <div class="details-body">
+        <table class="dep-table" aria-label="Mapa de dependências por passo">
+          <thead>
+            <tr><th>Passo</th><th>Depende de</th><th>Porquê</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><b>2</b> · re-rodar arena</td><td><b>1</b> · gold ≥20</td><td>Sem ≥20 casos/papel o <code>jev train</code> recusa e o arena pula os holdouts — a re-rodada voltaria a dar empates.</td></tr>
+            <tr><td><b>3</b> · A/B em produção</td><td><b>2</b> · promovidos</td><td>Só vale a pena shadow-runar prompts que o bench promoveu por significância.</td></tr>
+            <tr><td><b>11</b> · calibragem</td><td><b>1</b> + <b>3</b></td><td>O suporte n≥30 por classe vem do gold dev (1) e do log real via <code>from-decisions</code> (3).</td></tr>
+            <tr><td><b>6</b> · evidência antes de abstain</td><td>amplifica <b>11</b></td><td>Re-decidir com confiança calibrada é seguro; sem calibragem, a re-decisão herda os mesmos vieses.</td></tr>
+            <tr><td><b>5</b> · macro-ação</td><td>— (independente)</td><td>Resolve sozinho a maior parte das 349/415 abstensões; com <b>6</b> fecha o problema por completo.</td></tr>
+            <tr><td><b>4</b> · skills de combate</td><td>— (independente)</td><td>Destrava <b>14</b> (treino exige skills) e valida <b>13</b> (plano de caça só é bom se o combate for eficaz).</td></tr>
+            <tr><td><b>14</b> · treinar antes de caçar</td><td><b>4</b></td><td>Sem snapshot de skills não há gate de <code>Proficient</code>.</td></tr>
+            <tr><td><b>12</b> · gerar-testar-criticar</td><td><b>13</b> · schema</td><td>O crítico de formato só faz sentido com um schema fixo para validar.</td></tr>
+            <tr><td><b>8</b> · state com histórico</td><td><b>9</b> · eventos</td><td>O bloco comprimido do state alimenta-se dos eventos estruturados; sem eles, o histórico é manual.</td></tr>
+            <tr><td><b>15</b> · golden set em CI</td><td><b>1</b> · holdout ≥20</td><td>O hold-out anti-overfit cresce com o gold expandido.</td></tr>
+            <tr><td><b>17</b> · CI no GitHub</td><td><b>15</b></td><td>O CI roda o <code>golden.py check</code> — sem golden set não há gate de prompt.</td></tr>
+            <tr><td><b>16</b> · stores em SQLite</td><td>— (independente)</td><td>Alimenta <b>11</b> (amostras reais) e <b>18</b> (watchdog precisa de histórico persistente).</td></tr>
+            <tr><td><b>18</b> · watchdog de sessão</td><td><b>16</b> (desejável)</td><td>Com stores persistentes o watchdog audita e recupera; sem eles, só deteta.</td></tr>
+            <tr><td><b>19</b> · cache</td><td>— (independente)</td><td>Liberta orçamento para as rodadas do <b>2</b>.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </details>
+  </section>
+
+  <!-- ============ 05 · RISCOS ============ -->
+  <section id="riscos">
+    <div class="section-header">
+      <span class="section-number">04</span>
+      <h2>Riscos e mitigação</h2>
+    </div>
+    <p class="lede">Os riscos com nome e apelido na rota — e o que já está desenhado para os conter.</p>
+
+    <div class="risk-grid">
+      <div class="risk-row">
+        <div class="risk-name">Overfitting de prompts — afina-se contra o hold-out e destrói-se o seu valor</div>
+        <div><span class="badge high">HIGH</span></div>
+        <div class="risk-mitigation">Hold-out ≥20 casos/papel <b>intocado e pinado</b> (<code>HOLDOUT.sha256</code>); <code>freeze-holdout --reason</code> é o único que o altera; <code>bless --reason</code> só para mudanças intencionais; <code>run --split holdout</code> só no fim (Passos 1 e 15).</div>
+      </div>
+      <div class="risk-row">
+        <div class="risk-name">Amostras pequenas — conclusões por opinião (o +20 p.p. ficou em p=0,156)</div>
+        <div><span class="badge high">HIGH</span></div>
+        <div class="risk-mitigation">Gold ≥20 casos/papel + <i>power analysis</i> na primeira re-rodada <b>[por medir]</b>; regra de promoção escrita (p&lt;0,05, gate max-T a 5%, ou efeito grande e consistente nas repetições).</div>
+      </div>
+      <div class="risk-row">
+        <div class="risk-name">PII em diálogos — conversas com humanos passam a viver em disco</div>
+        <div><span class="badge med">MED</span></div>
+        <div class="risk-mitigation">Mascaramento de chaves, política de retenção, permissões <code>dir 0700</code> / ficheiros <code>0600</code>; a transcrição bruta nunca é reescrita e as extrações derivadas são citáveis (Passo 7).</div>
+      </div>
+      <div class="risk-row">
+        <div class="risk-name">Parsing de skills Lua — pode quebrar com updates do DFHack</div>
+        <div><span class="badge med">MED</span></div>
+        <div class="risk-mitigation">Normalização defensiva para bloco compacto + os 42 testes de snapshot (<code>dfhack/test_snapshot.py</code>) como rede de segurança; teste de leitura real incluído na definição de pronto (Passo 4).</div>
+      </div>
+      <div class="risk-row">
+        <div class="risk-name">Custo de embedding/extração — custo por mensagem na memória conversacional</div>
+        <div><span class="badge low">LOW</span></div>
+        <div class="risk-mitigation">Extração de factos assíncrona e em background (narrador/JEV-M); cache de tradução e de planos generalizado (Passo 19); recuperação híbrida FTS5+vetor já existe e não precisa de infra nova.</div>
+      </div>
+      <div class="risk-row">
+        <div class="risk-name">Orçamento do benchmark — a evolução foi cortada de 3 para 2 iterações (<code>estimate.high</code> &gt; $10 com <code>--budget 10</code> → exit 2)</div>
+        <div><span class="badge med">MED</span></div>
+        <div class="risk-mitigation">Sempre <code>--dry-run</code> antes de gastar; orçamento maior para 3+ iterações e 3+ repetições (<code>flipRate</code>); teto diário US$ 20 respeitado; o cache (Passo 19) liberta margem.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 06 · TOP 3 ============ -->
+  <section id="tres-coisas">
+    <div class="section-header">
+      <span class="section-number">05</span>
+      <h2>Se só fizer 3 coisas</h2>
+    </div>
+    <p class="lede">Se o tempo só chegar para três, são estes — o maior impacto pelo menor custo. Juntos cobrem as duas maiores dívidas medidas do projecto: decisões sem poder estatístico e abstensões em movimento.</p>
+
+    <div class="three-grid">
+      <div class="callout">
+        <span class="c-num">01 · PASSOS 1 + 2</span>
+        <h3>Gold ≥20 casos/papel + re-rodar a arena</h3>
+        <p>Sem poder estatístico toda a decisão de prompt é opinião — o +20 p.p. do plano-de-caça (p=0,156) pode ser o maior ganho já medido ou ser ruído, e hoje é impossível saber. É também o mais barato em código: é trabalho de dados.</p>
+      </div>
+      <div class="callout">
+        <span class="c-num">02 · PASSO 4</span>
+        <h3>Skills de combate nas decisões</h3>
+        <p>É o gap que mata personagens: decidir ataque/fuga sem saber a capacidade do aventureiro. É a mudança de maior impacto comportamental das 12 — e destrava o plano de caça e o treino.</p>
+      </div>
+      <div class="callout">
+        <span class="c-num">03 · PASSOS 5 + 6</span>
+        <h3>Macro-ação + evidência antes de abstain</h3>
+        <p>Ataca a maior dívida medida — 349 abstensões em 415 decisões de movimento na <code>caca-2</code>: o humano carrega o loop. Juntos, tiram o micro-movimento do decisor e dão-lhe uma segunda hipótese com evidência nova antes de escalar.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ FOOTER ============ -->
+  <footer>
+    <div>
+      <span class="prompt-label">Fontes</span>
+      <ul>
+        <li><b>PROXIMOS-PASSOS.md</b> — documento de origem (19 passos, fichas de 7 campos)</li>
+        <li><b>ARQUITETURA.md</b> — §6–§10: factos provados, missão caca-2, as 12 mudanças, riscos</li>
+        <li><b>bench/relatorios/evolucao-prompt-builder.html</b> — rodada de evolução de prompts (JEV + MIMO)</li>
+        <li><b>docs/prompt-builder-evolucao.md</b> — evolução, bloqueios da ferramenta e decisões registadas</li>
+      </ul>
+    </div>
+    <div class="foot-note">
+      Sem estimativas de tempo — as fases mostram sequência e dependências. Números reais como estão nas fontes; o que ainda ninguém mediu está marcado [por medir].
+    </div>
+  </footer>
+
+</div>
+</body>
+</html>
