@@ -88,15 +88,13 @@ jobs:
       - name: Offline smoke
         run: python3 scripts/smoke/df_smoke.py --offline --report smoke-offline.json
 
-      # O golden set de prompts (ARQUITETURA §8 #12) é construído noutra peça:
-      # o passo só corre quando o script existe.
+      # Golden set de prompts (Passo 15, ARQUITETURA §8 #12): gate OBRIGATÓRIO,
+      # offline e determinístico (~1 s). `check` valida o pin do hold-out e
+      # deteta prompt-drift/build-drift/seed-drift; se o script faltar, o passo
+      # falha — um gate de regressão de prompts não se pode saltar. Disciplina
+      # (bless --reason, hold-out só no fim): docs/ci.md e docs/calibracao.md §14.
       - name: Golden set (offline)
-        run: |
-          if [ -f scripts/golden.py ]; then
-            python3 scripts/golden.py check
-          else
-            echo "scripts/golden.py ainda não existe — passo ignorado"
-          fi
+        run: python3 scripts/golden.py check
 
       - name: Upload smoke report
         if: always()

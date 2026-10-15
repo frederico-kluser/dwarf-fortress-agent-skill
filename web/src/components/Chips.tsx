@@ -1,9 +1,12 @@
 import Chip from '@mui/material/Chip';
 import Tooltip from '@mui/material/Tooltip';
+import ReportProblemOutlined from '@mui/icons-material/ReportProblemOutlined';
+import HelpOutlined from '@mui/icons-material/HelpOutlined';
+import HourglassEmpty from '@mui/icons-material/HourglassEmpty';
+import Replay from '@mui/icons-material/Replay';
+import TaskAlt from '@mui/icons-material/TaskAlt';
 
 import {
-  BAND_DESCRIPTION,
-  BAND_LABEL,
   DECISION_STATUS_DESCRIPTION,
   DECISION_STATUS_LABEL,
   JEV_ROLE_LABEL,
@@ -18,30 +21,16 @@ import type {
   JevAgent,
   QuestionStatus,
 } from '../api/types';
-
-const BAND_COLOR: Record<DecisionBand, 'success' | 'warning' | 'error'> = {
-  auto: 'success',
-  hitl: 'warning',
-  abstain: 'error',
-};
+import { tintedChipSx, type BadgeTone } from './chipSkin';
+import { BandBadge } from './rpg/BandBadge';
 
 /**
- * Banda de ação do JEV. A cor nunca é o único sinal: a etiqueta diz o que é
- * (WCAG 2.2 — não depender só da cor) e o tooltip explica o vocabulário
- * (auditoria v2, achado 4): auto ≥ 0,90 executa sozinho · hitl 0,50–0,89
- * confirma · abstain < 0,50 não age.
+ * Banda de ação do JEV — badge partilhado `rpg/BandBadge` (§5.10): glifo runa +
+ * etiqueta PT + tooltip com os limiares (auto ≥ 0,90 · hitl 0,50–0,89 ·
+ * abstain < 0,50); a cor nunca é o único sinal (WCAG 2.2).
  */
-export function BandChip({ band, size = 'small' }: { band: DecisionBand; size?: 'small' | 'medium' }) {
-  return (
-    <Tooltip title={BAND_DESCRIPTION[band] ?? band}>
-      <Chip
-        size={size}
-        variant="outlined"
-        color={BAND_COLOR[band] ?? 'default'}
-        label={BAND_LABEL[band] ?? band}
-      />
-    </Tooltip>
-  );
+export function BandChip({ band }: { band: DecisionBand }) {
+  return <BandBadge band={band} />;
 }
 
 /**
@@ -59,14 +48,27 @@ export function DecisionStatusChip({
   if (!status) {
     return (
       <Tooltip title="O contrato não traz desfecho para decisões auxiliares (JEV-R/M/D) — desconhecido, não «executada».">
-        <Chip size={size} variant="outlined" color="default" label="desconhecido" />
+        <Chip
+          size={size}
+          variant="outlined"
+          icon={<HelpOutlined />}
+          sx={tintedChipSx('default')}
+          label="desconhecido"
+        />
       </Tooltip>
     );
   }
-  const color = status === 'executed' ? 'success' : status === 'question' ? 'warning' : 'error';
+  const tone: BadgeTone = status === 'executed' ? 'success' : status === 'question' ? 'warning' : 'error';
+  const icon = status === 'executed' ? <TaskAlt /> : status === 'question' ? <HourglassEmpty /> : <ReportProblemOutlined />;
   return (
     <Tooltip title={DECISION_STATUS_DESCRIPTION[status] ?? status}>
-      <Chip size={size} variant="outlined" color={color} label={DECISION_STATUS_LABEL[status] ?? status} />
+      <Chip
+        size={size}
+        variant="outlined"
+        icon={icon}
+        sx={tintedChipSx(tone)}
+        label={DECISION_STATUS_LABEL[status] ?? status}
+      />
     </Tooltip>
   );
 }
@@ -92,18 +94,31 @@ export function AttemptsChip({
         lastSeenTs ? `; último re-pedido: ${formatDateTime(lastSeenTs)}` : ''
       }`}
     >
-      <Chip size={size} variant="outlined" color="warning" label={`pedido ${count} vezes`} />
+      <Chip
+        size={size}
+        variant="outlined"
+        icon={<Replay />}
+        sx={tintedChipSx('warning')}
+        label={`pedido ${count} vezes`}
+      />
     </Tooltip>
   );
 }
 
-/** Papel JEV (R/A/M/D) com legenda PT no tooltip. */
+/**
+ * Papel JEV (R/A/M/D) com legenda PT no tooltip. O papel NÃO é um estado: fica
+ * neutro (§2.3 regra 3 — `warning`/`danger`/`success` nunca decorativos) e a
+ * letra do contrato identifica-o.
+ */
 export function AgentChip({ agent }: { agent: JevAgent }) {
-  const color =
-    agent === 'JEV-A' ? 'primary' : agent === 'JEV-R' ? 'info' : agent === 'JEV-M' ? 'secondary' : 'warning';
   return (
     <Tooltip title={JEV_ROLE_LABEL[agent] ?? agent}>
-      <Chip size="small" variant="outlined" color={color} label={agent.replace('JEV-', '')} />
+      <Chip
+        size="small"
+        variant="outlined"
+        sx={{ ...tintedChipSx('default'), fontFamily: 'inherit', fontWeight: 600 }}
+        label={agent.replace('JEV-', '')}
+      />
     </Tooltip>
   );
 }
@@ -168,13 +183,15 @@ export function ControlModeChip({
   );
 }
 
-/** Estado de uma pergunta da fila. */
+/** Estado de uma pergunta da fila. Glifo + etiqueta: cor nunca sozinha (§2.3). */
 export function QuestionStatusChip({ status }: { status: QuestionStatus }) {
+  const pending = status === 'pending';
   return (
     <Chip
       size="small"
       variant="outlined"
-      color={status === 'pending' ? 'warning' : 'success'}
+      icon={pending ? <HourglassEmpty /> : <TaskAlt />}
+      sx={tintedChipSx(pending ? 'warning' : 'success')}
       label={QUESTION_STATUS_LABEL[status] ?? status}
     />
   );
@@ -182,7 +199,8 @@ export function QuestionStatusChip({ status }: { status: QuestionStatus }) {
 
 /**
  * Valor enumerado do contrato (EN) mostrado em PT.
- * `tone` mapeia o valor para uma cor sem depender dela para o significado.
+ * `tone` mapeia o valor para uma cor sem depender dela para o significado —
+ * a etiqueta PT é sempre visível (§2.3 regra 1).
  */
 export function ValueChip({
   value,
@@ -190,8 +208,10 @@ export function ValueChip({
   label,
 }: {
   value: unknown;
-  tone?: 'default' | 'success' | 'warning' | 'error' | 'info' | 'primary';
+  tone?: BadgeTone;
   label?: string;
 }) {
-  return <Chip size="small" variant="outlined" color={tone} label={label ?? valuePt(value)} />;
+  return (
+    <Chip size="small" variant="outlined" sx={tintedChipSx(tone)} label={label ?? valuePt(value)} />
+  );
 }

@@ -80,13 +80,16 @@ export default function AnswerConfirmDialog({
         </Stack>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onCancel}>Cancelar</Button>
+        <Button sx={{ minHeight: 40 }} onClick={onCancel}>
+          Cancelar
+        </Button>
         <Button
           variant="contained"
           autoFocus
           loading={busy}
           loadingPosition="start"
           startIcon={<Send />}
+          sx={{ minHeight: 40 }}
           onClick={onConfirm}
         >
           Confirmar e enviar

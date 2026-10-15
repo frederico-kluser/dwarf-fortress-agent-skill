@@ -42,7 +42,9 @@ import {
 import type { NewCharacterRequest, NewWorldRequest, WorldParams } from '../api/types';
 import AdventureTaskCard from './AdventureTaskCard';
 import { PanelNotice } from './PanelState';
+import { TOKEN, runaType } from './RunaKit';
 import WizardStepper from './WizardStepper';
+import type { RunaGlyphName } from './rpg';
 
 /** Raças do contrato (`Select <race>`) — valores EN, rótulos PT. */
 const RACES: { value: string; label: string }[] = [
@@ -57,6 +59,17 @@ type StepKey = 'mundo' | 'personagem' | 'progresso' | 'pronto';
 
 const STEPS_CREATE: StepKey[] = ['mundo', 'personagem', 'progresso', 'pronto'];
 const STEPS_CHARACTER: StepKey[] = ['personagem', 'progresso', 'pronto'];
+
+/** Alvo tátil das ações primárias (auditoria v3, achado 6 — spec §5.11). */
+const TARGET_SX = { minHeight: 40 } as const;
+
+/** Glifo runa por etapa (spec §8: map · key · hourglass). */
+const STEP_GLYPH: Record<StepKey, RunaGlyphName> = {
+  mundo: 'map',
+  personagem: 'key',
+  progresso: 'hourglass',
+  pronto: 'flame',
+};
 
 const STEP_LABELS: Record<StepKey, string> = {
   mundo: 'Mundo',
@@ -243,6 +256,7 @@ export default function AdventureWizard({ open, mode = 'create', onClose }: Adve
               steps={steps.map((key) => STEP_LABELS[key])}
               active={step}
               label="Passos da criação de aventura"
+              glyphs={steps.map((key) => STEP_GLYPH[key])}
             />
 
             {feedback ? (
@@ -253,9 +267,11 @@ export default function AdventureWizard({ open, mode = 'create', onClose }: Adve
 
             {current === 'mundo' ? (
               <StaggerReveal className="flex flex-col gap-4">
-                <StaggerRevealHeadline as="h2" className="text-sm font-bold text-foreground">
+                <div style={{ ...runaType('section'), color: TOKEN.foreground }}>
+                <StaggerRevealHeadline as="h2" className="text-balance">
                   1 · Mundo
                 </StaggerRevealHeadline>
+                </div>
                 <StaggerRevealItem>
                   <TextField
                     label="Nome do mundo"
@@ -304,9 +320,11 @@ export default function AdventureWizard({ open, mode = 'create', onClose }: Adve
 
             {current === 'personagem' ? (
               <StaggerReveal className="flex flex-col gap-4">
-                <StaggerRevealHeadline as="h2" className="text-sm font-bold text-foreground">
+                <div style={{ ...runaType('section'), color: TOKEN.foreground }}>
+                <StaggerRevealHeadline as="h2" className="text-balance">
                   {mode === 'create' ? '2 · Personagem' : '1 · Personagem'}
                 </StaggerRevealHeadline>
+                </div>
                 <StaggerRevealItem>
                   <Box>
                     <FormControlLabel
@@ -393,9 +411,11 @@ export default function AdventureWizard({ open, mode = 'create', onClose }: Adve
 
             {current === 'progresso' ? (
               <StaggerReveal className="flex flex-col gap-4">
-                <StaggerRevealHeadline as="h2" className="text-sm font-bold text-foreground">
+                <div style={{ ...runaType('section'), color: TOKEN.foreground }}>
+                <StaggerRevealHeadline as="h2" className="text-balance">
                   {mode === 'create' ? '3 · Progresso' : '2 · Progresso'}
                 </StaggerRevealHeadline>
+                </div>
                 <StaggerRevealItem>
                   <Typography variant="body2" sx={{ color: 'text.secondary' }} role="status">
                     {phase === 'world'
@@ -431,9 +451,11 @@ export default function AdventureWizard({ open, mode = 'create', onClose }: Adve
 
             {current === 'pronto' ? (
               <StaggerReveal className="flex flex-col gap-4">
-                <StaggerRevealHeadline as="h2" className="text-sm font-bold text-foreground">
+                <div style={{ ...runaType('section'), color: TOKEN.foreground }}>
+                <StaggerRevealHeadline as="h2" className="text-balance">
                   {mode === 'create' ? '4 · Pronto' : '3 · Pronto'}
                 </StaggerRevealHeadline>
+                </div>
                 <StaggerRevealItem>
                   <Alert severity="success" icon={<CheckCircle fontSize="inherit" />} role="status">
                     {mode === 'create'
@@ -472,10 +494,10 @@ export default function AdventureWizard({ open, mode = 'create', onClose }: Adve
                 </StaggerRevealItem>
                 <StaggerRevealItem>
                   <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
-                    <Button variant="contained" startIcon={<PlayArrow />} onClick={enterSession}>
+                    <Button variant="contained" startIcon={<PlayArrow />} sx={TARGET_SX} onClick={enterSession}>
                       Entrar em sessão
                     </Button>
-                    <Button variant="outlined" onClick={enterControl}>
+                    <Button variant="outlined" sx={TARGET_SX} onClick={enterControl}>
                       Ver controlo do sistema
                     </Button>
                   </Stack>
@@ -486,25 +508,25 @@ export default function AdventureWizard({ open, mode = 'create', onClose }: Adve
         </DialogContent>
         <DialogActions>
           {current === 'personagem' && mode === 'create' ? (
-            <Button onClick={() => setStep(steps.indexOf('mundo'))} disabled={running}>
+            <Button sx={TARGET_SX} onClick={() => setStep(steps.indexOf('mundo'))} disabled={running}>
               Voltar
             </Button>
           ) : null}
           {current === 'progresso' ? (
-            <Button onClick={() => setStep(steps.indexOf('personagem'))} disabled={running}>
+            <Button sx={TARGET_SX} onClick={() => setStep(steps.indexOf('personagem'))} disabled={running}>
               Voltar
             </Button>
           ) : null}
           <Box sx={{ flexGrow: 1 }} />
           {current === 'pronto' ? (
-            <Button variant="contained" onClick={onClose}>
+            <Button variant="contained" sx={TARGET_SX} onClick={onClose}>
               Concluir
             </Button>
           ) : (
-            <Button onClick={requestClose}>{running ? 'Fechar' : 'Cancelar'}</Button>
+            <Button sx={TARGET_SX} onClick={requestClose}>{running ? 'Fechar' : 'Cancelar'}</Button>
           )}
           {current === 'mundo' ? (
-            <Button variant="contained" endIcon={<PlayArrow />} onClick={() => setStep(steps.indexOf('personagem'))}>
+            <Button variant="contained" endIcon={<PlayArrow />} sx={TARGET_SX} onClick={() => setStep(steps.indexOf('personagem'))}>
               Avançar
             </Button>
           ) : null}
@@ -512,6 +534,7 @@ export default function AdventureWizard({ open, mode = 'create', onClose }: Adve
             <Button
               variant="contained"
               startIcon={<Add />}
+              sx={TARGET_SX}
               disabled={running}
               onClick={() => setStep(steps.indexOf('progresso'))}
             >

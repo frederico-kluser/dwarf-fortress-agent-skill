@@ -24,6 +24,22 @@ tanto a saída de ``online`` como a de ``jev.mjs eval`` (as ``rows``).
 
 Códigos de saída: 0 ok · 1 sem amostras / nada a escrever · 2 uso ou ambiente ·
 3 dados de entrada inválidos. A chave nunca é impressa.
+
+Disciplina (docs/calibracao.md §13, mudança 06):
+
+* **Primeiro calibrar, depois mexer no prompt.** A calibração mede o
+  prompt+snapshot atuais; mudar o prompt invalida a leitura. Ordem:
+  ``online``/``from-decisions`` → ``report --table`` → rever ``thresholds`` →
+  **só então** mexer no prompt (e a mudança volta a exigir calibração).
+* **``--mark-verified`` é um ato humano explícito** — exige suporte ≥ 100
+  (``MIN_SUPPORT_TO_LOWER``) e **nunca** se aplica à classe ``destructive``.
+  Corridas automatizadas nunca o usam: sem marca, a tabela só sobe limiares.
+* **n < ``--min-support`` (30) ⇒ NÃO-ACEITE** (suporte insuficiente): fica
+  ``threshold: null`` + ``reason: insufficient_support``, e o relatório marca
+  a classe ``accepted: false``. Os pisos da política mandam.
+* **Snapshot trocado ⇒ recalibrar**: entrada com ``resolved_model`` diferente
+  do observado (ou modelo novo) é ``stale_resolved``/``missing`` e devolve os
+  pisos — os limiares não transferem entre snapshots.
 """
 from __future__ import annotations
 
@@ -264,6 +280,32 @@ def _settings(args: argparse.Namespace) -> dict[str, Any]:
     return {"min_support": int(args.min_support), "bound": bound, "z": args.z}
 
 
+def _mark_acceptance(report: dict[str, Any]) -> None:
+    """Veredito por classe no relatório: ``ACEITE`` ou **NÃO-ACEITE**.
+
+    Regra (docs/calibracao.md §13): só é ACEITE a classe com ``n >=
+    min_support`` **e** um limiar cujo limite superior de risco (Wilson 95 %)
+    cabe no risco-alvo; com n abaixo do mínimo o veredicto é
+    ``NÃO-ACEITE (suporte insuficiente)`` e o piso da política manda. Marca-se
+    aqui (e não na tabela) porque a entrada da tabela já o regista como
+    ``threshold: null`` + ``reason: insufficient_support``.
+    """
+    min_support = int((report.get("settings") or {}).get("min_support") or cal.DEFAULT_MIN_SUPPORT)
+    for klass, row in (report.get("by_class") or {}).items():
+        if not isinstance(row, Mapping):
+            continue
+        selection = row.get("selection") or {}
+        n = int(row.get("n") or 0)
+        if selection.get("threshold") is not None and n >= min_support:
+            row["accepted"], row["verdict"] = True, "ACEITE"
+        elif n < min_support:
+            row["accepted"] = False
+            row["verdict"] = f"NÃO-ACEITE (suporte insuficiente: n={n} < {min_support})"
+        else:
+            row["accepted"] = False
+            row["verdict"] = f"NÃO-ACEITE ({selection.get('reason') or 'no threshold'})"
+
+
 def _print_summary(report: Mapping[str, Any]) -> None:
     overall = report["overall"]
     print(f"model {report.get('model')} · source {report.get('source')} · n={overall['n']} "
@@ -273,12 +315,15 @@ def _print_summary(report: Mapping[str, Any]) -> None:
         print(f"  {role}: n={metrics['n']} accuracy={metrics['accuracy']} ece={metrics['ece']}")
     for klass, row in report["by_class"].items():
         choice = row["selection"]
+        verdict = f"  [{row['verdict']}]" if row.get("verdict") else ""
         print(f"  class {klass}: n={row['n']} floor={row['policy_floor']} "
-              f"target_risk={row['target_risk']} -> threshold={choice['threshold']} ({choice['reason']})")
+              f"target_risk={row['target_risk']} -> threshold={choice['threshold']} "
+              f"({choice['reason']}){verdict}")
 
 
 def _finish_report(report: dict[str, Any], args: argparse.Namespace,
                    samples: Sequence[cal.Sample]) -> int:
+    _mark_acceptance(report)
     out = Path(args.out)
     write_json(out, {**report, "samples": [s.to_dict() for s in samples]}
                if getattr(args, "keep_samples", False) else report)

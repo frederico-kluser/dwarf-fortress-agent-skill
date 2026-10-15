@@ -59,12 +59,20 @@ passar a expor esse grupo, nada aqui muda.
 from __future__ import annotations
 
 import re
-from typing import Any, Iterable, Mapping, Sequence
+from typing import Any, Iterable, Mapping, NamedTuple, Sequence
 
 from ..game.models import GameState, InventoryItem, VisibleUnit
+from ..game.readiness import (
+    CombatReadiness,
+    TRAIN_MIN_LEVEL,
+    assess_target,
+    skill_label,
+)
+from .combat_policy import AimChoice, choose_aim, weapon_kind_of
 from .types import MacroAction
 
 __all__ = [
+    "AIM_MENU_ENTRY",
     "DIRECTIONS",
     "OPPOSITE",
     "POTION_WORDS",
@@ -74,6 +82,9 @@ __all__ = [
     "SAPIENT_WORDS",
     "EXIT_ACTION_ID",
     "WAIT_ACTION_ID",
+    "AttackGate",
+    "attack_gate",
+    "combat_readiness",
     "direction_from_text",
     "feasible_verbs",
     "generate_actions",
@@ -366,6 +377,141 @@ def _travel_targets(state: GameState) -> list[tuple[str, dict[str, Any]]]:
 # ------------------------------------------------------------- geração
 
 
+# --------------------------------------------- prontidão de combate (mudança 02)
+# Dwarf Fortress é skill-driven: a diferença entre um golpe que mata e um golpe
+# desperdiçado está nas skills do aventureiro (na `caca-2` foram precisas 5
+# estocadas numa mula *tame*). O retrato medido (`adventurer.combat` do Lua →
+# `game/readiness.py`) entra aqui em TRÊS regras: o ataque só é candidato com
+# vantagem real (skill ≥ limiar), a fuga sobe com HP < 60% / dor / exaustão, e a
+# mira letal (`c neck` paralisa, `d head` mata) só vem quando a skill compensa.
+# SEM retrato medido NADA muda: não se veta nada às cegas.
+
+#: Entrada real do menu de mira da cadeia provada (`ARQUITETURA.md` §6, caca-2).
+AIM_MENU_ENTRY: Mapping[str, str] = {
+    "upper body": "a upper body", "lower body": "b lower body",
+    "neck": "c neck", "head": "d head", "leg": "leg",
+}
+
+#: Risco do alvo a partir do qual a skill tem de chegar ao limiar para atacar.
+_RISK_NEEDS_SKILL: tuple[str, ...] = ("moderate", "high", "deadly")
+
+
+class AttackGate(NamedTuple):
+    """Atacar este alvo AGORA com este retrato? ``engage`` + razão + mira letal."""
+
+    engage: bool
+    reason: str
+    aim: AimChoice | None = None
+
+    @property
+    def aim_name(self) -> str:
+        return self.aim.aim if self.aim is not None else ""
+
+    @property
+    def aim_menu(self) -> str:
+        """Entrada do menu de mira da cadeia provada (``c neck``/``d head``)."""
+        return AIM_MENU_ENTRY.get(self.aim_name, self.aim_name) if self.aim is not None else ""
+
+
+def combat_readiness(state: Any) -> CombatReadiness:
+    """Retrato de prontidão do aventureiro (``state.readiness``/``adventurer.combat``).
+
+    Sem medições devolve o retrato vazio (``known`` False) — nunca levanta: sem
+    dados o gerador de candidatos mantém exatamente o comportamento anterior.
+    """
+    try:
+        readiness = getattr(state, "readiness", None)
+        if isinstance(readiness, CombatReadiness):
+            return readiness
+        adventurer = getattr(state, "adventurer", None)
+        raw = (adventurer.get("combat") if isinstance(adventurer, Mapping)
+               else getattr(adventurer, "combat", None))
+        return CombatReadiness.from_dict(raw)
+    except Exception:  # noqa: BLE001 - o caminho do loop nunca levanta
+        return CombatReadiness()
+
+
+def attack_gate(
+    readiness: Any = None,
+    target: Any = None,
+    *,
+    weapon_kind: Any = None,
+    min_skill: float = TRAIN_MIN_LEVEL,
+) -> AttackGate:
+    """Atacar ``target`` com este retrato? Rejeição por DESVANTAGEM real (mudança 02).
+
+    Regras pela ordem (a primeira que casa decide):
+
+    1. retrato ausente/sem medições ⇒ ``engage`` — **nada é vetado às cegas**;
+    2. ``matchup`` ``deadly`` ⇒ rejeitado: o poder efetivo (skill × condição)
+       está muito abaixo do que o risco do alvo exige;
+    3. skill efetiva da arma (ou Fighter) < ``min_skill`` (Proficient por
+       omissão) contra alvo ``moderate``+ ⇒ rejeitado: sem a skill, cada golpe é
+       uma aposta; presa ``harmless``/``low`` continua legítima (também treina);
+    4. senão ``engage`` com a mira letal de :func:`~.combat_policy.choose_aim`
+       (``c neck`` paralisa, ``d head`` mata — mira pequena só com skill que
+       compense).
+
+    ``readiness`` aceita :class:`~..game.readiness.CombatReadiness`, o dict do
+    Lua (``adventurer.combat``) ou ``None``; ``target`` um ``VisibleUnit``/dict/
+    nome. ``weapon_kind`` por omissão vem do nome da arma do retrato. Nunca levanta.
+    """
+    try:
+        mine = (readiness if isinstance(readiness, CombatReadiness)
+                else CombatReadiness.from_dict(readiness))
+        kind = weapon_kind if weapon_kind is not None else getattr(mine, "weapon_name", None)
+        if not mine.known:
+            return AttackGate(True, "no readiness measurements: the attack is offered unchanged")
+        verdict = mine.matchup(target)
+        risk = assess_target(target)
+        skill = mine.weapon_skill if mine.weapon_skill is not None else mine.fighter
+        if verdict.level == "deadly":
+            return AttackGate(
+                False,
+                "skill disadvantage: "
+                + ("; ".join(verdict.reasons)
+                   or f"matchup is deadly against {risk.name or 'the target'}"))
+        if (skill is not None and float(skill) < float(min_skill)
+                and risk.level in _RISK_NEEDS_SKILL):
+            return AttackGate(False, (
+                f"skill disadvantage: weapon skill {skill_label(skill)} ({float(skill):g}) is "
+                f"below {skill_label(min_skill)} ({float(min_skill):g}) against a "
+                f"{risk.level}-risk target"))
+        return AttackGate(True, "; ".join(verdict.reasons) or f"matchup {verdict.level}",
+                          choose_aim(kind, _target_kind_text(target, risk), mine))
+    except Exception:  # noqa: BLE001 - o caminho do loop nunca levanta
+        return AttackGate(True, "readiness unreadable: the attack is offered unchanged")
+
+
+def _aim_note(gate: "AttackGate", readiness: CombatReadiness) -> str:
+    """Frase da mira letal (``c neck``/``d head``) — só com retrato medido.
+
+    Sem retrato a descrição do candidato não muda um byte (estabilidade dos
+    prompts/evals); com retrato o JEV-A vê a mira e a razão dela.
+    """
+    if not readiness.known or gate.aim is None:
+        return ""
+    entry = gate.aim_menu
+    where = f" ({entry})" if entry and entry != gate.aim_name else ""
+    return f" Aim at the {gate.aim_name}{where}: {gate.aim.reason}."
+
+
+def _target_kind_text(target: Any, risk: Any) -> str:
+    """Texto de ``target_kind`` para :func:`~.combat_policy.choose_aim`."""
+    if getattr(risk, "sapient", False):
+        return "sapient"
+    parts = ["animal"]
+    if bool(_field_lookup(target, "hostile")):
+        parts.append("hostile")
+    if getattr(risk, "great_danger", False) or bool(_field_lookup(target, "great_danger")):
+        parts.append("great danger")
+    return " ".join(parts)
+
+
+def _field_lookup(unit: Any, key: str) -> Any:
+    return unit.get(key) if isinstance(unit, Mapping) else getattr(unit, key, None)
+
+
 def generate_actions(
     state: GameState,
     config: Any = None,
@@ -421,6 +567,28 @@ def generate_actions(
     safe = _is_safe(state)
     wounded = _wounded(state)
 
+    # ------------------------------- prontidão de combate (mudança 02, aditivo)
+    # Retrato medido do aventureiro + gate por alvo. SEM retrato (`known` False)
+    # tudo abaixo é neutro: gate engage, recuo falso, zero razões — os candidatos
+    # saem exatamente como dantes (nada é vetado às cegas).
+    readiness = combat_readiness(state)
+    weapon_kind = weapon_kind_of(inventory.equipped_weapon or readiness.weapon_name)
+
+    def by_distance(unit: Any) -> tuple[float, str]:
+        return (unit.distance if unit.distance is not None else 1e9, unit.name or "")
+
+    threat_plan = [(unit, attack_gate(readiness, unit, weapon_kind=weapon_kind))
+                   for unit in sorted(hostiles, key=by_distance)]
+    prey_plan = [(unit, attack_gate(readiness, unit, weapon_kind=weapon_kind))
+                 for unit in sorted(huntable_units(state), key=by_distance)[:max_items]]
+    # ataques rejeitados por desvantagem: entram na razão do candidato de fuga
+    rejected = [f"{unit.name or 'the target'}: {gate.reason}"
+                for unit, gate in (*threat_plan, *prey_plan) if not gate.engage]
+    # o ramo "o inimigo é mortífero para nós" de ``should_retreat`` só faz sentido
+    # com retrato MEDIDO (sem medições não se avisa nem se veta nada: os prompts
+    # dos evals não podem mudar às cegas)
+    retreat = readiness.should_retreat(nearest=threats.nearest if readiness.known else None)
+
     potions = _find_items(inventory.items, POTION_WORDS)
     edibles = _find_items(inventory.items, EDIBLE_WORDS)
     drinks = _find_items(inventory.items, DRINKABLE_WORDS)
@@ -449,17 +617,24 @@ def generate_actions(
         away = opposite_direction(normalise_direction(nearest.direction if nearest else ""))
         step_dir = away or "s"
         dangerous = bool(nearest and (nearest.great_danger or (nearest.distance or 99) <= 5))
-        if dangerous or wounded:
+        # fuga sob dano/dor (mudança 02): o retrato dispara com HP < 60%
+        # (``RETREAT_BLOOD_RATIO``), dor/exaustão pesadas, sangramentos ou matchup
+        # mortífero; ataques rejeitados por desvantagem de skill também empurram
+        # para a fuga. Sem retrato, ``retreat``/``rejected`` estão vazios.
+        if dangerous or wounded or retreat.retreat or rejected:
+            why = list(retreat.reasons) + [f"attack rejected ({reason})" for reason in rejected]
             actions.append(MacroAction(
                 id=_unique(f"flee:{step_dir}", taken),
                 name_en=f"Flee {step_dir}",
                 description_en=(
                     f"Break away {step_dir}, away from {nearest.name if nearest else 'the threat'}: "
                     f"{flee_steps} steps, then re-assess."
+                    + (f" Why: {'; '.join(why)}." if why else "")
                 ),
                 target=step_dir, verb="flee", category="survival", priority=20,
                 params={"direction": step_dir, "steps": flee_steps,
-                        "from": nearest.name if nearest else None},
+                        "from": nearest.name if nearest else None,
+                        "reasons": why},
             ))
 
     if hungry:
@@ -522,9 +697,9 @@ def generate_actions(
         ))
 
     # ------------------------------------------------- resposta a ameaça
-    for order, hostile in enumerate(sorted(
-        hostiles, key=lambda unit: (unit.distance if unit.distance is not None else 1e9, unit.name or "")
-    )):
+    for order, (hostile, gate) in enumerate(threat_plan):
+        if not gate.engage:            # rejeitado por desvantagem: ver nota da fuga
+            continue
         direction = normalise_direction(hostile.direction)
         distance = hostile.distance if isinstance(hostile.distance, (int, float)) else None
         approach = max(1, int(distance) - 1) if distance else 1
@@ -534,21 +709,22 @@ def generate_actions(
             description_en=(
                 f"Close on {hostile.name} ({'%d tiles ' % int(distance) if distance else ''}"
                 f"{direction or 'adjacent'}) and attack until it is dead."
+                + _aim_note(gate, readiness)
             ),
             target=hostile.name, verb="attack", category="threat",
             priority=10 + int(distance or 0) * 10 + order,
             params={"direction": direction, "distance": distance, "steps": approach,
                     "great_danger": bool(hostile.great_danger), "target_name": hostile.name,
+                    "aim": gate.aim_name or None, "aim_menu": gate.aim_menu or None,
                     "x": hostile.x, "y": hostile.y, "z": hostile.z},
         ))
 
     # --------------------------------------------------------- caça (missão)
-    prey = sorted(
-        huntable_units(state),
-        key=lambda unit: (unit.distance if unit.distance is not None else 1e9, unit.name or ""),
-    )
+    prey = [unit for unit, _gate in prey_plan]
     hunt_mission = wants_hunt(objective)
-    for order, unit in enumerate(prey[:max_items]):
+    for order, (unit, gate) in enumerate(prey_plan):
+        if not gate.engage:            # presa acima da skill: preferir treino/presa leve
+            continue
         direction = normalise_direction(unit.direction)
         distance = unit.distance if isinstance(unit.distance, (int, float)) else None
         approach = max(1, int(distance) - 1) if distance else 1
@@ -561,11 +737,13 @@ def generate_actions(
                 + (f"({int(distance)} tiles {direction or 'adjacent'}) " if distance else "")
                 + "and strike it down (walk into its tile) until it dies: "
                 "a non-sapient creature, legitimate prey."
+                + _aim_note(gate, readiness)
             ),
             target=unit.name, verb="attack", category="objective",
             priority=(25 if hunt_mission else 85) + order,
             params={"direction": direction, "distance": distance, "steps": approach,
                     "target_name": unit.name, "kind": unit.kind or "animal",
+                    "aim": gate.aim_name or None, "aim_menu": gate.aim_menu or None,
                     "x": unit.x, "y": unit.y, "z": unit.z},
         ))
     if hunt_mission and not prey:

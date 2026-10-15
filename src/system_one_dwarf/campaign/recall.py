@@ -55,6 +55,7 @@ __all__ = [
     "HOURS_PER_YEAR",
     "MAX_STORED_TEXT",
     "MAX_TOKENS",
+    "RETRIEVAL_WEIGHTS",
     "STOPWORDS",
     "ScoreWeights",
     "Scored",
@@ -64,8 +65,10 @@ __all__ = [
     "clean_text",
     "clock_game_hours",
     "coerce_now",
+    "combined_score",
     "connect_private",
     "cosine",
+    "epoch_from_iso",
     "fit_lines",
     "format_age",
     "game_hours",
@@ -439,6 +442,13 @@ class ScoreWeights:
         return fallback
 
 
+#: Pesos do top-K composto do JEV-R (recência + importância + similaridade).
+#: É a API de calibração do retrieval: o wiring do loop passa um
+#: :class:`ScoreWeights` (ou mapeamento ``{recency,importance,relevance}``) por
+#: chamada — ver ``MemoryBundle.memory_items`` (``campaign/bundle.py``).
+RETRIEVAL_WEIGHTS = ScoreWeights(recency=1.0, importance=1.0, relevance=1.0)
+
+
 @dataclass(frozen=True)
 class Candidate(Generic[T]):
     """Entrada de :func:`rank`: o item + os três valores BRUTOS."""
@@ -530,6 +540,28 @@ def _finite(value: Any) -> float:
     return number if math.isfinite(number) else 0.0
 
 
+def combined_score(
+    recency: Any,
+    importance: Any,
+    relevance: Any,
+    weights: ScoreWeights | dict[str, float] | None = None,
+) -> float:
+    """Score composto ABSOLUTO (sem min-max) para fundir listas de lojas diferentes.
+
+    :func:`rank` normaliza sobre o conjunto de candidatos — ótimo dentro de uma
+    loja, mas os ``score`` de duas lojas não são comparáveis. Esta função usa os
+    valores brutos na mesma escala em todas as lojas (``raw_recency`` ∈ [0, 1] de
+    :func:`recency_score`, importância 1..10, similaridade de cosseno) e devolve
+    um ``[0, 1]`` comparável — é o que o top-K do JEV-R usa ao fundir diálogo,
+    diário, extrações e episódios (``campaign/bundle.py``).
+    """
+    w = ScoreWeights.from_any(weights, RETRIEVAL_WEIGHTS)
+    rec = min(1.0, max(0.0, _finite(recency)))
+    imp = min(1.0, max(0.0, _finite(importance) / 10.0))
+    rel = min(1.0, max(0.0, _finite(relevance)))
+    return (w.recency * rec + w.importance * imp + w.relevance * rel) / w.total
+
+
 # --------------------------------------------------------------------- relógio
 
 
@@ -610,6 +642,26 @@ def ages_hours(
     ]
     oldest = max((a for a in ages if a is not None), default=0.0)
     return [oldest if a is None else a for a in ages]
+
+
+def epoch_from_iso(value: Any) -> float | None:
+    """ISO-8601 (``…Z`` ou offset) → epoch segundos; ``None`` se não der para ler.
+
+    Comum às lojas de memória: é assim que a recência de registos com carimbo
+    ``recorded_at``/``ts`` entra no score composto.
+    """
+    text = value.strip() if isinstance(value, str) else ""
+    if not text:
+        return None
+    if text.endswith(("Z", "z")):
+        text = text[:-1] + "+00:00"
+    try:
+        moment = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=timezone.utc)
+    return moment.timestamp()
 
 
 def iso_from_epoch(seconds: float) -> str:

@@ -10,7 +10,9 @@ Fontes:
     translator.py, fleet.py) — extraídos em tempo de execução para o prompt sob
     teste nunca divergir do que o runtime envia.
 
-Uso:  .venv/bin/python bench/gerar.py
+Uso:  .venv/bin/python bench/gerar.py               # arena + jev (escreve tudo)
+      .venv/bin/python bench/gerar.py --arena-only   # só bench/configs/ (não toca em jev/evals)
+      .venv/bin/python bench/gerar.py --sync-evals   # re-espelha evals/*.json (peça do espelho)
 Saída: bench/configs/*.json (arena) + bench/jev/*.json (jev) + bench/jev/casos/*.jsonl
 """
 from __future__ import annotations
@@ -38,11 +40,22 @@ MODELS = {
 }
 EFFORT = {"judge": "high", "datagen": "low"}
 VARIATION = {"optimize": True, "techniques": ["persona", "constraints", "format"]}
-# `config example` traz iterations=3; aqui 2 por causa do teto de --budget 10
-# (o estimador recusava estimate.high > 10 com 3 iterações × juiz JEV+painel).
-# Desvio documentado em docs/prompt-builder-evolucao.md.
-TRAINING = {"iterations": 2, "holdoutRatio": 0.3}
-SUPLEMENTARES = 4  # cenários gerados pelo datagen por config (pedido do usuário)
+# Re-rodada (Passo 2 de PROXIMOS-PASSOS.md): 3 iterações — o `config example`
+# traz 3 e a rodada de 2026-10-11 só desceu para 2 porque o estimador dava
+# estimate.high > 10 e o tool recusava com `--budget 10`. Agora o teto sobe para
+# o estimate.high do `--dry-run` (ver "Orçamento" em
+# docs/prompt-builder-evolucao.md §10).
+TRAINING = {"iterations": 3, "holdoutRatio": 0.3}
+# Datagen SUPRIMIDO — stages 100% pinados. O gerador de cenários deu timeout de
+# 180 s em 3/4 sessões da rodada de 2026-10-11 (bench/relatorios/train-*-run.log:
+# "[datagen] lote 1/1 falhou: timeout total (180000ms …)"; uma reposição com
+# JSON truncado) e os suplementares nunca entraram pareados antes/depois. Com o
+# gold expandido (bench/cenarios/ = 20/papel, fechado em 2026-10-12) stages =
+# pinados cobre já o piso de 20 para o holdout de verdade, sem nenhuma chamada
+# de datagen. Repor SUPLEMENTARES > 0 só quando o datagen deixar de estourar
+# (a alternativa é pré-gerar e pinar em `scenarios` — formato idêntico).
+# Documentado em docs/prompt-builder-evolucao.md §9.
+SUPLEMENTARES = 0  # cenários gerados pelo datagen por config (0 = datagen não corre)
 
 
 def load_scenarios(name: str) -> list[dict]:
@@ -60,6 +73,8 @@ def arena_config(*, name: str, theme: str, brief: str, prompt_text: str,
         "theme": theme,
         "scenarioBrief": brief,
         "languages": ["pt-BR", "en"],
+        # stages 100% pinados (SUPLEMENTARES = 0): o datagen do tool nunca é
+        # chamado ⇒ sem timeout de 180 s; `stages` acompanna o gold expandido.
         "stages": len(pinned) + SUPLEMENTARES,
         "scenarios": pinned,
         "prompt": {"text": prompt_text,
@@ -147,7 +162,10 @@ def jev_specs_and_cases() -> None:
             "spec": {"label": "original", "questions": questions},
             "cases": {"path": f"casos/{cases_file}"},
             "models": {"decision": ["typesafe/jev-1.13"]},
-            "repeats": 2,
+            # 3 repetições por caso (era 2): mínimo para o flipRate do Passo 2
+            # ("3+ repetições") — com 2 só se via inversão em 1/38 células no
+            # JEV-A e zero nos restantes, insuficiente para julgar estabilidade.
+            "repeats": 3,
             "variants": [
                 {"label": "criterios-v2",
                  "spec": {"questions": {qid: variant[qid] for qid in target}}},
@@ -264,9 +282,14 @@ def sync_evals() -> None:
         print(f"espelho actualizado: evals/{filename} ({touched} caso(s) alterado(s))")
 
 
-def main() -> None:
+def gerar_arena() -> None:
+    """Só os arena-config (bench/configs/) a partir de bench/cenarios/.
+
+    Não toca em bench/jev/ nem em evals/: usado para conferir o resultado das
+    constantes de treino/stages sem regenerar os casos do ouro (que pertencem
+    à peça do gold/espelho).
+    """
     CONFIGS.mkdir(parents=True, exist_ok=True)
-    JEV_DIR.mkdir(parents=True, exist_ok=True)
 
     arena = [
         ("train-narrador.json", dict(
@@ -329,6 +352,11 @@ def main() -> None:
         print(f"gerado bench/configs/{filename} "
               f"({len(cfg['scenarios'])} pinados + {SUPLEMENTARES} gerados)")
 
+
+def main() -> None:
+    gerar_arena()
+    JEV_DIR.mkdir(parents=True, exist_ok=True)
+
     jev_specs_and_cases()
     for p in sorted(JEV_DIR.glob("*.json")):
         if not (CASOS / (p.stem + ".jsonl")).exists():
@@ -340,5 +368,7 @@ def main() -> None:
 if __name__ == "__main__":
     if "--sync-evals" in sys.argv:
         sync_evals()
+    elif "--arena-only" in sys.argv:
+        gerar_arena()
     else:
         main()

@@ -306,17 +306,26 @@ class StuckDetector:
 
     # -------------------------------------------------------------- observação
 
-    def observe(self, state: Any, *, action_id: str | None = None) -> StuckEvent | None:
+    def observe(self, state: Any, *, action_id: str | None = None,
+                moved: bool | None = None) -> StuckEvent | None:
         """Observa UMA validação; devolve o evento mais urgente (ou ``None``).
 
         A ordem de urgência é ``death > damage > action_loop > stuck``. O hash do
         estado só conta como "sem progresso" quando TUDO ficou igual (posição,
         arredores e unidades próximas).
+
+        ``moved``: quem observa já sabe se a personagem progrediu — o corredor
+        de rotas do :class:`~.executor.MacroExecutor` compara posições entre
+        *legs* (:func:`~.movement.evaluate_leg`). ``False`` conta como "sem
+        mudança" mesmo que o hash mude (as criaturas à volta movem-se sozinhas:
+        isso não é progresso da personagem); ``True`` conta como progresso e
+        reinicia a escada. ``None`` (omissão) deriva o progresso do hash, como
+        sempre — o comportamento do loop não muda.
         """
         fp = state_fingerprint(state)
         health = health_fingerprint(state)
         alive = bool(getattr(state, "is_alive", True))
-        progressed = fp != self._last_hash
+        progressed = fp != self._last_hash if moved is None else bool(moved)
         event: StuckEvent | None = None
 
         # -- morte ---------------------------------------------------------

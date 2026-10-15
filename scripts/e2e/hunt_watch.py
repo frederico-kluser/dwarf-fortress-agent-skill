@@ -278,7 +278,10 @@ def main() -> int:
             else:
                 rc = subprocess.run(
                     [sys.executable, str(ROOT / "scripts" / "e2e" / "hunt_plan.py"),
-                     "--out", str(PLAN_PATH), "--context", f"stuck at {view['pos']}"],
+                     "--out", str(PLAN_PATH), "--context", f"stuck at {view['pos']}",
+                     # Cache de planos (Passo 19): re-planos com o mesmo estado
+                     # normalizado + objetivo saem do cache, sem tokens.
+                     "--cache", str(ROOT / ".runtime" / "hunt-plan-cache.json")],
                     capture_output=True, text=True, timeout=200).returncode
                 record_stuck(stuck_mod, "stuck", "replan",
                              f"watcher: still stuck (round {stuck_rounds}) — LLM hunt re-plan",

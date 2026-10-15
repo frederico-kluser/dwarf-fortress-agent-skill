@@ -11,16 +11,18 @@ import Typography from '@mui/material/Typography';
 import ContentCopy from '@mui/icons-material/ContentCopy';
 import Pause from '@mui/icons-material/Pause';
 import PlayArrow from '@mui/icons-material/PlayArrow';
-import Refresh from '@mui/icons-material/Refresh';
 
 import { errorMessage } from '../api/events';
-import { formatRelative, formatTime } from '../api/format';
 import { useScreen } from '../api/queries';
+import FreshnessIndicator from '../components/FreshnessIndicator';
 import PanelShell from '../components/PanelShell';
 import { PanelError, PanelLoading, PanelNotice } from '../components/PanelState';
 import SectionCard from '../components/SectionCard';
+import { tintedChipSx } from '../components/chipSkin';
 import { useNow } from '../hooks/useSparkSeries';
-import { MONO_FONT } from '../theme';
+
+/** Alvo mínimo de ações recorrentes (invariante §5 / achado I.2.2.02): ≥ 40 px. */
+const TARGET_SX = { width: 40, height: 40 };
 
 /** Ecrã do jogo traduzido ao vivo — só PT (o original nunca é mostrado). */
 export default function ScreenPanel() {
@@ -28,10 +30,16 @@ export default function ScreenPanel() {
   const now = useNow(1000);
   const [frozen, setFrozen] = useState(false);
   const [frozenText, setFrozenText] = useState('');
+  const [frozenTs, setFrozenTs] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
   const screen = screenQuery.data;
   const text = frozen ? frozenText : (screen?.translated_pt ?? '');
+  /**
+   * Frescura honesta (C.1.1.01): com o texto congelado, a frescura mostrada é a
+   * da cópia visível — nunca a da tradução mais recente que NÃO se está a ver.
+   */
+  const visibleTs = frozen ? frozenTs : (screen?.ts ?? null);
 
   const toggleFreeze = () => {
     if (frozen) {
@@ -39,6 +47,7 @@ export default function ScreenPanel() {
       return;
     }
     setFrozenText(screen?.translated_pt ?? '');
+    setFrozenTs(screen?.ts ?? null);
     setFrozen(true);
   };
 
@@ -60,34 +69,36 @@ export default function ScreenPanel() {
           <Chip
             size="small"
             variant="outlined"
-            color={frozen ? 'default' : 'success'}
+            icon={frozen ? <Pause /> : <PlayArrow />}
+            sx={tintedChipSx(frozen ? 'warning' : 'success')}
             label={frozen ? 'congelado' : 'em direto'}
           />
-          <Typography variant="caption" sx={{ color: 'text.secondary', fontFamily: MONO_FONT }}>
-            última atualização {formatTime(screen?.ts)} · {formatRelative(screen?.ts, now)}
-          </Typography>
+          {/*
+            C.1.1.01: a frescura é a do `FreshnessIndicator` partilhado (mesmo
+            texto/alvo de métricas, perguntas, decisões, memória e gastos) — com
+            o ecrã congelado mostra a frescura da cópia visível (frescura honesta).
+          */}
+          <FreshnessIndicator
+            ts={visibleTs}
+            now={now}
+            showClock
+            refreshing={screenQuery.isFetching}
+            refreshDisabled={screenQuery.isFetching}
+            onRefresh={() => void screenQuery.refetch()}
+            refreshLabel="Atualizar o ecrã agora"
+          />
           <Tooltip title={frozen ? 'Retomar atualização automática' : 'Congelar o texto atual'}>
             <IconButton
               aria-label={frozen ? 'Retomar atualização automática do ecrã' : 'Congelar o texto do ecrã'}
               onClick={toggleFreeze}
+              sx={TARGET_SX}
             >
               {frozen ? <PlayArrow /> : <Pause />}
             </IconButton>
           </Tooltip>
-          <Tooltip title="Atualizar agora">
-            <span>
-              <IconButton
-                aria-label="Atualizar o texto do ecrã agora"
-                onClick={() => void screenQuery.refetch()}
-                disabled={screenQuery.isFetching}
-              >
-                <Refresh />
-              </IconButton>
-            </span>
-          </Tooltip>
           <Tooltip title="Copiar texto">
             <span>
-              <IconButton aria-label="Copiar o texto do ecrã" onClick={copyText} disabled={!text}>
+              <IconButton aria-label="Copiar o texto do ecrã" onClick={copyText} disabled={!text} sx={TARGET_SX}>
                 <ContentCopy />
               </IconButton>
             </span>
@@ -122,10 +133,12 @@ export default function ScreenPanel() {
               <Typography
                 variant="body1"
                 component="p"
+                className="text-pretty"
                 sx={{
-                  fontFamily: MONO_FONT,
-                  fontSize: { xs: '0.8125rem', md: '0.9375rem' },
-                  lineHeight: 1.75,
+                  // §8 `#/ecra`: sans para PT (mono só para EN/identificadores).
+                  fontSize: '0.9375rem',
+                  lineHeight: 1.55,
+                  maxWidth: '72ch',
                   whiteSpace: 'pre-wrap',
                 }}
               >

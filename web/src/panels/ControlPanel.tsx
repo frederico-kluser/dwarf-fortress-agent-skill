@@ -25,7 +25,6 @@ import TableRow from '@mui/material/TableRow';
 import TextField from '@mui/material/TextField';
 import ToggleButton from '@mui/material/ToggleButton';
 import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
-import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
 import Pause from '@mui/icons-material/Pause';
 import PlayArrow from '@mui/icons-material/PlayArrow';
@@ -52,11 +51,13 @@ import {
 import type { ControlMode, Provider } from '../api/types';
 import ApprovalsSection from '../components/ApprovalsSection';
 import AutopilotConfirmDialog, { type AutopilotReason } from '../components/AutopilotConfirmDialog';
+import { tintedChipSx } from '../components/chipSkin';
 import FreshnessIndicator from '../components/FreshnessIndicator';
 import KillSwitchButton from '../components/KillSwitchButton';
 import MetricCard from '../components/MetricCard';
 import PanelShell from '../components/PanelShell';
 import { PanelEmpty, PanelError, PanelLoading, PanelNotice } from '../components/PanelState';
+import { RunaGlyph, RunaRule } from '../components/rpg';
 import SectionCard from '../components/SectionCard';
 import { SpendSkeleton } from '../components/SkeletonBlocks';
 import SystemSection from '../components/SystemSection';
@@ -363,12 +364,37 @@ export default function ControlPanel() {
           <Chip
             size="small"
             variant="outlined"
-            color={killSwitch ? 'error' : mode === 'paused' ? 'warning' : 'success'}
+            icon={
+              killSwitch ? (
+                <RunaGlyph name="shield" size={14} />
+              ) : mode === 'autopilot' ? (
+                <RunaGlyph name="flame" size={14} />
+              ) : mode === 'checkpoint' ? (
+                <RunaGlyph name="hourglass" size={14} />
+              ) : (
+                <Pause fontSize="small" />
+              )
+            }
+            sx={
+              killSwitch
+                ? {
+                    // §5.10: fill sólido + `--on-solid` só em risco extremo
+                    // (kill-switch armado) — etiqueta + glifo sempre.
+                    ...tintedChipSx('error'),
+                    bgcolor: 'var(--danger)',
+                    color: 'var(--on-solid)',
+                    borderColor: 'transparent',
+                  }
+                : tintedChipSx(
+                    mode === 'autopilot' ? 'success' : mode === 'checkpoint' ? 'info' : 'warning',
+                  )
+            }
             label={killSwitch ? 'kill-switch ativo' : CONTROL_MODE_LABEL[mode]}
           />
           <Chip
             size="small"
             variant="outlined"
+            sx={tintedChipSx('default')}
             label={campaign ? campaign.name : 'sem campanha'}
           />
         </>
@@ -394,6 +420,11 @@ export default function ControlPanel() {
           subtitle="Bandas de ação: auto ≥ 0,90 · hitl 0,50–0,89 · abstain < 0,50"
         >
           <Stack spacing={2}>
+            {/*
+              H.1.1.01: o significado dos 3 modos vive em TEXTO VISÍVEL por opção
+              (com `aria-describedby`) — nunca só em tooltip, que em tátil nem
+              abre. Os tooltips foram removidos para não duplicar a informação.
+            */}
             <ToggleButtonGroup
               exclusive
               value={mode}
@@ -401,22 +432,64 @@ export default function ControlPanel() {
                 if (next !== null) requestMode(next);
               }}
               aria-label="Modo de autonomia"
+              sx={{ width: '100%', maxWidth: 560 }}
             >
-              <Tooltip title="O agente decide e age sozinho — pede confirmação antes de ativar">
-                <ToggleButton value="autopilot">Autopiloto</ToggleButton>
-              </Tooltip>
-              <Tooltip title="O agente para nos casos de banda hitl/abstain e pergunta na fila de perguntas">
-                <ToggleButton value="checkpoint">Checkpoints</ToggleButton>
-              </Tooltip>
-              <Tooltip title="O agente não age sobre o jogo até retomares">
-                <ToggleButton value="paused">Em pausa</ToggleButton>
-              </Tooltip>
+              <ToggleButton
+                value="autopilot"
+                aria-describedby="modo-autopiloto-desc"
+                sx={{ flex: 1, minHeight: 56, flexDirection: 'column', gap: 0.25, px: 2 }}
+              >
+                <Typography variant="button" component="span">
+                  Autopiloto
+                </Typography>
+                <Typography
+                  id="modo-autopiloto-desc"
+                  variant="caption"
+                  component="span"
+                  sx={{ color: 'text.secondary', textTransform: 'none', letterSpacing: 0 }}
+                >
+                  age sozinho
+                </Typography>
+              </ToggleButton>
+              <ToggleButton
+                value="checkpoint"
+                aria-describedby="modo-checkpoints-desc"
+                sx={{ flex: 1, minHeight: 56, flexDirection: 'column', gap: 0.25, px: 2 }}
+              >
+                <Typography variant="button" component="span">
+                  Checkpoints
+                </Typography>
+                <Typography
+                  id="modo-checkpoints-desc"
+                  variant="caption"
+                  component="span"
+                  sx={{ color: 'text.secondary', textTransform: 'none', letterSpacing: 0 }}
+                >
+                  para e pergunta
+                </Typography>
+              </ToggleButton>
+              <ToggleButton
+                value="paused"
+                aria-describedby="modo-pausa-desc"
+                sx={{ flex: 1, minHeight: 56, flexDirection: 'column', gap: 0.25, px: 2 }}
+              >
+                <Typography variant="button" component="span">
+                  Em pausa
+                </Typography>
+                <Typography
+                  id="modo-pausa-desc"
+                  variant="caption"
+                  component="span"
+                  sx={{ color: 'text.secondary', textTransform: 'none', letterSpacing: 0 }}
+                >
+                  não age
+                </Typography>
+              </ToggleButton>
             </ToggleButtonGroup>
 
             <Alert severity="info" variant="outlined" role="note">
-              <strong>Checkpoints</strong>: o agente retém cada ação para tua aprovação — as
-              aprovações pendentes estão na secção <strong>Aprovações retidas</strong> abaixo e no
-              badge da barra superior. <strong>Em pausa</strong> retoma sempre para{' '}
+              As ações retidas aparecem em <strong>Aprovações retidas</strong> (abaixo) e no badge da
+              barra superior. <strong>Em pausa</strong> retoma sempre para{' '}
               <strong>{modeLabel(restorableMode)}</strong>
               {persisted ? '' : ' (valor por omissão; escolhe um modo para o fixar)'}.
             </Alert>
@@ -475,6 +548,20 @@ export default function ControlPanel() {
             </PanelNotice>
           </Stack>
         </SectionCard>
+
+        {/*
+          I.2.2.02: o kill-switch é uma ação destrutiva global — fica numa zona
+          própria, separada das ações de uso frequente (régua runa §4.4 + folga).
+        */}
+        <Box sx={{ pt: 1 }}>
+          <RunaRule />
+          <Typography
+            variant="overline"
+            sx={{ color: 'text.secondary', display: 'block', textAlign: 'center' }}
+          >
+            Segurança
+          </Typography>
+        </Box>
 
         <SectionCard
           title="Kill-switch"

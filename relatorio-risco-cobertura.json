@@ -1,0 +1,1130 @@
+{
+  "by_class": {
+    "costly": {
+      "accepted": false,
+      "accuracy": 1.0,
+      "aurc": 0.0,
+      "brier": 0.0468,
+      "curve": [
+        {
+          "accepted": 1,
+          "coverage": 0.125,
+          "errors": 0,
+          "risk": 0.0,
+          "threshold": 0.917,
+          "upper_bound": 0.7935
+        },
+        {
+          "accepted": 2,
+          "coverage": 0.25,
+          "errors": 0,
+          "risk": 0.0,
+          "threshold": 0.886,
+          "upper_bound": 0.6576
+        },
+        {
+          "accepted": 3,
+          "coverage": 0.375,
+          "errors": 0,
+          "risk": 0.0,
+          "threshold": 0.876,
+          "upper_bound": 0.5615
+        },
+        {
+          "accepted": 4,
+          "coverage": 0.5,
+          "errors": 0,
+          "risk": 0.0,
+          "threshold": 0.868,
+          "upper_bound": 0.4899
+        },
+        {
+          "accepted": 5,
+          "coverage": 0.625,
+          "errors": 0,
+          "risk": 0.0,
+          "threshold": 0.858,
+          "upper_bound": 0.4345
+        },
+        {
+          "accepted": 6,
+          "coverage": 0.75,
+          "errors": 0,
+          "risk": 0.0,
+          "threshold": 0.841,
+          "upper_bound": 0.3903
+        },
+        {
+          "accepted": 7,
+          "coverage": 0.875,
+          "errors": 0,
+          "risk": 0.0,
+          "threshold": 0.839,
+          "upper_bound": 0.3543
+        },
+        {
+          "accepted": 8,
+          "coverage": 1.0,
+          "errors": 0,
+          "risk": 0.0,
+          "threshold": 0.5,
+          "upper_bound": 0.3244
+        }
+      ],
+      "ece": 0.1769,
+      "ece_label": "bad",
+      "mean_confidence": 0.8231,
+      "n": 8,
+      "policy_floor": 0.95,
+      "selection": {
+        "accepted": 0,
+        "bound": "wilson",
+        "coverage": null,
+        "errors": 0,
+        "max_risk": 0.05,
+        "min_support": 30,
+        "n": 8,
+        "reason": "insufficient_support",
+        "risk": null,
+        "threshold": null,
+        "upper_bound": null
+      },
+      "target_risk": 0.05,
+      "unavailable_confidence": 1,
+      "verdict": "NÃO-ACEITE (suporte insuficiente: n=8 < 30)"
+    },
+    "destructive": {
+      "accepted": false,
+      "accuracy": 1.0,
+      "aurc": 0.0,
+      "brier": 0.0655,
+      "curve": [
+        {
+          "accepted": 1,
+          "coverage": 0.1667,
+          "errors": 0,
+          "risk": 0.0,
+          "threshold": 0.96,
+          "upper_bound": 0.7935
+        },
+        {
+          "accepted": 2,
+          "coverage": 0.3333,
+          "errors": 0,
+          "risk": 0.0,
+          "threshold": 0.855,
+          "upper_bound": 0.6576
+        },
+        {
+          "accepted": 3,
+          "coverage": 0.5,
+          "errors": 0,
+          "risk": 0.0,
+          "threshold": 0.815,
+          "upper_bound": 0.5615
+        },
+        {
+          "accepted": 4,
+          "coverage": 0.6667,
+          "errors": 0,
+          "risk": 0.0,
+          "threshold": 0.81,
+          "upper_bound": 0.4899
+        },
+        {
+          "accepted": 5,
+          "coverage": 0.8333,
+          "errors": 0,
+          "risk": 0.0,
+          "threshold": 0.776,
+          "upper_bound": 0.4345
+        },
+        {
+          "accepted": 6,
+          "coverage": 1.0,
+          "errors": 0,
+          "risk": 0.0,
+          "threshold": 0.5,
+          "upper_bound": 0.3903
+        }
+      ],
+      "ece": 0.214,
+      "ece_label": "bad",
+      "mean_confidence": 0.786,
+      "n": 6,
+      "policy_floor": 0.97,
+      "selection": {
+        "accepted": 0,
+        "bound": "wilson",
+        "coverage": null,
+        "errors": 0,
+        "max_risk": 0.03,
+        "min_support": 30,
+        "n": 6,
+        "reason": "insufficient_support",
+        "risk": null,
+        "threshold": null,
+        "upper_bound": null
+      },
+      "target_risk": 0.03,
+      "unavailable_confidence": 1,
+      "verdict": "NÃO-ACEITE (suporte insuficiente: n=6 < 30)"
+    },
+    "irreversible": {
+      "accepted": false,
+      "accuracy": 1.0,
+      "aurc": 0.0,
+      "brier": 0.0324,
+      "curve": [
+        {
+          "accepted": 1,
+          "coverage": 0.3333,
+          "errors": 0,
+          "risk": 0.0,
+          "threshold": 0.926,
+          "upper_bound": 0.7935
+        },
+        {
+          "accepted": 2,
+          "coverage": 0.6667,
+          "errors": 0,
+          "risk": 0.0,
+          "threshold": 0.805,
+          "upper_bound": 0.6576
+        },
+        {
+          "accepted": 3,
+          "coverage": 1.0,
+          "errors": 0,
+          "risk": 0.0,
+          "threshold": 0.768,
+          "upper_bound": 0.5615
+        }
+      ],
+      "ece": 0.167,
+      "ece_label": "bad",
+      "mean_confidence": 0.833,
+      "n": 3,
+      "policy_floor": 0.95,
+      "selection": {
+        "accepted": 0,
+        "bound": "wilson",
+        "coverage": null,
+        "errors": 0,
+        "max_risk": 0.05,
+        "min_support": 30,
+        "n": 3,
+        "reason": "insufficient_support",
+        "risk": null,
+        "threshold": null,
+        "upper_bound": null
+      },
+      "target_risk": 0.05,
+      "unavailable_confidence": 0,
+      "verdict": "NÃO-ACEITE (suporte insuficiente: n=3 < 30)"
+    },
+    "reversible": {
+      "accepted": false,
+      "accuracy": 0.7059,
+      "aurc": 0.1353,
+      "brier": 0.1795,
+      "curve": [
+        {
+          "accepted": 1,
+          "coverage": 0.0588,
+          "errors": 0,
+          "risk": 0.0,
+          "threshold": 0.963,
+          "upper_bound": 0.7935
+        },
+        {
+          "accepted": 2,
+          "coverage": 0.1176,
+          "errors": 0,
+          "risk": 0.0,
+          "threshold": 0.95,
+          "upper_bound": 0.6576
+        },
+        {
+          "accepted": 3,
+          "coverage": 0.1765,
+          "errors": 0,
+          "risk": 0.0,
+          "threshold": 0.931,
+          "upper_bound": 0.5615
+        },
+        {
+          "accepted": 4,
+          "coverage": 0.2353,
+          "errors": 0,
+          "risk": 0.0,
+          "threshold": 0.877,
+          "upper_bound": 0.4899
+        },
+        {
+          "accepted": 5,
+          "coverage": 0.2941,
+          "errors": 0,
+          "risk": 0.0,
+          "threshold": 0.834,
+          "upper_bound": 0.4345
+        },
+        {
+          "accepted": 6,
+          "coverage": 0.3529,
+          "errors": 1,
+          "risk": 0.1667,
+          "threshold": 0.832,
+          "upper_bound": 0.5635
+        },
+        {
+          "accepted": 7,
+          "coverage": 0.4118,
+          "errors": 1,
+          "risk": 0.1429,
+          "threshold": 0.802,
+          "upper_bound": 0.5131
+        },
+        {
+          "accepted": 8,
+          "coverage": 0.4706,
+          "errors": 1,
+          "risk": 0.125,
+          "threshold": 0.739,
+          "upper_bound": 0.4709
+        },
+        {
+          "accepted": 9,
+          "coverage": 0.5294,
+          "errors": 2,
+          "risk": 0.2222,
+          "threshold": 0.727,
+          "upper_bound": 0.5474
+        },
+        {
+          "accepted": 10,
+          "coverage": 0.5882,
+          "errors": 2,
+          "risk": 0.2,
+          "threshold": 0.722,
+          "upper_bound": 0.5098
+        },
+        {
+          "accepted": 11,
+          "coverage": 0.6471,
+          "errors": 2,
+          "risk": 0.1818,
+          "threshold": 0.715,
+          "upper_bound": 0.477
+        },
+        {
+          "accepted": 12,
+          "coverage": 0.7059,
+          "errors": 2,
+          "risk": 0.1667,
+          "threshold": 0.707,
+          "upper_bound": 0.448
+        },
+        {
+          "accepted": 13,
+          "coverage": 0.7647,
+          "errors": 2,
+          "risk": 0.1538,
+          "threshold": 0.703,
+          "upper_bound": 0.4224
+        },
+        {
+          "accepted": 14,
+          "coverage": 0.8235,
+          "errors": 3,
+          "risk": 0.2143,
+          "threshold": 0.664,
+          "upper_bound": 0.4759
+        },
+        {
+          "accepted": 15,
+          "coverage": 0.8824,
+          "errors": 4,
+          "risk": 0.2667,
+          "threshold": 0.609,
+          "upper_bound": 0.5195
+        },
+        {
+          "accepted": 16,
+          "coverage": 0.9412,
+          "errors": 5,
+          "risk": 0.3125,
+          "threshold": 0.527,
+          "upper_bound": 0.556
+        },
+        {
+          "accepted": 17,
+          "coverage": 1.0,
+          "errors": 5,
+          "risk": 0.2941,
+          "threshold": 0.5,
+          "upper_bound": 0.5313
+        }
+      ],
+      "ece": 0.1464,
+      "ece_label": "bad",
+      "mean_confidence": 0.7531,
+      "n": 17,
+      "policy_floor": 0.9,
+      "selection": {
+        "accepted": 0,
+        "bound": "wilson",
+        "coverage": null,
+        "errors": 0,
+        "max_risk": 0.1,
+        "min_support": 30,
+        "n": 17,
+        "reason": "insufficient_support",
+        "risk": null,
+        "threshold": null,
+        "upper_bound": null
+      },
+      "target_risk": 0.1,
+      "unavailable_confidence": 1,
+      "verdict": "NÃO-ACEITE (suporte insuficiente: n=17 < 30)"
+    }
+  },
+  "by_question": {
+    "JEV-A/action": {
+      "accuracy": 0.8529,
+      "brier": 0.1152,
+      "ece": 0.1454,
+      "ece_label": "bad",
+      "mean_confidence": 0.7824,
+      "n": 34,
+      "unavailable_confidence": 3
+    },
+    "JEV-A/has_injection": {
+      "accuracy": 0.625,
+      "brier": 0.2426,
+      "ece": 0.3408,
+      "ece_label": "bad",
+      "mean_confidence": 0.822,
+      "n": 8,
+      "unavailable_confidence": 0
+    },
+    "JEV-A/needs_human": {
+      "accuracy": 0.9412,
+      "brier": 0.0639,
+      "ece": 0.1554,
+      "ece_label": "bad",
+      "mean_confidence": 0.8253,
+      "n": 34,
+      "unavailable_confidence": 0
+    },
+    "JEV-A/urgency": {
+      "accuracy": 0.8824,
+      "brier": 0.0809,
+      "ece": 0.0909,
+      "ece_label": "acceptable",
+      "mean_confidence": 0.8261,
+      "n": 34,
+      "unavailable_confidence": 2
+    },
+    "JEV-D/ask_human": {
+      "accuracy": 0.7941,
+      "brier": 0.1399,
+      "ece": 0.1391,
+      "ece_label": "bad",
+      "mean_confidence": 0.8195,
+      "n": 34,
+      "unavailable_confidence": 0
+    },
+    "JEV-D/has_injection": {
+      "accuracy": 0.5,
+      "brier": 0.2695,
+      "ece": 0.4245,
+      "ece_label": "bad",
+      "mean_confidence": 0.7924,
+      "n": 4,
+      "unavailable_confidence": 0
+    },
+    "JEV-D/question_format": {
+      "accuracy": 0.8333,
+      "brier": 0.1168,
+      "ece": 0.1223,
+      "ece_label": "bad",
+      "mean_confidence": 0.7667,
+      "n": 24,
+      "unavailable_confidence": 3
+    },
+    "JEV-M/has_injection": {
+      "accuracy": 1.0,
+      "brier": 0.0291,
+      "ece": 0.1542,
+      "ece_label": "bad",
+      "mean_confidence": 0.8458,
+      "n": 4,
+      "unavailable_confidence": 0
+    },
+    "JEV-M/narrator_effort": {
+      "accuracy": 0.8333,
+      "brier": 0.1658,
+      "ece": 0.2,
+      "ece_label": "bad",
+      "mean_confidence": 0.7583,
+      "n": 24,
+      "unavailable_confidence": 5
+    },
+    "JEV-M/record_type": {
+      "accuracy": 1.0,
+      "brier": 0.0611,
+      "ece": 0.2051,
+      "ece_label": "bad",
+      "mean_confidence": 0.7949,
+      "n": 24,
+      "unavailable_confidence": 3
+    },
+    "JEV-M/update_memory": {
+      "accuracy": 0.8333,
+      "brier": 0.1178,
+      "ece": 0.1232,
+      "ece_label": "bad",
+      "mean_confidence": 0.8091,
+      "n": 24,
+      "unavailable_confidence": 0
+    },
+    "JEV-R/dominant_theme": {
+      "accuracy": 0.8333,
+      "brier": 0.0957,
+      "ece": 0.1051,
+      "ece_label": "bad",
+      "mean_confidence": 0.8271,
+      "n": 36,
+      "unavailable_confidence": 3
+    },
+    "JEV-R/has_injection": {
+      "accuracy": 1.0,
+      "brier": 0.0255,
+      "ece": 0.1511,
+      "ece_label": "bad",
+      "mean_confidence": 0.8488,
+      "n": 6,
+      "unavailable_confidence": 0
+    },
+    "JEV-R/include_df_skills_df-adventure_armour-and-swimming": {
+      "accuracy": 1.0,
+      "brier": 0.0781,
+      "ece": 0.2795,
+      "ece_label": "bad",
+      "mean_confidence": 0.7205,
+      "n": 1,
+      "unavailable_confidence": 0
+    },
+    "JEV-R/include_df_skills_df-adventure_asking-directions": {
+      "accuracy": 1.0,
+      "brier": 0.0271,
+      "ece": 0.1633,
+      "ece_label": "bad",
+      "mean_confidence": 0.8367,
+      "n": 3,
+      "unavailable_confidence": 0
+    },
+    "JEV-R/include_df_skills_df-adventure_camp-site-choice": {
+      "accuracy": 1.0,
+      "brier": 0.0045,
+      "ece": 0.056,
+      "ece_label": "acceptable",
+      "mean_confidence": 0.944,
+      "n": 2,
+      "unavailable_confidence": 0
+    },
+    "JEV-R/include_df_skills_df-adventure_cave-layout": {
+      "accuracy": 1.0,
+      "brier": 0.0008,
+      "ece": 0.0286,
+      "ece_label": "good",
+      "mean_confidence": 0.9714,
+      "n": 1,
+      "unavailable_confidence": 0
+    },
+    "JEV-R/include_df_skills_df-adventure_cooking-at-a-campfire": {
+      "accuracy": 1.0,
+      "brier": 0.0099,
+      "ece": 0.0997,
+      "ece_label": "acceptable",
+      "mean_confidence": 0.9003,
+      "n": 1,
+      "unavailable_confidence": 0
+    },
+    "JEV-R/include_df_skills_df-adventure_edible-plants": {
+      "accuracy": 1.0,
+      "brier": 0.0064,
+      "ece": 0.0801,
+      "ece_label": "acceptable",
+      "mean_confidence": 0.9199,
+      "n": 1,
+      "unavailable_confidence": 0
+    },
+    "JEV-R/include_df_skills_df-adventure_encumbrance": {
+      "accuracy": 1.0,
+      "brier": 0.0102,
+      "ece": 0.1009,
+      "ece_label": "bad",
+      "mean_confidence": 0.8991,
+      "n": 1,
+      "unavailable_confidence": 0
+    },
+    "JEV-R/include_df_skills_df-adventure_exploration-yield": {
+      "accuracy": 0.0,
+      "brier": 0.3339,
+      "ece": 0.5765,
+      "ece_label": "bad",
+      "mean_confidence": 0.5765,
+      "n": 2,
+      "unavailable_confidence": 0
+    },
+    "JEV-R/include_df_skills_df-adventure_farming-seasons": {
+      "accuracy": 0.0,
+      "brier": 0.3248,
+      "ece": 0.5699,
+      "ece_label": "bad",
+      "mean_confidence": 0.5699,
+      "n": 1,
+      "unavailable_confidence": 0
+    },
+    "JEV-R/include_df_skills_df-adventure_finding-water": {
+      "accuracy": 1.0,
+      "brier": 0.0007,
+      "ece": 0.0262,
+      "ece_label": "good",
+      "mean_confidence": 0.9738,
+      "n": 1,
+      "unavailable_confidence": 0
+    },
+    "JEV-R/include_df_skills_df-adventure_goto-planar-limits": {
+      "accuracy": 1.0,
+      "brier": 0.0153,
+      "ece": 0.1235,
+      "ece_label": "bad",
+      "mean_confidence": 0.8765,
+      "n": 1,
+      "unavailable_confidence": 0
+    },
+    "JEV-R/include_df_skills_df-adventure_light-sources": {
+      "accuracy": 1.0,
+      "brier": 0.0051,
+      "ece": 0.0715,
+      "ece_label": "acceptable",
+      "mean_confidence": 0.9285,
+      "n": 1,
+      "unavailable_confidence": 0
+    },
+    "JEV-R/include_df_skills_df-adventure_net-fishing": {
+      "accuracy": 0.0,
+      "brier": 0.3686,
+      "ece": 0.6071,
+      "ece_label": "bad",
+      "mean_confidence": 0.6071,
+      "n": 1,
+      "unavailable_confidence": 0
+    },
+    "JEV-R/include_df_skills_df-adventure_npc-greetings": {
+      "accuracy": 1.0,
+      "brier": 0.0421,
+      "ece": 0.1571,
+      "ece_label": "bad",
+      "mean_confidence": 0.8429,
+      "n": 2,
+      "unavailable_confidence": 0
+    },
+    "JEV-R/include_df_skills_df-adventure_reading-terrain": {
+      "accuracy": 1.0,
+      "brier": 0.0495,
+      "ece": 0.2225,
+      "ece_label": "bad",
+      "mean_confidence": 0.7775,
+      "n": 1,
+      "unavailable_confidence": 0
+    },
+    "JEV-R/include_df_skills_df-adventure_river-crossings": {
+      "accuracy": 1.0,
+      "brier": 0.0004,
+      "ece": 0.019,
+      "ece_label": "good",
+      "mean_confidence": 0.981,
+      "n": 1,
+      "unavailable_confidence": 0
+    },
+    "JEV-R/include_df_skills_df-adventure_sleep-and-watch": {
+      "accuracy": 1.0,
+      "brier": 0.0348,
+      "ece": 0.1828,
+      "ece_label": "bad",
+      "mean_confidence": 0.8172,
+      "n": 2,
+      "unavailable_confidence": 0
+    },
+    "JEV-R/include_df_skills_df-adventure_stuck-handling": {
+      "accuracy": 0.5,
+      "brier": 0.3429,
+      "ece": 0.3397,
+      "ece_label": "bad",
+      "mean_confidence": 0.8117,
+      "n": 4,
+      "unavailable_confidence": 0
+    },
+    "JEV-R/include_df_skills_df-adventure_water-safety": {
+      "accuracy": 1.0,
+      "brier": 0.0528,
+      "ece": 0.2297,
+      "ece_label": "bad",
+      "mean_confidence": 0.7703,
+      "n": 1,
+      "unavailable_confidence": 0
+    },
+    "JEV-R/include_df_skills_df-adventure_what-to-drop": {
+      "accuracy": 0.0,
+      "brier": 0.275,
+      "ece": 0.5244,
+      "ece_label": "bad",
+      "mean_confidence": 0.5244,
+      "n": 1,
+      "unavailable_confidence": 0
+    },
+    "JEV-R/include_df_skills_df-central_fortress-history": {
+      "accuracy": 1.0,
+      "brier": 0.028,
+      "ece": 0.1461,
+      "ece_label": "bad",
+      "mean_confidence": 0.8539,
+      "n": 3,
+      "unavailable_confidence": 0
+    },
+    "JEV-R/include_df_skills_df-central_goblin-language": {
+      "accuracy": 0.3333,
+      "brier": 0.2397,
+      "ece": 0.4392,
+      "ece_label": "bad",
+      "mean_confidence": 0.6815,
+      "n": 3,
+      "unavailable_confidence": 0
+    },
+    "JEV-R/include_df_skills_df-central_goblin-war-cries": {
+      "accuracy": 1.0,
+      "brier": 0.0485,
+      "ece": 0.2202,
+      "ece_label": "bad",
+      "mean_confidence": 0.7798,
+      "n": 1,
+      "unavailable_confidence": 0
+    },
+    "JEV-R/include_df_skills_df-central_legendary-swords": {
+      "accuracy": 0.5,
+      "brier": 0.2082,
+      "ece": 0.3979,
+      "ece_label": "bad",
+      "mean_confidence": 0.7232,
+      "n": 2,
+      "unavailable_confidence": 0
+    },
+    "JEV-R/include_df_skills_df-central_regional-curses": {
+      "accuracy": 1.0,
+      "brier": 0.0332,
+      "ece": 0.1692,
+      "ece_label": "bad",
+      "mean_confidence": 0.8308,
+      "n": 2,
+      "unavailable_confidence": 0
+    },
+    "JEV-R/include_df_skills_df-central_tavern-songs": {
+      "accuracy": 0.8,
+      "brier": 0.1625,
+      "ece": 0.2161,
+      "ece_label": "bad",
+      "mean_confidence": 0.858,
+      "n": 5,
+      "unavailable_confidence": 0
+    },
+    "JEV-R/include_df_skills_df-combate_aiming-lethal-parts": {
+      "accuracy": 1.0,
+      "brier": 0.0211,
+      "ece": 0.145,
+      "ece_label": "bad",
+      "mean_confidence": 0.855,
+      "n": 2,
+      "unavailable_confidence": 0
+    },
+    "JEV-R/include_df_skills_df-combate_breaking-line-of-sight": {
+      "accuracy": 1.0,
+      "brier": 0.0405,
+      "ece": 0.1663,
+      "ece_label": "bad",
+      "mean_confidence": 0.8337,
+      "n": 2,
+      "unavailable_confidence": 0
+    },
+    "JEV-R/include_df_skills_df-combate_explicit-attack-chain": {
+      "accuracy": 1.0,
+      "brier": 0.0425,
+      "ece": 0.2062,
+      "ece_label": "bad",
+      "mean_confidence": 0.7938,
+      "n": 1,
+      "unavailable_confidence": 0
+    },
+    "JEV-R/include_df_skills_df-combate_goblin-morale": {
+      "accuracy": 1.0,
+      "brier": 0.0432,
+      "ece": 0.1937,
+      "ece_label": "bad",
+      "mean_confidence": 0.8064,
+      "n": 4,
+      "unavailable_confidence": 0
+    },
+    "JEV-R/include_df_skills_df-combate_kill-verification": {
+      "accuracy": 1.0,
+      "brier": 0.0613,
+      "ece": 0.2476,
+      "ece_label": "bad",
+      "mean_confidence": 0.7524,
+      "n": 1,
+      "unavailable_confidence": 0
+    },
+    "JEV-R/include_df_skills_df-combate_sharpening-blades": {
+      "accuracy": 1.0,
+      "brier": 0.0316,
+      "ece": 0.1413,
+      "ece_label": "bad",
+      "mean_confidence": 0.8587,
+      "n": 3,
+      "unavailable_confidence": 0
+    },
+    "JEV-R/include_df_skills_df-combate_underwater-fighting": {
+      "accuracy": 1.0,
+      "brier": 0.0742,
+      "ece": 0.2724,
+      "ece_label": "bad",
+      "mean_confidence": 0.7276,
+      "n": 1,
+      "unavailable_confidence": 0
+    },
+    "JEV-R/include_df_skills_df-combate_wrestling": {
+      "accuracy": 1.0,
+      "brier": 0.0247,
+      "ece": 0.1177,
+      "ece_label": "bad",
+      "mean_confidence": 0.8823,
+      "n": 3,
+      "unavailable_confidence": 0
+    },
+    "JEV-R/include_df_skills_df-comercio_bartering-etiquette": {
+      "accuracy": 1.0,
+      "brier": 0.0336,
+      "ece": 0.1767,
+      "ece_label": "bad",
+      "mean_confidence": 0.8233,
+      "n": 3,
+      "unavailable_confidence": 0
+    },
+    "JEV-R/include_df_skills_df-comercio_caravan-prices": {
+      "accuracy": 0.6667,
+      "brier": 0.1524,
+      "ece": 0.324,
+      "ece_label": "bad",
+      "mean_confidence": 0.7452,
+      "n": 3,
+      "unavailable_confidence": 0
+    },
+    "JEV-R/include_df_skills_df-comercio_food-prices": {
+      "accuracy": 1.0,
+      "brier": 0.0199,
+      "ece": 0.1367,
+      "ece_label": "bad",
+      "mean_confidence": 0.8633,
+      "n": 4,
+      "unavailable_confidence": 0
+    },
+    "JEV-R/include_df_skills_df-comercio_merchant-rumours": {
+      "accuracy": 1.0,
+      "brier": 0.0059,
+      "ece": 0.0771,
+      "ece_label": "acceptable",
+      "mean_confidence": 0.9229,
+      "n": 1,
+      "unavailable_confidence": 0
+    },
+    "JEV-R/include_df_skills_df-criaturas_bronze-colossus": {
+      "accuracy": 1.0,
+      "brier": 0.0411,
+      "ece": 0.2028,
+      "ece_label": "bad",
+      "mean_confidence": 0.7972,
+      "n": 1,
+      "unavailable_confidence": 0
+    },
+    "JEV-R/include_df_skills_df-criaturas_dragon-slaying": {
+      "accuracy": 0.5,
+      "brier": 0.3605,
+      "ece": 0.4329,
+      "ece_label": "bad",
+      "mean_confidence": 0.916,
+      "n": 2,
+      "unavailable_confidence": 0
+    },
+    "JEV-R/include_df_skills_df-criaturas_hunt-prey-behaviour": {
+      "accuracy": 1.0,
+      "brier": 0.0464,
+      "ece": 0.2056,
+      "ece_label": "bad",
+      "mean_confidence": 0.7944,
+      "n": 2,
+      "unavailable_confidence": 0
+    },
+    "JEV-R/include_df_skills_df-dwarves_mining-songs": {
+      "accuracy": 1.0,
+      "brier": 0.0293,
+      "ece": 0.1325,
+      "ece_label": "bad",
+      "mean_confidence": 0.8675,
+      "n": 3,
+      "unavailable_confidence": 0
+    },
+    "JEV-R/include_df_skills_df-dwarves_noble-succession": {
+      "accuracy": 1.0,
+      "brier": 0.0056,
+      "ece": 0.0745,
+      "ece_label": "acceptable",
+      "mean_confidence": 0.9255,
+      "n": 2,
+      "unavailable_confidence": 0
+    },
+    "JEV-R/include_df_skills_df-fortress-construcao_siege-engineering": {
+      "accuracy": 1.0,
+      "brier": 0.0193,
+      "ece": 0.1294,
+      "ece_label": "bad",
+      "mean_confidence": 0.8706,
+      "n": 2,
+      "unavailable_confidence": 0
+    },
+    "JEV-R/include_df_skills_df-fortress-industria_brewing": {
+      "accuracy": 1.0,
+      "brier": 0.0335,
+      "ece": 0.1645,
+      "ece_label": "bad",
+      "mean_confidence": 0.8356,
+      "n": 2,
+      "unavailable_confidence": 0
+    },
+    "JEV-R/include_df_skills_df-fortress-industria_cheese-aging": {
+      "accuracy": 0.8,
+      "brier": 0.0949,
+      "ece": 0.1969,
+      "ece_label": "bad",
+      "mean_confidence": 0.8677,
+      "n": 5,
+      "unavailable_confidence": 0
+    },
+    "JEV-R/include_df_skills_df-fortress-industria_crossbow-maintenance": {
+      "accuracy": 0.0,
+      "brier": 0.7254,
+      "ece": 0.8517,
+      "ece_label": "bad",
+      "mean_confidence": 0.8517,
+      "n": 1,
+      "unavailable_confidence": 0
+    },
+    "JEV-R/include_df_skills_df-fortress-industria_mushroom-farming": {
+      "accuracy": 0.6667,
+      "brier": 0.177,
+      "ece": 0.3096,
+      "ece_label": "bad",
+      "mean_confidence": 0.8253,
+      "n": 3,
+      "unavailable_confidence": 0
+    },
+    "JEV-R/include_df_skills_df-fortress-industria_rope-making": {
+      "accuracy": 1.0,
+      "brier": 0.0588,
+      "ece": 0.2397,
+      "ece_label": "bad",
+      "mean_confidence": 0.7603,
+      "n": 2,
+      "unavailable_confidence": 0
+    },
+    "JEV-R/include_df_skills_df-fortress-industria_smelters": {
+      "accuracy": 1.0,
+      "brier": 0.0504,
+      "ece": 0.2246,
+      "ece_label": "bad",
+      "mean_confidence": 0.7754,
+      "n": 1,
+      "unavailable_confidence": 0
+    },
+    "JEV-R/include_df_skills_df-fortress-industria_smelting": {
+      "accuracy": 1.0,
+      "brier": 0.0476,
+      "ece": 0.2181,
+      "ece_label": "bad",
+      "mean_confidence": 0.7819,
+      "n": 1,
+      "unavailable_confidence": 0
+    },
+    "JEV-R/include_df_skills_df-fortress-industria_soap-making": {
+      "accuracy": 0.9,
+      "brier": 0.1011,
+      "ece": 0.2152,
+      "ece_label": "bad",
+      "mean_confidence": 0.817,
+      "n": 10,
+      "unavailable_confidence": 0
+    },
+    "JEV-R/include_df_skills_df-fortress-industria_steel-forging": {
+      "accuracy": 0.5,
+      "brier": 0.2924,
+      "ece": 0.2655,
+      "ece_label": "bad",
+      "mean_confidence": 0.7655,
+      "n": 2,
+      "unavailable_confidence": 0
+    },
+    "JEV-R/include_df_skills_df-fortress-industria_stone-engraving": {
+      "accuracy": 1.0,
+      "brier": 0.0243,
+      "ece": 0.1453,
+      "ece_label": "bad",
+      "mean_confidence": 0.8547,
+      "n": 3,
+      "unavailable_confidence": 0
+    },
+    "JEV-R/include_df_skills_df-geologia_strata": {
+      "accuracy": 0.75,
+      "brier": 0.1149,
+      "ece": 0.2832,
+      "ece_label": "bad",
+      "mean_confidence": 0.7587,
+      "n": 4,
+      "unavailable_confidence": 0
+    },
+    "JEV-R/include_df_skills_df-mapa_regional-roads": {
+      "accuracy": 1.0,
+      "brier": 0.0267,
+      "ece": 0.1344,
+      "ece_label": "bad",
+      "mean_confidence": 0.8656,
+      "n": 3,
+      "unavailable_confidence": 0
+    },
+    "JEV-R/include_df_skills_df-saude_bandaging-wounds": {
+      "accuracy": 1.0,
+      "brier": 0.0395,
+      "ece": 0.1721,
+      "ece_label": "bad",
+      "mean_confidence": 0.8279,
+      "n": 2,
+      "unavailable_confidence": 0
+    },
+    "JEV-R/include_df_skills_df-saude_pressure-on-bleeding-limbs": {
+      "accuracy": 0.5,
+      "brier": 0.1512,
+      "ece": 0.3345,
+      "ece_label": "bad",
+      "mean_confidence": 0.6982,
+      "n": 2,
+      "unavailable_confidence": 0
+    }
+  },
+  "by_role": {
+    "JEV-A": {
+      "accuracy": 0.8727,
+      "brier": 0.098,
+      "ece": 0.0997,
+      "ece_label": "acceptable",
+      "mean_confidence": 0.812,
+      "n": 110,
+      "unavailable_confidence": 5
+    },
+    "JEV-D": {
+      "accuracy": 0.7903,
+      "brier": 0.1394,
+      "ece": 0.0786,
+      "ece_label": "acceptable",
+      "mean_confidence": 0.7973,
+      "n": 62,
+      "unavailable_confidence": 3
+    },
+    "JEV-M": {
+      "accuracy": 0.8947,
+      "brier": 0.1104,
+      "ece": 0.1217,
+      "ece_label": "bad",
+      "mean_confidence": 0.7905,
+      "n": 76,
+      "unavailable_confidence": 8
+    },
+    "JEV-R": {
+      "accuracy": 0.8452,
+      "brier": 0.0959,
+      "ece": 0.1279,
+      "ece_label": "bad",
+      "mean_confidence": 0.8223,
+      "n": 168,
+      "unavailable_confidence": 3
+    }
+  },
+  "eval_fingerprint": "sha256:970c8c9fc52a439ea3084584b9bb19e7a233b630b3630dbc650d876f15babab8",
+  "format": 1,
+  "model": "typesafe/jev-1.13",
+  "overall": {
+    "accuracy": 0.8534,
+    "brier": 0.1056,
+    "ece": 0.0997,
+    "ece_label": "acceptable",
+    "mean_confidence": 0.8101,
+    "n": 416,
+    "unavailable_confidence": 19
+  },
+  "reliability": [
+    {
+      "accuracy": 0.4545,
+      "bin": "0.5-0.6",
+      "count": 33,
+      "gap": 0.0667,
+      "mean_confidence": 0.5212
+    },
+    {
+      "accuracy": 0.0,
+      "bin": "0.6-0.7",
+      "count": 15,
+      "gap": 0.636,
+      "mean_confidence": 0.636
+    },
+    {
+      "accuracy": 0.8976,
+      "bin": "0.7-0.8",
+      "count": 127,
+      "gap": 0.1463,
+      "mean_confidence": 0.7513
+    },
+    {
+      "accuracy": 0.8897,
+      "bin": "0.8-0.9",
+      "count": 136,
+      "gap": 0.0411,
+      "mean_confidence": 0.8487
+    },
+    {
+      "accuracy": 1.0,
+      "bin": "0.9-1.0",
+      "count": 105,
+      "gap": 0.0532,
+      "mean_confidence": 0.9468
+    }
+  ],
+  "report_date": "2026-10-13",
+  "resolved_model": null,
+  "settings": {
+    "bins": 10,
+    "bound": "wilson",
+    "grid": 0.01,
+    "min_support": 30,
+    "z": 1.96
+  },
+  "source": "fake-model"
+}

@@ -31,8 +31,10 @@ import { useNow } from '../hooks/useSparkSeries';
 import { MONO_FONT } from '../theme';
 import ApprovalConfirmDialog from './ApprovalConfirmDialog';
 import { AttemptsChip, BandChip } from './Chips';
+import { tintedChipSx } from './chipSkin';
 import FreshnessIndicator from './FreshnessIndicator';
-import { PanelEmpty, PanelError, PanelLoading, PanelNotice } from './PanelState';
+import { PanelError, PanelLoading, PanelNotice } from './PanelState';
+import { EmptyState } from './rpg/EmptyState';
 import SectionCard from './SectionCard';
 import { groupApprovalsByAction } from './questionGroups';
 
@@ -139,8 +141,8 @@ export default function ApprovalsSection({ mode }: ApprovalsSectionProps) {
         <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
           <Chip
             size="small"
-            color={approvals.length > 0 ? 'warning' : 'default'}
             variant="outlined"
+            sx={tintedChipSx(approvals.length > 0 ? 'warning' : 'default')}
             label={`${approvals.length} pendentes`}
           />
           <FreshnessIndicator
@@ -194,15 +196,19 @@ export default function ApprovalsSection({ mode }: ApprovalsSectionProps) {
       ) : null}
 
       {!approvalsQuery.isLoading && approvals.length === 0 ? (
+        /* §5.7 — a mensagem nomeia o objeto real e diz o que falta e porquê;
+         * a frase do autopiloto só quando ela é verdade (honestidade). */
         mode === 'autopilot' ? (
-          <PanelEmpty
-            message="Sem aprovações pendentes — o autopiloto decide sozinho"
-            hint="O agente só retém ações para aprovação no modo «Checkpoints». Muda o modo para reveres cada ação antes de ser executada."
+          <EmptyState
+            glyph="hourglass"
+            title="Sem aprovações pendentes — o autopiloto decide sozinho"
+            body="O agente só retém ações para aprovação no modo «Checkpoints». Muda o modo para reveres cada ação antes de ser executada."
           />
         ) : (
-          <PanelEmpty
-            message="Sem aprovações pendentes."
-            hint="Assim que o agente quiser executar uma ação retida, ela aparece aqui e no badge da barra superior."
+          <EmptyState
+            glyph="shield"
+            title="Sem aprovações pendentes"
+            body="Assim que o agente quiser executar uma ação retida, ela aparece aqui e no badge da barra superior — para aprovares ou rejeitares."
           />
         )
       ) : null}
@@ -277,6 +283,7 @@ export default function ApprovalsSection({ mode }: ApprovalsSectionProps) {
                     size="small"
                     startIcon={<TaskAlt />}
                     disabled={decideMutation.isPending}
+                    sx={{ minHeight: 40 }}
                     onClick={() => setPending({ approval, approve: true })}
                   >
                     Aprovar
@@ -287,6 +294,7 @@ export default function ApprovalsSection({ mode }: ApprovalsSectionProps) {
                     color="error"
                     startIcon={<Block />}
                     disabled={decideMutation.isPending}
+                    sx={{ minHeight: 40 }}
                     onClick={() => setPending({ approval, approve: false })}
                   >
                     Rejeitar
@@ -327,7 +335,8 @@ export default function ApprovalsSection({ mode }: ApprovalsSectionProps) {
                         <Chip
                           size="small"
                           variant="outlined"
-                          color={approval.status === 'approved' ? 'success' : 'error'}
+                          icon={approval.status === 'approved' ? <TaskAlt /> : <Block />}
+                          sx={tintedChipSx(approval.status === 'approved' ? 'success' : 'error')}
                           label={approval.status === 'approved' ? 'aprovada' : 'rejeitada'}
                         />
                         {isDecisionBand(approval.band) ? <BandChip band={approval.band} /> : null}

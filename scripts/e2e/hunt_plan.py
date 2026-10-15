@@ -59,6 +59,7 @@ if str(ROOT / "src") not in sys.path:  # o pacote não está instalado no venv
     sys.path.insert(0, str(ROOT / "src"))
 
 from system_one_dwarf.agent import planning  # noqa: E402
+from system_one_dwarf.cache import CacheSession  # noqa: E402
 
 #: Prompt de sistema = o schema do plano + as regras (fonte única: ``planning``).
 SYSTEM = planning.PLAN_SYSTEM_PROMPT
@@ -71,6 +72,9 @@ KEY_FILES = (".dsh/.credentials.yaml", ".secrets")
 KEY_PATTERN = re.compile(r"(sk-or-v1-[A-Za-z0-9_-]+)")
 SNAPSHOT_TIMEOUT_S = 120
 KNOWLEDGE_TIMEOUT_S = 60
+#: Cache de planos (Passo 19): espelho JSON partilhado entre execuções do CLI
+#: (``hunt_watch.py`` chama este script como processo novo a cada re-plano).
+DEFAULT_PLAN_CACHE = ROOT / ".runtime" / "hunt-plan-cache.json"
 
 
 def load_module(name: str, path: Path):
@@ -184,12 +188,16 @@ def build_plan(
     stuck_escalations: int | None = None,
     offline: bool = False,
     fauna_search: Callable[..., Any] | None = None,
+    cache: Any = None,
 ) -> dict:
     """Snapshot → pistas de fauna → ciclo gerar/testar/criticar → plano (dict).
 
     O esforço de raciocínio sai de ``planning.effort_for`` (código, não o
     modelo) e viaja no objeto aninhado ``reasoning``; sem chave (ou ``offline``)
     o ``HuntPlanner`` não chama ninguém e devolve o *fallback*.
+
+    ``cache`` (opcional, ``planning.PlanCache``) serve o plano guardado quando o
+    estado normalizado + objetivo não mudou — zero chamadas LLM (Passo 19).
     """
     snap = snapshot(df_path) if snap is None else snap
     digest = snapshot_digest(snap)
@@ -200,7 +208,7 @@ def build_plan(
         stuck_escalations = 2 if "stuck" in context.lower() else 0
     planner = planning.HuntPlanner(
         client, fauna_search=fauna_search, max_attempts=max_attempts,
-        fallback_fn=lambda: fallback_plan(digest),
+        fallback_fn=lambda: fallback_plan(digest), cache=cache,
     )
     result = planner.plan(digest, context=context, knowledge=knowledge_context(),
                           stuck_round=stuck_escalations,
@@ -226,9 +234,26 @@ def main(argv: list[str] | None = None) -> int:
                          "2+ = esforço máximo; omitido: 2 se o contexto fala em stuck)")
     ap.add_argument("--no-llm", action="store_true",
                     help="não chama o LLM: plano determinístico (offline)")
+    ap.add_argument("--cache", default=None,
+                    help="espelho JSON do cache de planos (Passo 19); por omissão, sem cache")
+    ap.add_argument("--no-cache", action="store_true",
+                    help="desliga o cache de planos (gera sempre de novo)")
+    ap.add_argument("--session", default="hunt_plan",
+                    help="id da sessão para a métrica custo/hit-rate do cache")
     args = ap.parse_args(argv)
+    cache = None
+    session = None
+    if args.cache and not args.no_cache:
+        cache = planning.PlanCache(path=args.cache)
+        session = CacheSession(args.session)
+        session.bind(cache.name, cache)
     plan = build_plan(args.df_path, args.context, max_attempts=args.max_attempts,
-                      stuck_escalations=args.stuck_escalations, offline=args.no_llm)
+                      stuck_escalations=args.stuck_escalations, offline=args.no_llm,
+                      cache=cache)
+    if session is not None:
+        # Métrica reportável por sessão (custo poupado + hit-rate) — mesmo padrão
+        # onde o projeto regista gastos (campaign.spend.SpendLedger.record).
+        plan["planning"]["cache"] = session.report()
     text = json.dumps(plan, ensure_ascii=False, indent=2)
     if args.out:
         Path(args.out).write_text(text, encoding="utf-8")

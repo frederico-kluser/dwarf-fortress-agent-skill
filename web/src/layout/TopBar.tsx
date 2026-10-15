@@ -21,6 +21,7 @@ import KillSwitchButton from '../components/KillSwitchButton';
 import { ControlModeChip } from '../components/Chips';
 import { QuestionsBadgeButton } from '../components/QuestionsQueueDrawer';
 import ThemeModeToggle from '../components/ThemeModeToggle';
+import { BandBadge } from '../components/rpg/BandBadge';
 import { useApiContext, useConnection } from '../api/queries';
 import { CONTROL_MODE_LABEL } from '../api/format';
 import { useNow } from '../hooks/useSparkSeries';
@@ -52,22 +53,37 @@ export default function TopBar({
   const [campaignAnchor, setCampaignAnchor] = useState<HTMLElement | null>(null);
   const campaignName = campaign?.name ?? 'Sem campanha';
 
+  // §4.1 — edge da forja: o bloco de estado ganha `border-top: 2px var(--primary)`
+  // enquanto o loop está a correr (brasa = a trabalhar; §1).
+  const loopAtivo = campaign != null && campaign.control.mode !== 'paused' && !campaign.control.kill_switch;
+
   return (
-    <AppBar position="fixed" sx={{ zIndex: (theme) => theme.zIndex.drawer + 1 }}>
+    <AppBar
+      position="fixed"
+      sx={{
+        zIndex: (theme) => theme.zIndex.drawer + 1,
+        // §2.1/§4.1 — placa de pedra: superfície sólida + cantos talhados + shadow-1.
+        backgroundColor: 'var(--surface)',
+        backgroundImage: 'none',
+        color: 'var(--foreground)',
+        borderBottom: '1px solid var(--border)',
+        boxShadow: 'var(--shadow-1), inset 0 1px 0 var(--carve-top)',
+      }}
+    >
       <Toolbar variant="dense" sx={{ gap: 1, px: { xs: 1, sm: 2 } }}>
         <Typography variant="h2" component="p" sx={{ whiteSpace: 'nowrap' }}>
           <Box sx={{ display: { xs: 'none', sm: 'inline' } }}>System One Dwarf</Box>
           <Box sx={{ display: { xs: 'inline', sm: 'none' } }}>SOD</Box>
         </Typography>
 
+        {/*
+          Badge de sistema (§5.10): «dados simulados» → `--info`, glifo 14px +
+          etiqueta PT, fundo 15% do status — nunca cor como único sinal.
+        */}
         {isMock ? (
-          <Chip
-            size="small"
-            variant="outlined"
-            color="info"
-            label="dados simulados"
-            sx={{ display: { xs: 'none', md: 'inline-flex' } }}
-          />
+          <span className="hidden md:block">
+            <BandBadge band="stub" />
+          </span>
         ) : null}
 
         <Box sx={{ flexGrow: 1 }} />
@@ -101,6 +117,8 @@ export default function TopBar({
             aria-label={`Campanha ativa: ${campaignName}. Abrir lista de campanhas`}
             sx={{
               display: { xs: 'inline-flex', sm: 'none' },
+              // I.2.2.02 — alvo de toque ≥ 40px em ação recorrente.
+              height: 40,
               maxWidth: 132,
               '& .MuiChip-label': { overflow: 'hidden', textOverflow: 'ellipsis' },
             }}
@@ -144,7 +162,17 @@ export default function TopBar({
               : 'Sem campanha selecionada'
           }
         >
-          <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
+          <Stack
+            direction="row"
+            spacing={0.75}
+            sx={{
+              alignItems: 'center',
+              px: 1,
+              // §4.1 — edge da forja no bloco com o loop a correr (transparente quando parado).
+              borderTop: '2px solid',
+              borderColor: loopAtivo ? 'var(--primary)' : 'transparent',
+            }}
+          >
             <ControlModeChip
               mode={campaign?.control.mode ?? 'paused'}
               blocked={campaign?.control.kill_switch ?? false}
@@ -163,11 +191,30 @@ export default function TopBar({
 
         <ApprovalsBadgeButton pendingCount={pendingApprovals} onClick={onOpenApprovals} />
 
-        <KillSwitchButton
-          active={campaign?.control.kill_switch ?? false}
-          onConfirm={onKillSwitch}
-          busy={controlBusy}
+        {/*
+          I.2.2.02: o kill-switch (ação destrutiva global) vive no seu próprio
+          grupo — «corda» (§4.4) de separação + ≥12px de folga de ambos os lados.
+          Nada cola ao kill-switch, nem os badges de uso frequente nem o toggle.
+        */}
+        <Box
+          aria-hidden="true"
+          sx={{
+            display: { xs: 'none', sm: 'block' },
+            width: 2,
+            alignSelf: 'stretch',
+            my: 1,
+            mx: 1.5,
+            background:
+              'repeating-linear-gradient(180deg, var(--border) 0 6px, transparent 6px 10px)',
+          }}
         />
+        <Box sx={{ display: 'inline-flex', mx: 1.5 }}>
+          <KillSwitchButton
+            active={campaign?.control.kill_switch ?? false}
+            onConfirm={onKillSwitch}
+            busy={controlBusy}
+          />
+        </Box>
 
         <Stack sx={{ display: { xs: 'none', sm: 'flex' } }}>
           <ThemeModeToggle />

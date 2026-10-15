@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import Alert from '@mui/material/Alert';
+import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
 import List from '@mui/material/List';
@@ -14,8 +15,9 @@ import { errorMessage } from '../api/events';
 import { formatDateTime } from '../api/format';
 import { useInputs, useSubmitInput } from '../api/queries';
 import PanelShell from '../components/PanelShell';
-import { PanelEmpty, PanelError, PanelLoading, PanelNotice } from '../components/PanelState';
-import SectionCard from '../components/SectionCard';
+import { PanelError, PanelNotice } from '../components/PanelState';
+import { EmptyState, RunaRule } from '../components/rpg';
+import { RunaLoading, RunaSection } from '../components/RunaKit';
 import { MONO_FONT } from '../theme';
 
 const EXAMPLES = [
@@ -47,9 +49,11 @@ export default function InputsPanel() {
       description="Informação livre para o agente. É traduzida PT→EN antes de entrar nos prompts."
     >
       <Stack spacing={2}>
-        <SectionCard
+        <RunaSection
           title="Nova informação"
           subtitle="Uma ideia por envio — o agente lê isto como contexto"
+          glyph="key"
+          texture
         >
           <Stack spacing={1.5}>
             <TextField
@@ -87,6 +91,7 @@ export default function InputsPanel() {
               <Button
                 variant="contained"
                 startIcon={<Send />}
+                sx={{ minHeight: 40 }}
                 loading={mutation.isPending}
                 loadingPosition="start"
                 disabled={text.trim().length === 0}
@@ -94,7 +99,7 @@ export default function InputsPanel() {
               >
                 Enviar
               </Button>
-              <Button variant="text" disabled={text.length === 0} onClick={() => setText('')}>
+              <Button variant="text" sx={{ minHeight: 40 }} disabled={text.length === 0} onClick={() => setText('')}>
                 Limpar
               </Button>
             </Stack>
@@ -105,26 +110,36 @@ export default function InputsPanel() {
               </Alert>
             ) : null}
           </Stack>
-        </SectionCard>
+        </RunaSection>
 
-        <SectionCard
+        <RunaRule />
+
+        <RunaSection
           title="Histórico"
           subtitle={`${history.length} envios nesta campanha`}
+          glyph="scroll"
           flush
         >
-          {inputsQuery.isLoading ? <PanelLoading label="A carregar histórico…" /> : null}
+          {inputsQuery.isLoading ? (
+            <Box sx={{ p: 2 }}>
+              <RunaLoading label="A carregar histórico…" />
+            </Box>
+          ) : null}
 
           {inputsQuery.isError ? (
-            <PanelError
-              message={errorMessage(inputsQuery.error)}
-              onRetry={() => void inputsQuery.refetch()}
-            />
+            <Box sx={{ p: 2 }}>
+              <PanelError
+                message={errorMessage(inputsQuery.error)}
+                onRetry={() => void inputsQuery.refetch()}
+              />
+            </Box>
           ) : null}
 
           {!inputsQuery.isLoading && history.length === 0 ? (
-            <PanelEmpty
-              message="Ainda não injetaste informação."
-              hint="Tudo o que escreveres aqui entra no contexto do agente depois de traduzido."
+            <EmptyState
+              glyph="key"
+              title="Ainda não injetaste informação."
+              body="Tudo o que escreveres aqui entra no contexto do agente depois de traduzido."
             />
           ) : null}
 
@@ -136,15 +151,21 @@ export default function InputsPanel() {
                     primary={entry.text_pt}
                     secondary={`EN: ${entry.text} · ${formatDateTime(entry.ts)}`}
                     slotProps={{
-                      primary: { variant: 'body2' },
-                      secondary: { variant: 'caption', sx: { fontFamily: MONO_FONT } },
+                      primary: {
+                        variant: 'body2',
+                        sx: { maxWidth: '72ch', textWrap: 'pretty' },
+                      },
+                      secondary: {
+                        variant: 'caption',
+                        sx: { fontFamily: MONO_FONT, fontVariantNumeric: 'tabular-nums' },
+                      },
                     }}
                   />
                 </ListItem>
               ))}
             </List>
           ) : null}
-        </SectionCard>
+        </RunaSection>
 
         <PanelNotice severity="info">
           O contrato (<code>docs/api.md</code>) só define <code>POST /api/campaigns/{'{id}'}/inputs</code>{' '}

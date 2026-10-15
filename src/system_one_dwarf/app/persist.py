@@ -762,6 +762,20 @@ class RuntimeStore:
             0,
         ))
 
+    def known_ids(self, kind: str) -> set[str]:
+        """Ids que o ficheiro já conhece — **lápides incluídas**.
+
+        É o que a migração de arranque (``CampaignRuntime._migrate``) precisa
+        para nunca reescrever uma linha guardada nem ressuscitar uma entrada que
+        o runtime *largou* (``status = 'dropped'``).  Nunca levanta (falha ⇒
+        vazio: a memória é a verdade e a escrita continua a ser upsert).
+        """
+        if kind not in KINDS:
+            return set()
+        rows = self._run("known",
+                         lambda conn: conn.execute(f"SELECT id FROM {kind}", ()).fetchall(), ())
+        return {str(row[0]) for row in rows}
+
     # ---------------------------------------------------------------- ciclo
 
     def close(self) -> None:

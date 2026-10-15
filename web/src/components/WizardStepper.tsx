@@ -5,6 +5,11 @@ import {
   useMotionUITransition,
 } from '@/components/motion-ui/ui-theme';
 import { ProgressBar } from '@/components/motion-ui/progress-bar';
+import {
+  RunaGlyph,
+  type RunaGlyphName,
+} from './rpg';
+import { TOKEN, runaType } from './RunaKit';
 
 export interface WizardStepperProps {
   /** Rótulos dos passos, por ordem. */
@@ -13,11 +18,18 @@ export interface WizardStepperProps {
   active: number;
   /** Nome acessível do conjunto de passos. */
   label: string;
+  /** Glifo runa por etapa (spec §8: map · key · hourglass) — alinhado com `steps`. */
+  glyphs?: RunaGlyphName[];
 }
 
 /**
  * Stepper do wizard: passos com estado (concluído · atual · por fazer) sobre a
  * barra de progresso do registry Motion UI (`@motion/progress-bar`).
+ *
+ * Tema «RPG medieval» (spec §8): rótulos de passo em overline Cinzel
+ * (`--text-overline`), glifo runa por etapa e marca de estado em forma —
+ * losango para passos feitos/atual, círculo oco para por fazer (o estado nunca
+ * depende só da cor: peso do rótulo + `aria-current="step"` acompanham).
  *
  * Composição justificada (cascata, passo 3/4): o catálogo @motion não tem
  * stepper/wizard (buscas «stepper», «wizard», «steps» devolvem vazio) — o rótulo
@@ -25,7 +37,7 @@ export interface WizardStepperProps {
  * `transform`/`opacity` e transições do token do tema (reduced motion via
  * `motionMode`).
  */
-export default function WizardStepper({ steps, active, label }: WizardStepperProps) {
+export default function WizardStepper({ steps, active, label, glyphs }: WizardStepperProps) {
   const { motionMode } = useMotionUITheme();
   const snap = useMotionUITransition('snap');
   const still = motionMode === 'off';
@@ -37,6 +49,7 @@ export default function WizardStepper({ steps, active, label }: WizardStepperPro
       <ol aria-label={label} className="flex items-center gap-2">
         {steps.map((step, index) => {
           const state = index < current ? 'done' : index === current ? 'current' : 'todo';
+          const glyph = glyphs?.[index];
           return (
             <li
               key={step}
@@ -45,28 +58,52 @@ export default function WizardStepper({ steps, active, label }: WizardStepperPro
             >
               <motion.span
                 aria-hidden="true"
-                className={
-                  state === 'todo'
-                    ? 'size-2 shrink-0 rounded-full bg-muted-foreground/40'
-                    : 'size-2.5 shrink-0 rounded-full bg-primary'
-                }
+                className="flex shrink-0 items-center justify-center"
                 initial={still ? false : { scale: 0.7, opacity: 0.6 }}
                 animate={{ scale: state === 'current' ? 1 : 0.8, opacity: 1 }}
                 transition={{ ...snap }}
-              />
+              >
+                {state === 'todo' ? (
+                  <span
+                    className="size-2 rounded-full border"
+                    style={{ borderColor: TOKEN.mutedForeground, opacity: 0.5 }}
+                  />
+                ) : (
+                  <span
+                    style={{ color: state === 'current' ? TOKEN.primary : TOKEN.accent }}
+                  >
+                    <RunaGlyph name="diamond" size={state === 'current' ? 12 : 10} />
+                  </span>
+                )}
+              </motion.span>
+              {glyph ? (
+                <span
+                  aria-hidden="true"
+                  style={{
+                    color: state === 'todo' ? TOKEN.mutedForeground : TOKEN.foreground,
+                    opacity: state === 'todo' ? 0.5 : 1,
+                  }}
+                >
+                  <RunaGlyph name={glyph} size={16} />
+                </span>
+              ) : null}
               <span
-                className={
-                  state === 'todo'
-                    ? 'truncate text-xs font-medium text-muted-foreground'
-                    : 'truncate text-xs font-semibold text-foreground'
-                }
+                className="truncate"
+                style={{
+                  ...runaType('overline'),
+                  color: state === 'todo' ? TOKEN.mutedForeground : TOKEN.foreground,
+                  opacity: state === 'done' ? 0.8 : 1,
+                }}
               >
                 {step}
               </span>
               {index < steps.length - 1 ? (
                 <span
                   aria-hidden="true"
-                  className={`h-px min-w-3 flex-1 ${index < current ? 'bg-primary' : 'bg-border'}`}
+                  className="h-px min-w-3 flex-1"
+                  style={{
+                    backgroundColor: index < current ? TOKEN.primary : TOKEN.border,
+                  }}
                 />
               ) : null}
             </li>

@@ -181,8 +181,14 @@ function QuestionProvenance({ question, dense }: { question: Question; dense: bo
  *
  * Fricção alinhada com a irreversibilidade (auditoria C.1.4.01): a resposta entra
  * na memória do agente e não há edição no contrato, logo nenhum caminho envia com
- * um clique acidental — opção rápida pede confirmação com o texto exato, texto
- * livre tem pré-visualização antes do envio.
+ * um clique acidental — opção rápida e texto livre passam AMBOS pelo mesmo passo
+ * de revisão: o diálogo de confirmação com o texto exato («Rever e enviar» abre-o
+ * diretamente — 1 passo consistente).
+ *
+ * Teclado (auditoria F.1.1.03): o campo é `multiline`, por isso **Enter insere
+ * quebra de linha** (comportamento esperado de textarea) e nunca dispara revisão
+ * nem envio — nenhuma tecla de edição de texto origina um estado de envio não
+ * intencional. O envio por teclado é um atalho explícito: Ctrl+Enter (⌘+Enter).
  */
 export default function QuestionCard({
   question,
@@ -192,7 +198,6 @@ export default function QuestionCard({
   coalesced = [],
 }: QuestionCardProps) {
   const [freeText, setFreeText] = useState('');
-  const [reviewing, setReviewing] = useState(false);
   const [pending, setPending] = useState<PendingAnswer | null>(null);
   const answered = question.status === 'answered';
   const fieldId = `resposta-livre-${question.id}`;
@@ -212,7 +217,17 @@ export default function QuestionCard({
 
   const resetDraft = () => {
     setFreeText('');
-    setReviewing(false);
+  };
+
+  /**
+   * Único caminho do texto livre (F.1.1.03): abre o diálogo de revisão com o
+   * texto exato — o mesmo passo do botão «Rever e enviar». Disparado pelo botão
+   * e pelo atalho explícito Ctrl+Enter (⌘+Enter); Enter nunca chega aqui.
+   */
+  const reviewFreeText = () => {
+    const text = freeText.trim();
+    if (!text) return;
+    setPending({ text, optionId: null });
   };
 
   const confirm = () => {
@@ -228,7 +243,6 @@ export default function QuestionCard({
 
   const cancel = () => {
     // Cancelar no texto livre volta ao rascunho, sem perder o que foi escrito.
-    if (pending && !pending.optionId) setReviewing(true);
     setPending(null);
   };
 
@@ -244,14 +258,14 @@ export default function QuestionCard({
         as="article"
         className={
           dense
-            ? 'flex flex-col gap-3 rounded-lg border border-border bg-card p-3 text-card-foreground shadow-sm'
-            : 'flex flex-col gap-3 rounded-lg border border-border bg-card p-4 text-card-foreground shadow-sm'
+            ? 'flex flex-col gap-3 rounded-lg border border-border bg-card p-3 text-foreground shadow-sm'
+            : 'flex flex-col gap-3 rounded-lg border border-border bg-card p-4 text-foreground shadow-sm'
         }
       >
         <div className="flex items-start justify-between gap-2">
           <StaggerRevealHeadline
             as="h3"
-            className="min-w-0 text-sm font-semibold text-card-foreground"
+            className="min-w-0 text-base font-semibold text-foreground"
           >
             {question.question}
           </StaggerRevealHeadline>
@@ -330,6 +344,7 @@ export default function QuestionCard({
                     size="small"
                     disabled={busy}
                     onClick={() => setPending({ text: option.text, optionId: option.id })}
+                    sx={{ minHeight: 40 }}
                   >
                     {option.text}
                   </Button>
@@ -348,61 +363,33 @@ export default function QuestionCard({
                     id={fieldId}
                     label="Resposta livre"
                     value={freeText}
-                    onChange={(event) => {
-                      setFreeText(event.target.value);
-                      setReviewing(false);
-                    }}
+                    onChange={(event) => setFreeText(event.target.value)}
                     onKeyDown={(event) => {
-                      if (event.key === 'Enter' && !event.shiftKey) {
+                      // Enter é do textarea (quebra de linha). Só o atalho
+                      // explícito Ctrl/⌘+Enter abre a revisão (F.1.1.03).
+                      if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
                         event.preventDefault();
-                        if (reviewing) {
-                          setPending({ text: freeText.trim(), optionId: null });
-                        } else if (freeText.trim()) {
-                          setReviewing(true);
-                        }
+                        reviewFreeText();
                       }
                     }}
                     multiline
                     minRows={1}
                     maxRows={4}
                     fullWidth
-                    helperText="Escreve em português — o servidor traduz antes de guardar."
+                    helperText="Escreve em português — o servidor traduz antes de guardar. Enter quebra linha; Ctrl+Enter (ou ⌘+Enter) revê e envia."
                   />
                   <Button
                     variant="contained"
-                    onClick={() => {
-                      const text = freeText.trim();
-                      if (!text) return;
-                      setPending({ text, optionId: null });
-                    }}
+                    onClick={reviewFreeText}
                     disabled={busy || freeText.trim().length === 0}
                     loading={busy}
                     loadingPosition="start"
                     startIcon={<Send />}
-                    sx={{ flexShrink: 0, mt: { xs: 0, sm: 0.5 } }}
+                    sx={{ flexShrink: 0, mt: { xs: 0, sm: 0.5 }, minHeight: 40 }}
                   >
                     Rever e enviar
                   </Button>
                 </Stack>
-
-                {reviewing ? (
-                  <Box
-                    role="status"
-                    sx={{
-                      p: 1,
-                      borderRadius: 1,
-                      border: '1px dashed var(--mui-palette-divider)',
-                      backgroundColor: 'var(--mui-palette-action-hover)',
-                    }}
-                  >
-                    <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
-                      Vai ser enviado como resposta (passo 2 de 2):
-                    </Typography>
-                    <Typography variant="body2" sx={{ fontFamily: MONO_FONT, whiteSpace: 'pre-wrap' }}>
-                      {freeText.trim()}
-                    </Typography>
-                  </Box>
-                ) : null}
               </Stack>
             ) : (
               <Typography variant="caption" sx={{ color: 'text.secondary' }}>

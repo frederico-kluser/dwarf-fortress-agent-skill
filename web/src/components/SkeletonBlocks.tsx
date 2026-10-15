@@ -30,10 +30,10 @@ export function SpendSkeleton() {
   return (
     <div role="status" aria-label="A carregar gastos…" className="flex flex-col gap-2 p-4">
       <Skeleton className="h-3 w-28" />
-      <Skeleton className="h-7 w-48" />
-      <Skeleton className="mt-2 h-9 w-full" />
-      <Skeleton className="h-9 w-full" />
-      <Skeleton className="h-9 w-full" />
+      <Skeleton className="h-6 w-48" />
+      <Skeleton className="mt-2 h-6 w-full" />
+      <Skeleton className="h-6 w-full" />
+      <Skeleton className="h-6 w-full" />
     </div>
   );
 }
@@ -50,7 +50,7 @@ export function MetricCardsSkeleton({ count = 5 }: { count?: number }) {
         <div key={index} className="rounded-lg border border-border bg-card p-3">
           <Skeleton className="h-3 w-28" />
           <Skeleton className="mt-2 h-6 w-24" />
-          <Skeleton className="mt-2 h-9 w-full" />
+          <Skeleton className="mt-2 h-6 w-full" />
         </div>
       ))}
     </div>

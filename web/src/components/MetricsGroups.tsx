@@ -5,7 +5,6 @@ import AccordionSummary from '@mui/material/AccordionSummary';
 import Box from '@mui/material/Box';
 import Chip from '@mui/material/Chip';
 import Grid from '@mui/material/Grid';
-import LinearProgress from '@mui/material/LinearProgress';
 import List from '@mui/material/List';
 import ListItem from '@mui/material/ListItem';
 import ListItemText from '@mui/material/ListItemText';
@@ -39,6 +38,7 @@ import {
   valuePt,
 } from '../api/format';
 import type { NumberFormat } from '@/components/motion-ui/animated-number';
+import { ProgressBar } from '@/components/motion-ui/progress-bar';
 import type { CombatEntry, Metrics, WoundEntry } from '../api/types';
 import { ValueChip } from './Chips';
 import MetricCard from './MetricCard';
@@ -262,11 +262,20 @@ export function ObjectiveProgressGroup({
       }
     >
       <Stack spacing={1}>
-        <LinearProgress
-          variant="determinate"
-          value={Math.round(metrics.objective_progress.percent * 100)}
+        {/* §5.4: a barra nunca é a única leitura — o valor fica sempre ao lado. */}
+        <ProgressBar
+          value={metrics.objective_progress.percent}
+          highlight
+          progressbar
           aria-label="Progresso do objetivo"
-          color="success"
+          label={
+            <span className="text-micro font-medium text-muted-foreground">Progresso do objetivo</span>
+          }
+          valueLabel={
+            <span className="text-data font-mono tabular-nums text-foreground">
+              {formatPercent(metrics.objective_progress.percent)}
+            </span>
+          }
         />
         <Tooltip title={`${progressSamples} amostras de progresso nesta sessão`}>
           <Typography variant="caption" sx={{ color: 'text.secondary' }}>

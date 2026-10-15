@@ -25,6 +25,7 @@ A app nunca é chamada: a chave sai de ``SOD_OPENROUTER_KEY``/``OPENROUTER_API_K
 from __future__ import annotations
 
 import argparse
+import hashlib
 import importlib.util
 import json
 import re
@@ -37,6 +38,8 @@ LIBRARY = ROOT / "docs" / "padroes-navegacao.json"
 BRIDGE = ROOT / "dfhack" / "df_bridge.py"
 DEFAULT_DF = str(Path.home() / "Games" / "dwarf-fortress-53.16")
 STATS_ENV = "NAV_JEV_STATS"
+#: Cache de padrões de menu (Passo 19): espelho JSON por processo, em .runtime/.
+DEFAULT_PATTERN_CACHE = ROOT / ".runtime" / "nav-pattern-cache.json"
 
 
 # --------------------------------------------------------------------------- #
@@ -84,6 +87,78 @@ def matches(pattern: dict, focus: str, text: str) -> bool:
 def candidates(library: dict, focus: str, text: str) -> list[dict]:
     """Padrões compatíveis com o ecrã (ordem da biblioteca = ordem do fluxo)."""
     return [p for p in library.get("patterns", []) if matches(p, focus, text)]
+
+
+# --------------------------------------------------------------------------- #
+# cache de padrões de menu (Passo 19)                                          #
+# --------------------------------------------------------------------------- #
+
+def library_fingerprint(library: dict) -> str:
+    """Impressão digital da biblioteca: qualquer edição invalida o cache todo.
+
+    A fonte de verdade é ``docs/padroes-navegacao.json`` ("aprendido uma vez,
+    nunca re-derivado"): servir padrões derivados de uma biblioteca antiga seria
+    um padrão stale — a invalidação é conservadora por isso.
+    """
+    return hashlib.sha256(
+        json.dumps(library.get("patterns", []), sort_keys=True, ensure_ascii=False,
+                   default=str).encode("utf-8")
+    ).hexdigest()
+
+
+class PatternCache:
+    """Cache dos padrões de menu derivados por ecrã (focus+texto → ids).
+
+    Reutiliza o núcleo genérico do projeto (``system_one_dwarf.cache`` — o mesmo
+    do cache de tradução e do cache de planos): chave = impressão digital da
+    biblioteca + ecrã; guarda só **ids** e resolve-os contra a biblioteca atual,
+    por isso uma entrada antiga nunca devolve padrões de outra versão da
+    biblioteca (qualquer divergência é descartada como miss).
+    """
+
+    def __init__(self, *, maxsize: int = 512, path=None, autosave: bool = True) -> None:
+        sys.path.insert(0, str(ROOT / "src"))
+        from system_one_dwarf.cache import JsonEntryCache, value_key  # noqa: PLC0415
+
+        self._value_key = value_key
+        self._cache = JsonEntryCache(maxsize=maxsize, path=path, autosave=autosave,
+                                     name="menu_patterns")
+
+    def _key(self, fingerprint: str, focus: str, text: str) -> str:
+        return self._value_key("nav_patterns", fingerprint, focus or "", text or "")
+
+    def match_ids(self, library: dict, focus: str, text: str) -> tuple[str, ...]:
+        """Ids dos padrões derivados para o ecrã (hit = mesma resposta, 0 regex)."""
+        fingerprint = library_fingerprint(library)
+        key = self._key(fingerprint, focus, text)
+        entry = self._cache.peek(key)
+        if entry is not None:
+            if entry.get("fingerprint") == fingerprint:
+                self._cache.count_hit(entry)
+                return tuple(str(i) for i in entry.get("ids", ()))
+            self._cache.drop(key)  # espelho divergente: nunca servir (conservador)
+        self._cache.count_miss()
+        ids = tuple(str(p.get("id")) for p in candidates(library, focus, text))
+        self._cache.put(key, {"ids": list(ids), "fingerprint": fingerprint})
+        return ids
+
+    def candidates_for(self, library: dict, focus: str, text: str) -> list[dict]:
+        """Como :func:`candidates`, mas com o cache por ecrã (ordem preservada)."""
+        by_id = {str(p.get("id")): p for p in library.get("patterns", [])}
+        return [by_id[i] for i in self.match_ids(library, focus, text) if i in by_id]
+
+    def invalidate_library(self, library: dict) -> int:
+        """Invalidação conservadora: drop de tudo o que não é esta biblioteca."""
+        current = library_fingerprint(library)
+        dropped = 0
+        for key, entry in self._cache.items():
+            if entry.get("fingerprint") != current and self._cache.drop(key):
+                dropped += 1
+        return dropped
+
+    def stats(self) -> dict:
+        """Contadores reportáveis (hits/misses/hit_rate) do cache de padrões."""
+        return self._cache.stats()
 
 
 # --------------------------------------------------------------------------- #
@@ -236,6 +311,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--execute", action="store_true", help="executa o padrão escolhido")
     ap.add_argument("--df-path", default=DEFAULT_DF)
     ap.add_argument("--library", default=str(LIBRARY))
+    ap.add_argument("--cache", default=str(DEFAULT_PATTERN_CACHE),
+                    help="espelho JSON do cache de padrões de menu (Passo 19)")
+    ap.add_argument("--no-cache", action="store_true",
+                    help="desliga o cache de padrões (deriva pura, sempre)")
     args = ap.parse_args(argv)
 
     if args.command == "act":
@@ -252,7 +331,14 @@ def main(argv: list[str] | None = None) -> int:
 
     library = load_library(Path(args.library))
     focus, text, code = bridge_screen(args.df_path)
-    cands = candidates(library, focus, text)
+    if args.no_cache:
+        cands = candidates(library, focus, text)
+    else:
+        # Padrões de menu re-derivados por ecrã, com cache conservador (Passo 19):
+        # a impressão digital da biblioteca invalida tudo à mais pequena edição.
+        cache = PatternCache(path=args.cache or None)
+        cache.invalidate_library(library)
+        cands = cache.candidates_for(library, focus, text)
     if args.command == "candidates":
         print(json.dumps({
             "exit": code, "focus": focus,

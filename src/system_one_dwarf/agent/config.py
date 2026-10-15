@@ -32,6 +32,12 @@ Env (todas opcionais)::
     SOD_SCREEN_MODEL=…                       SOD_QUESTION_MODEL=…
     SOD_SESSION_ID=system-one-dwarf          SOD_MAX_EVENTS=20
 
+Watchdog global de sessão (Passo 18 · ``agent.session_watchdog``)::
+
+    SOD_WATCHDOG_WINDOW_MIN=15               SOD_WATCHDOG_GRACE_MIN=2
+    SOD_WATCHDOG_STAGE_STEP_MIN=7.5          SOD_WATCHDOG_ENABLED=1
+    SOD_WATCHDOG_STAGES="replan,ask_human,kill_switch"
+
 Meta da campanha (aceita chaves no topo **ou** dentro de ``config``/``loop``)::
 
     {"mode": "checkpoint", "kill_switch": false,
@@ -50,6 +56,7 @@ __all__ = [
     "ENV_PREFIX",
     "ENV_KEYS",
     "META_SECTIONS",
+    "WATCHDOG_ENV_KEYS",
     "control_from_any",
     "default_config",
     "env_overrides",
@@ -58,6 +65,9 @@ __all__ = [
     "merge_meta_sources",
     "meta_overrides",
     "parse_bool",
+    "watchdog_env_overrides",
+    "watchdog_meta_overrides",
+    "watchdog_settings",
 ]
 
 ENV_PREFIX = "SOD_"
@@ -247,3 +257,74 @@ def merge_meta_sources(*sources: Mapping[str, Any] | None) -> dict[str, Any]:
         if isinstance(source, Mapping):
             out.update(source)
     return dict(out)
+
+
+# ------------------------------------------- watchdog global de sessão (Passo 18)
+
+#: ``SOD_WATCHDOG_<NOME>`` → campo de :class:`~.session_watchdog.WatchdogConfig`.
+WATCHDOG_ENV_KEYS: dict[str, str] = {
+    "WATCHDOG_WINDOW_MIN": "window_min",
+    "WATCHDOG_GRACE_MIN": "grace_min",
+    "WATCHDOG_STAGE_STEP_MIN": "stage_step_min",
+    "WATCHDOG_STAGES": "stages",
+    "WATCHDOG_ENABLED": "enabled",
+}
+
+_WATCHDOG_META_KEY = "watchdog"
+
+
+def watchdog_env_overrides(env: Mapping[str, str] | None = None) -> dict[str, Any]:
+    """Overrides do watchdog vindos de ``SOD_WATCHDOG_*`` (``{}`` quando nenhuma).
+
+    Só junta o que existe — a coerção de tipos é de
+    :meth:`~.session_watchdog.WatchdogConfig.from_settings`.
+    """
+    source = os.environ if env is None else env
+    out: dict[str, Any] = {}
+    for suffix, name in WATCHDOG_ENV_KEYS.items():
+        raw = source.get(ENV_PREFIX + suffix)
+        if raw is not None:
+            out[name] = raw
+    return out
+
+
+def watchdog_meta_overrides(meta: Mapping[str, Any] | None = None) -> dict[str, Any]:
+    """Overrides do watchdog vindos da meta da campanha.
+
+    Aceita uma secção ``"watchdog"`` (no topo ou dentro de ``config``/``loop``)
+    **ou** chaves achatadas ``watchdog_*`` — a configuração é por campanha.
+    """
+    if not isinstance(meta, Mapping):
+        return {}
+    out: dict[str, Any] = {}
+    sections: list[Mapping[str, Any]] = []
+    if any(meta.get(name) is not None for name in META_SECTIONS):
+        sections.append(_first_section(meta, META_SECTIONS))
+    sections.append(meta)
+    for section in sections:
+        block = section.get(_WATCHDOG_META_KEY)
+        if isinstance(block, Mapping):
+            for key, value in block.items():
+                if key in WATCHDOG_ENV_KEYS.values() and value is not None:
+                    out[str(key)] = value
+        for key, value in section.items():
+            if isinstance(key, str) and key.startswith("watchdog_") and value is not None:
+                name = key[len("watchdog_"):]
+                if name in WATCHDOG_ENV_KEYS.values():
+                    out[name] = value
+    return out
+
+
+def watchdog_settings(
+    meta: Mapping[str, Any] | None = None,
+    env: Mapping[str, str] | None = None,
+) -> dict[str, Any]:
+    """Overrides do watchdog global de sessão (``defaults < env < meta``).
+
+    Devolve um mapping pronto para
+    :meth:`~.session_watchdog.WatchdogConfig.from_settings` — o módulo do
+    watchdog continua sem dependências de I/O, só recebe o resultado.
+    """
+    merged = dict(watchdog_env_overrides(env))
+    merged.update(watchdog_meta_overrides(meta))
+    return merged

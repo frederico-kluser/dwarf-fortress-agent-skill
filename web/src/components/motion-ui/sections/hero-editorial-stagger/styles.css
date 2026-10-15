@@ -1,0 +1,79 @@
+@layer theme, base, components;
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css";
+@source "./index.tsx";
+/* The demo composes the stagger-reveal mechanic from the shared component
+   library, so its Tailwind classes must be scanned into this section's chunk
+   too. The CTA anchors are demo-local, so their classes come from ./index.tsx
+   above. */
+@source "../../stagger-reveal/index.tsx";
+
+.velocity-hero-editorial {
+  --motion-ui-transition-snap: cubic-bezier(0.22, 1, 0.36, 1);
+  --motion-ui-transition-snap-duration: 0.15s;
+
+  width: 100%;
+  max-width: 100%;
+  overflow-x: clip;
+}
+
+.velocity-hero-editorial-stage {
+  min-height: 520px;
+  padding: clamp(20px, 3vw, 38px);
+}
+
+.velocity-hero-editorial-copy {
+  max-width: 520px;
+  padding: clamp(80px, 10vw, 140px) 0 40px;
+}
+
+.velocity-hero-editorial-copy h1 {
+  max-width: 14ch;
+  font-size: clamp(3rem, 4vw, 3.5rem);
+  line-height: 1;
+}
+
+.velocity-hero-editorial-copy > p {
+  max-width: 36ch;
+  margin-top: 24px;
+  font-size: 1rem;
+  line-height: 1.5rem;
+}
+
+.velocity-hero-editorial-actions {
+  gap: 10px;
+  margin-top: 28px;
+}
+
+.velocity-hero-editorial-cta-secondary {
+  background-color: transparent;
+  transition-property:
+    color,
+    background-color,
+    -webkit-backdrop-filter,
+    backdrop-filter;
+}
+
+.velocity-hero-editorial-cta-secondary::before {
+  position: absolute;
+  inset: 0;
+  border: 1px solid var(--border);
+  border-radius: inherit;
+  content: "";
+  pointer-events: none;
+  mix-blend-mode: luminosity;
+  transition: border-color var(--motion-ui-transition-snap-duration)
+    var(--motion-ui-transition-snap);
+}
+
+@media (hover: hover) {
+  .velocity-hero-editorial-cta-secondary:hover {
+    background-color: transparent;
+    -webkit-backdrop-filter: saturate(1.14) brightness(0.94);
+    backdrop-filter: saturate(1.14) brightness(0.94);
+  }
+
+  .velocity-hero-editorial-cta-secondary:hover::before {
+    border-color: var(--foreground);
+  }
+}

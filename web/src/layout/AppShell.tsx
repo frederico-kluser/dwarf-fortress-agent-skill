@@ -30,14 +30,14 @@ import {
   useAutonomyPersistence,
 } from '../hooks/useAutonomyControl';
 import NavDrawer from './NavDrawer';
-import PanelTabs, { PanelIconTabs } from './PanelTabs';
+import PanelTabs, { NavQuickAccess } from './PanelTabs';
 import TopBar from './TopBar';
+import { panelMobileTabId } from './navIds';
 import {
   DEFAULT_PANEL_ID,
   PANELS,
   panelById,
   panelRegionId,
-  panelTabId,
   type PanelId,
 } from '../panels/registry';
 
@@ -64,15 +64,15 @@ function ToastFace({
       role="status"
       className={
         entry.tone === 'error'
-          ? 'pointer-events-auto flex items-start gap-2 rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-foreground shadow-lg'
-          : 'pointer-events-auto flex items-start gap-2 rounded-lg border border-success/40 bg-success/10 p-3 text-sm text-foreground shadow-lg'
+          ? 'pointer-events-auto flex items-start gap-2 rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-foreground shadow-[var(--shadow-2)]'
+          : 'pointer-events-auto flex items-start gap-2 rounded-lg border border-success/40 bg-success/10 p-3 text-sm text-foreground shadow-[var(--shadow-2)]'
       }
     >
       <p className="min-w-0 flex-1 text-pretty">{entry.text}</p>
       <button
         type="button"
         aria-label="Fechar notificação"
-        className="shrink-0 rounded-full p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+        className="grid h-10 w-10 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
         onClick={() => onDismiss(entry.id)}
       >
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
@@ -137,9 +137,10 @@ export default function AppShell() {
   );
 
   /**
-   * Uma só navegação em ecrãs estreitos (auditoria F.2.2.03): abaixo de `md` a
-   * navegação é a barra de separadores com rótulo; a partir de `md` é a navegação
-   * lateral agrupada, com uma barra só-ícone como acesso rápido à fila de perguntas.
+   * Uma só navegação por breakpoint (auditorias F.2.2.03/F.1.1.04): abaixo de
+   * `md` a navegação primária é a tira de separadores agrupada por NAV_GROUPS;
+   * a partir de `md` é a navegação lateral agrupada, com um «acesso rápido» de
+   * dois atalhos («Perguntas»/«Controlo») — nunca uma lista paralela de 9.
    */
   const isTabbedNav = useMediaQuery(theme.breakpoints.down('md'));
   const showNavDrawer = !isTabbedNav;
@@ -287,12 +288,27 @@ export default function AppShell() {
       />
       <Stack direction="row" sx={{ flexGrow: 1, minHeight: 0 }}>
         {showNavDrawer ? (
-          <NavDrawer active={active} onSelect={selectPanel} pendingQuestions={pending.length} />
+          <NavDrawer
+            active={active}
+            onSelect={selectPanel}
+            pendingQuestions={pending.length}
+            pendingApprovals={pendingApprovals}
+          />
         ) : null}
         <Box sx={{ flexGrow: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
           <Toolbar variant="dense" />
-          <PanelTabs active={active} onSelect={selectPanel} />
-          <PanelIconTabs active={active} onSelect={selectPanel} pendingQuestions={pending.length} />
+          <PanelTabs
+            active={active}
+            onSelect={selectPanel}
+            pendingQuestions={pending.length}
+            pendingApprovals={pendingApprovals}
+          />
+          <NavQuickAccess
+            active={active}
+            onSelect={selectPanel}
+            pendingQuestions={pending.length}
+            pendingApprovals={pendingApprovals}
+          />
           <Container
             component="main"
             id="main"
@@ -301,12 +317,13 @@ export default function AppShell() {
           >
             {/*
               `role=tabpanel` só quando existe mesmo um tablist visível (mobile). Em
-              desktop a navegação é `nav` + `aria-current` e o painel é uma região.
+              desktop a navegação é `nav` + `aria-labelledby` para o separador mobile
+              único (IDs sem duplicados, auditoria H.1.1.01) e o painel é uma região.
             */}
             <Box
               id={panelRegionId(active)}
               {...(isTabbedNav
-                ? { role: 'tabpanel', 'aria-labelledby': panelTabId(active) }
+                ? { role: 'tabpanel', 'aria-labelledby': panelMobileTabId(active) }
                 : { role: 'region', 'aria-label': `${activePanel.title} — painel` })}
               tabIndex={-1}
             >

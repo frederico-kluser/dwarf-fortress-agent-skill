@@ -1027,6 +1027,66 @@ class TestRestart:
         again, _ = new_runtime(tmp_path)
         assert view(again) == view(runtime)
 
+    # ------------------------------ migração de arranque (anéis em memória → base)
+
+    def test_the_in_memory_rings_migrate_into_the_base_at_startup(self, tmp_path):
+        """Passo 16: anéis já povoados no arranque caem na base e sobrevivem."""
+        seed = CampaignRuntime("c-1")                    # sessão anterior: só memória
+        self.build_history(seed)
+        before = view(seed)
+
+        migrated = CampaignRuntime(                      # arranque com store: migra tudo
+            "c-1", decisions=list(seed.decisions), questions=dict(seed.questions),
+            approvals=dict(seed.approvals), inputs=list(seed.inputs),
+            store=new_store(tmp_path))
+
+        assert view(migrated) == before                  # a memória não perde nada
+        assert migrated.migrated == {"decisions": 5, "questions": 3,
+                                     "approvals": 2, "inputs": 2}
+        assert view(seed) == before                      # os anéis do chamador ficam intactos
+
+        again, _ = new_runtime(tmp_path)                 # "restart": a base já tem tudo
+        assert view(again) == before
+        assert again.restored == {"decisions": 5, "questions": 3, "approvals": 2, "inputs": 2}
+        assert again.add_decision(decision(9))["id"] == "d-6"    # ids continuam
+
+    def test_the_migration_is_a_fallback_the_base_is_never_overwritten(self, tmp_path):
+        """A base é a verdade onde tem dados: nada reescrito, nenhuma lápide revivida."""
+        runtime, _ = new_runtime(tmp_path)
+        runtime.add_question({"id": "q-1", "ts": ts(1), "question": "da base", "status": "answered"})
+        approval = runtime.add_approval(approval_question(qid="q-2", action_id="goto:x", ts=ts(2)))
+        runtime.drop_approval(approval["id"])            # largada: lápide na base
+        runtime.close()
+
+        migrated = CampaignRuntime(
+            "c-1",
+            questions={"q-1": {"id": "q-1", "ts": ts(1), "question": "da memória"},
+                       "q-3": {"id": "q-3", "ts": ts(3), "question": "nova?"}},
+            approvals={"q-2": {"id": "q-2", "ts": ts(2), "action_id": "goto:x",
+                               "question_id": "q-2", "status": "pending"}},
+            store=new_store(tmp_path))
+
+        assert migrated.questions["q-1"]["question"] == "da base"     # nunca reescrita
+        assert migrated.questions["q-3"]["question"] == "nova?"       # o desconhecido migra
+        assert "q-2" not in migrated.approvals                        # não ressuscita
+        assert migrated.migrated == {"decisions": 0, "questions": 1, "approvals": 0, "inputs": 0}
+        store = new_store(tmp_path)
+        assert store.count("approvals") == 1                          # a lápide fica auditada
+        assert store.read("approvals") == []                          # e nunca recarregada
+
+    def test_the_migration_never_writes_secrets_into_the_base(self, tmp_path):
+        """A migração passa pelo mesmo scrub: chaves não chegam ao ficheiro."""
+        seed = CampaignRuntime("c-1")
+        seed.add_decision({**decision(1), "why_pt": f"a chave {LIVE_KEY} ficou no texto"})
+
+        store = new_store(tmp_path)
+        CampaignRuntime("c-1", decisions=list(seed.decisions), store=store)
+        store.close()
+
+        assert LIVE_KEY.encode() not in raw_bytes(tmp_path)
+        stored = new_store(tmp_path).read("decisions")
+        assert mask_key(LIVE_KEY) in stored[0]["why_pt"]
+
 
 # ============================================================ app / API (restart)
 

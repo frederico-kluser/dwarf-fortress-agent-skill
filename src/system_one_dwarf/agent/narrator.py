@@ -60,6 +60,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Mapping, Protocol, Sequence, runtime_checkable
 
 from ..campaign.clock import utc_now_iso
+from ..cache import value_key
 from .llm import (
     LLMClient,
     LLMResult,
@@ -76,6 +77,7 @@ __all__ = [
     "NarrationDraft",
     "NarrationResult",
     "Skip",
+    "change_key",
     "read_jev_answer",
     "parse_narration",
     "condense_to_budget",
@@ -92,6 +94,8 @@ __all__ = [
     "FACT",
     "PROCEDURE",
     "SKIP",
+    "NOTHING_CHANGED",
+    "EFFORT_NONE",
     "UPDATE_ANSWER_KEYS",
     "EFFORT_ANSWER_KEYS",
     "RECORD_TYPE_ANSWER_KEYS",
@@ -103,6 +107,12 @@ EPISODE = "episode"
 FACT = "fact"
 PROCEDURE = "procedure"
 SKIP = "skip"
+
+#: ``Skip.reason`` quando nada mudou desde o último episódio (Passo 19): a alavanca
+#: é o ``narrator_effort`` do JEV-M — o narrador devolve ``none`` e não gasta nada.
+NOTHING_CHANGED = "nothing_changed"
+#: O esforço ``none`` (vocabulário do ``narrator_effort``: "não vale a pena gravar").
+EFFORT_NONE = "none"
 
 #: Record kinds this module knows how to store (mirrors ``jev.fleet.RECORD_TYPES``).
 RECORD_TYPES: tuple[str, ...] = (EPISODE, FACT, PROCEDURE, SKIP)
@@ -315,6 +325,18 @@ def _normalise_record_type(value: Any, default: str | None = EPISODE) -> str | N
 
 
 # --------------------------------------------------------------- word budget
+
+
+def change_key(recent_events: Sequence[str] = ()) -> str:
+    """Impressão digital do que mudou (eventos recentes) — o padrão do cache.
+
+    Usa o mesmo construtor de chaves dos caches do projeto
+    (``system_one_dwarf.cache.value_key``): os mesmos eventos ⇒ a mesma chave.
+    O ``narrative_tail`` fica DE FORA de propósito — ele muda quando o próprio
+    narrador escreve, o que não é "mudou o mundo".
+    """
+    events = [str(event).strip() for event in (recent_events or []) if str(event).strip()]
+    return value_key("narrator_change", *events)
 
 
 def word_count(text: str) -> int:
@@ -658,6 +680,10 @@ class Narrator:
             narrator spends a call (only an explicit *no* skips).
         skip_on_effort_none: honour JEV-M's ``none`` criterion literally and
             skip instead of making the cheapest possible call.
+        skip_on_no_change: when nothing changed since the last episode (same
+            recent events) return :class:`Skip` with effort ``none`` instead of
+            re-narrating — the "narrativas em `none` quando nada mudou" lever of
+            Passo 19 (``PROBLEMAS-E-SOLUCOES.md`` §H6).
         write_records: set ``False`` to update only the rolling narrative.
     """
 
@@ -673,6 +699,7 @@ class Narrator:
         default_effort: str = "medium",
         default_record_type: str = EPISODE,
         skip_on_effort_none: bool = False,
+        skip_on_no_change: bool = True,
         write_records: bool = True,
         date_episodes: bool = True,
         max_tokens: int = 1200,
@@ -696,6 +723,7 @@ class Narrator:
         self.default_effort = _normalise_effort(default_effort, "medium")
         self.default_record_type = _normalise_record_type(default_record_type, EPISODE) or EPISODE
         self.skip_on_effort_none = bool(skip_on_effort_none)
+        self.skip_on_no_change = bool(skip_on_no_change)
         self.write_records = bool(write_records)
         self.date_episodes = bool(date_episodes)
         self.max_tokens = int(max_tokens)
@@ -704,6 +732,8 @@ class Narrator:
         self.clock = clock
         #: Completions actually paid for (the skip path never increments this).
         self.calls = 0
+        #: ``change_key`` da última narração guardada ("nada mudou desde aí").
+        self._last_change_key: str | None = None
 
     # ------------------------------------------------------------------ prompt
     def system_prompt(self) -> str:
@@ -782,7 +812,7 @@ class Narrator:
         if record_type == SKIP:
             return Skip("record_type_skip", effort=effort, record_type=record_type,
                         update_probability=probability, ts=now)
-        if self.skip_on_effort_none and effort == "none":
+        if self.skip_on_effort_none and effort == EFFORT_NONE:
             return Skip("effort_none", effort=effort, record_type=record_type,
                         update_probability=probability, ts=now)
         if not [event for event in (recent_events or []) if str(event).strip()] and not (
@@ -790,6 +820,12 @@ class Narrator:
         ).strip():
             return Skip("no_input", effort=effort, record_type=record_type,
                         update_probability=probability, ts=now)
+        if self.skip_on_no_change and self._last_change_key is not None:
+            # Nada mudou desde o último episódio: a alavanca é o narrator_effort —
+            # devolve `none` e zero chamadas em vez de re-gerar a mesma narrativa.
+            if change_key(recent_events) == self._last_change_key:
+                return Skip(NOTHING_CHANGED, effort=EFFORT_NONE, record_type=record_type,
+                            update_probability=probability, ts=now)
 
         return self.narrate(
             jev_m_answer,
@@ -921,6 +957,9 @@ class Narrator:
         if not write:
             return NarrationResult(draft=draft, memory={}, errors=draft.issues)
         stored, errors = self.store(draft)
+        if stored:
+            # Algo foi guardado: "nada mudou desde o último episódio" mede-se daqui.
+            self._last_change_key = change_key(recent_events)
         return NarrationResult(draft=draft, memory=stored, errors=tuple(errors))
 
     # ----------------------------------------------------------------- store

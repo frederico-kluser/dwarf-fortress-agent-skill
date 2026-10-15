@@ -364,3 +364,32 @@ def test_policy_floor_accepts_overrides():
     assert DEFAULT_POLICY.floor("destructive") == pytest.approx(0.97)
     broken = RiskPolicy(floors={"reversible": "x"})
     assert broken.floor("reversible") == pytest.approx(0.90)  # volta ao piso da política
+
+
+# ------------------------------------- entradas NÃO-ACEITE e snapshot trocado
+
+
+def test_not_accepted_entries_leave_the_policy_floors():
+    # entradas NÃO-ACEITE (o que o pipeline produz com n<30): threshold None
+    table = Table(reversible=Entry(None, support=17), costly=Entry(None, support=8),
+                  irreversible=Entry(None, support=3), destructive=Entry(None, support=6))
+    assert risk.class_thresholds(table) == {c: risk.POLICY_FLOORS[c] for c in RISK_CLASSES}
+    assert {a: risk.auto_threshold_for_action(a, calibration=table) for a in
+            ("explore:x", "flee:s", "attack:stray_mule", "attack:human_farmer")} == {
+        "explore:x": 0.90, "flee:s": 0.95, "attack:stray_mule": 0.95, "attack:human_farmer": 0.97}
+    # entrada não-aceite com limiar ACIMA do piso ainda pode SUBIR (direção
+    # segura, §12 regra 1); nunca baixa — para isso exige verified + suporte ≥ 100
+    assert risk.thresholds_for(RISK_COSTLY, Table(costly=Entry(0.98, support=5))) == pytest.approx(0.98)
+    assert risk.thresholds_for(RISK_COSTLY, Table(costly=Entry(0.85, support=5))) == pytest.approx(0.95)
+
+
+def test_snapshot_swap_falls_back_to_policy_bands():
+    # tabela sem entrada para o snapshot em uso (missing/stale_resolved ⇒
+    # defaults, "recalibrar"): as bandas voltam aos pisos da política — 0.92
+    # chega para reversible mas nunca para costly/irreversible/destructive
+    stale = Table()
+    assert risk.band_for_action(0.92, "explore:x", calibration=stale) == "auto"
+    assert risk.band_for_action(0.92, "flee:s", calibration=stale) == "hitl"
+    assert risk.band_for_action(0.949, "attack:stray_mule", calibration=stale) == "hitl"
+    assert risk.band_for_action(0.95, "attack:stray_mule", calibration=stale) == "auto"
+    assert risk.band_for_action(0.96, "attack:human_farmer", calibration=stale) == "hitl"

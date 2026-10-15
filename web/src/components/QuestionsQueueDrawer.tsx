@@ -14,8 +14,8 @@ import {
   SheetPanel,
 } from '@/components/motion-ui/sheet';
 import type { AnswerQuestionRequest, Question } from '../api/types';
-import { PanelEmpty } from './PanelState';
 import QuestionCard from './QuestionCard';
+import { EmptyState } from './rpg/EmptyState';
 import { groupQuestionsByAction } from './questionGroups';
 
 const DRAWER_TITLE_ID = 'perguntas-pendentes-titulo';
@@ -83,7 +83,7 @@ export function QuestionsQueueDrawer({
         <SheetHandle />
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <h2 id={DRAWER_TITLE_ID} className="text-sm font-bold text-card-foreground">
+            <h2 id={DRAWER_TITLE_ID} className="text-sm font-bold text-foreground">
               Perguntas pendentes
             </h2>
             <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
@@ -99,9 +99,10 @@ export function QuestionsQueueDrawer({
 
         <div className="mt-3 flex-1 overflow-y-auto">
           {questions.length === 0 ? (
-            <PanelEmpty
-              message="Sem perguntas pendentes."
-              hint="As dúvidas aparecem aqui quando o JEV decide nas bandas hitl ou abstain."
+            <EmptyState
+              glyph="hourglass"
+              title="Nenhuma pergunta à espera"
+              body="As dúvidas aparecem aqui quando o JEV decide nas bandas hitl ou abstain — o agente fica à espera da tua resposta."
             />
           ) : (
             <Stack spacing={1.5}>

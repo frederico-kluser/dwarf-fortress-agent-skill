@@ -18,9 +18,9 @@
     "type": "choice",
     "instructions": "If the human is asked, what question format fits best?",
     "criteria": {
+     "multiple": "A short list of 3-4 concrete options to choose from, when several distinct actions are on the table. NOT for: genuine two-way decisions (use binary) and answers no option list can cover (use open).",
      "open": "A free-text question, when the answer is a name, a value or a plan that no option list can cover. NOT for: decisions whose concrete options can be listed (use binary or multiple).",
-     "binary": "A yes/no question with two mutually exclusive options, when the decision is genuinely two-way (cross now or turn back). NOT for: situations with three or more real options (use multiple) or answers that are names, values or plans (use open).",
-     "multiple": "A short list of 3-4 concrete options to choose from, when several distinct actions are on the table. NOT for: genuine two-way decisions (use binary) and answers no option list can cover (use open)."
+     "binary": "A yes/no question with two mutually exclusive options, when the decision is genuinely two-way (cross now or turn back). NOT for: situations with three or more real options (use multiple) or answers that are names, values or plans (use open)."
     }
    }
   }
@@ -33,7 +33,7 @@
    "typesafe/jev-1.13"
   ]
  },
- "repeats": 2,
+ "repeats": 3,
  "variants": [
   {
    "label": "criterios-v2",

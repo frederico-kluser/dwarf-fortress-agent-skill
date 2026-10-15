@@ -93,12 +93,12 @@ def test_golden_set_shape(committed):
     seeds = [c for c in committed if c["source"] == "seed"]
     synthetic = [c for c in committed if c["source"] == "synthetic"]
     assert len(committed) >= 100
-    assert len(seeds) == 66 and all("source=seed" in c["tags"] for c in seeds)
+    assert len(seeds) == 128 and all("source=seed" in c["tags"] for c in seeds)
     assert len(synthetic) >= 40 and all("source=synthetic" in c["tags"] for c in synthetic)
     ids = [c["id"] for c in committed]
     assert len(ids) == len(set(ids))
     holdout = [c for c in committed if core.split_of(c) == "holdout"]
-    assert 15 <= len(holdout) <= 25
+    assert 30 <= len(holdout) <= 45  # 37 no gold de 185 (split sha1 % 100 < 20)
     roles = {c["role"] for c in committed}
     assert roles == set(core.ROLES)
     for role in core.ROLES:  # cada papel tem dev e hold-out
@@ -599,7 +599,7 @@ def test_tune_view_never_opens_the_holdout(env, capsys):
     (env.golden / "holdout.jsonl").unlink()                     # nem sequer existe: não pode ser lido
     assert env.run("tune-view") == 0
     out = capsys.readouterr().out
-    assert "(101 of 101 dev cases; the hold-out is not shown" in out
+    assert "(148 of 148 dev cases; the hold-out is not shown" in out
     assert not any(hid in out for hid in hold_ids)
     assert env.run("tune-view", "--role", "JEV-D", "--limit", "2", "--requests") == 0
     assert capsys.readouterr().out.count("[JEV-D]") == 2
@@ -620,13 +620,13 @@ def test_export_writes_the_evals_format(env, tmp_path):
     out = tmp_path / "dev-cases.json"
     assert env.run("export", "--out", str(out)) == 0
     rows = json.loads(out.read_text(encoding="utf-8"))
-    assert len(rows) == 101 and {"name", "role", "state", "questions", "expected"} <= set(rows[0])
+    assert len(rows) == 148 and {"name", "role", "state", "questions", "expected"} <= set(rows[0])
     assert env.run("export", "--out", str(tmp_path / "h.json"), "--split", "holdout") == 2
     assert env.run("export", "--out", str(tmp_path / "all.json"), "--split", "all", "--allow-holdout") == 0
-    assert len(json.loads((tmp_path / "all.json").read_text())) == 123
+    assert len(json.loads((tmp_path / "all.json").read_text())) == 185
     # o formato é o de evals/*.json: o calibrate.py carrega-o tal e qual
     loaded = calibrate_cli.load_eval_cases([out])
-    assert len(loaded) == 101
+    assert len(loaded) == 148
     request = {"state": rows[0]["state"], "questions": rows[0]["questions"]}
     assert core.validate_request(request, raise_errors=False).ok
 
@@ -708,7 +708,7 @@ def test_run_needs_online_flag_and_the_key(run_env, tmp_path, monkeypatch, capsy
 def test_run_dev_split_reports_per_role_metrics(run_env, tmp_path, capsys):
     assert cli.main(run_args(run_env, tmp_path, "--split", "dev")) == 0
     report = json.loads((tmp_path / "report.json").read_text())
-    assert report["split"] == "dev" and report["cases"] == 101 and report["errors"] == []
+    assert report["split"] == "dev" and report["cases"] == 148 and report["errors"] == []
     assert set(report["roles"]) == set(core.ROLES)
     assert all(m["accuracy"] == 1.0 for m in report["roles"].values())
     assert report["resolved_model"] == "typesafe/jev-1.13-20260917"
@@ -727,7 +727,7 @@ def test_run_holdout_split_never_lists_per_case_rows(run_env, tmp_path):
     assert cli.main(run_args(run_env, tmp_path, "--split", "all")) == 0
     everything = json.loads((tmp_path / "report.json").read_text())
     hold_ids = {c["id"] for c in cli.read_cases(run_env.golden / "holdout.jsonl")}
-    assert everything["cases"] == 123 and everything["rows"]
+    assert everything["cases"] == 185 and everything["rows"]
     assert not hold_ids & {row["id"] for row in everything["rows"]}
 
 
@@ -792,7 +792,7 @@ def test_compare_baseline_gates_on_tolerance_and_support():
 def test_cli_exit_codes_and_json_output(env, capsys):
     assert cli.main(["check", "--json", "--dir", str(env.golden), "--evals", str(env.evals)]) == 0
     payload = json.loads(capsys.readouterr().out)
-    assert payload["ok"] is True and payload["stats"]["cases"] == 123 and payload["problems"] == []
+    assert payload["ok"] is True and payload["stats"]["cases"] == 185 and payload["problems"] == []
     (env.golden / "holdout.jsonl").write_text("{", encoding="utf-8")
     assert cli.main(["check", "--json", "--dir", str(env.golden), "--evals", str(env.evals)]) == 1
     payload = json.loads(capsys.readouterr().out)

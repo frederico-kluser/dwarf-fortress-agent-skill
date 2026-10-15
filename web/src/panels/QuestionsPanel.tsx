@@ -14,17 +14,20 @@ import ExpandMore from '@mui/icons-material/ExpandMore';
 
 import { errorMessage } from '../api/events';
 import { formatDateTime } from '../api/format';
-import { useAnswerQuestion, useQuestions } from '../api/queries';
+import { useApiContext, useAnswerQuestion, useQuestions } from '../api/queries';
+import { tintedChipSx } from '../components/chipSkin';
 import FreshnessIndicator from '../components/FreshnessIndicator';
 import PanelShell from '../components/PanelShell';
-import { PanelEmpty, PanelError, PanelLoading } from '../components/PanelState';
+import { PanelError, PanelLoading } from '../components/PanelState';
 import QuestionCard from '../components/QuestionCard';
+import { EmptyState } from '../components/rpg/EmptyState';
 import { groupQuestionsByAction } from '../components/questionGroups';
 import SectionCard from '../components/SectionCard';
 import { useNow } from '../hooks/useSparkSeries';
 
 /** Fila de dúvidas: responder depressa, com as respondidas a colapsar no histórico. */
 export default function QuestionsPanel() {
+  const { campaign } = useApiContext();
   const questionsQuery = useQuestions();
   const now = useNow(1000);
   const [feedback, setFeedback] = useState<{ tone: 'success' | 'error'; text: string } | null>(null);
@@ -50,8 +53,18 @@ export default function QuestionsPanel() {
       description="Dúvidas geradas nas bandas hitl e abstain. A resposta entra na memória do agente (traduzida PT→EN)."
       actions={
         <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
-          <Chip size="small" color="warning" variant="outlined" label={`${pending.length} pendentes`} />
-          <Chip size="small" color="success" variant="outlined" label={`${answered.length} respondidas`} />
+          <Chip
+            size="small"
+            variant="outlined"
+            sx={tintedChipSx(pending.length > 0 ? 'warning' : 'default')}
+            label={`${pending.length} pendentes`}
+          />
+          <Chip
+            size="small"
+            variant="outlined"
+            sx={tintedChipSx('success')}
+            label={`${answered.length} respondidas`}
+          />
           <FreshnessIndicator
             ts={questionsQuery.dataUpdatedAt ? new Date(questionsQuery.dataUpdatedAt).toISOString() : null}
             now={now}
@@ -88,9 +101,20 @@ export default function QuestionsPanel() {
           }
         >
           {!questionsQuery.isLoading && pending.length === 0 ? (
-            <PanelEmpty
-              message="Sem perguntas pendentes."
-              hint="Quando o JEV não tiver confiança suficiente, a pergunta aparece aqui e no badge da barra superior."
+            /* §5.7 — mensagem por painel, nomeando o objeto real; a frase do
+             * autopiloto só aparece quando ela é verdade (honestidade do estado). */
+            <EmptyState
+              glyph="hourglass"
+              title={
+                campaign?.control.mode === 'autopilot'
+                  ? 'Nenhuma pergunta à espera — o agente segue em autopilot'
+                  : 'Nenhuma pergunta à espera'
+              }
+              body="Quando o JEV decidir sem confiança suficiente (bandas hitl ou abstain), a dúvida aparece aqui e no badge da barra superior — e o agente fica à espera da tua resposta."
+              action={{
+                label: 'Atualizar perguntas',
+                onClick: () => void questionsQuery.refetch(),
+              }}
             />
           ) : (
             <Stack spacing={1.5}>

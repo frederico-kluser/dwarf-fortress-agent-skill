@@ -35,8 +35,12 @@ from pathlib import Path
 from typing import Any, Callable
 
 from .clock import utc_now_iso
+from .bundle import MemoryBundle
+from .dialogue import DialogueMemory
+from .extraction import ExtractionStore
 from .keys import KeyStore
-from .memory import IdentityTranslator, MemoryStore, Translator
+from .logbook import Logbook
+from .memory import EpisodicStore, IdentityTranslator, MemoryStore, Translator
 from .objective import ObjectiveStore
 from .paths import (
     campanhas_dir,
@@ -44,6 +48,7 @@ from .paths import (
     coala_python,
     ensure_private_dir,
     keys_db,
+    memory_db,
     meta_path,
     skill_script,
     spend_db,
@@ -384,6 +389,41 @@ class CampaignManager:
     def spend(self, campaign: Campaign) -> SpendLedger:
         return SpendLedger(spend_db(campaign.root))
 
+    # ------------------------------------------- memória viva (Passos 7 + 9)
+
+    def dialogue(self, campaign: Campaign, **kwargs: Any) -> DialogueMemory:
+        """Transcrição conversacional da campanha (``<raiz>/dialogos.sqlite``)."""
+        return DialogueMemory.from_campaign_root(campaign.root, **kwargs)
+
+    def logbook(self, campaign: Campaign, **kwargs: Any) -> Logbook:
+        """Diário de bordo append-only da campanha (``<raiz>/diario.sqlite``)."""
+        return Logbook.from_campaign_root(campaign.root, **kwargs)
+
+    def extraction(self, campaign: Campaign, **kwargs: Any) -> ExtractionStore:
+        """Extrações derivadas citáveis (``<raiz>/extracoes.sqlite``)."""
+        return ExtractionStore.from_campaign_root(campaign.root, **kwargs)
+
+    def episodes(self, campaign: Campaign, **kwargs: Any) -> EpisodicStore:
+        """Camada episódica CoALA (``…/memory/coala.sqlite``, só-leitura)."""
+        return EpisodicStore(memory_db(campaign.root, campaign.slug), **kwargs)
+
+    def bundle(self, campaign: Campaign, **kwargs: Any) -> MemoryBundle:
+        """Fachada «memória viva» (Passos 7+9): diálogo + diário + extrações + episódios.
+
+        É o objeto que o loop/narrador devem usar (ver o snippet de wiring no
+        relatório da Onda 2): ``observe`` transcreve e puxa contexto,
+        ``memory_items`` é o top-K composto do JEV-R, ``project`` leva os eventos
+        do diário à camada episódica CoALA.
+        """
+        return MemoryBundle(
+            self.dialogue(campaign),
+            self.logbook(campaign),
+            self.extraction(campaign),
+            self.episodes(campaign),
+            memory=self.memory(campaign),
+            **kwargs,
+        )
+
     # ------------------------------------------------------------------ lifecycle
 
     def mode_of(self, campaign_id: str) -> str:
@@ -404,6 +444,7 @@ __all__ = [
     "InstallerMissing",
     "InvalidSlug",
     "MODES",
+    "MemoryBundle",
     "default_manager",
     "slugify",
     "validate_slug",

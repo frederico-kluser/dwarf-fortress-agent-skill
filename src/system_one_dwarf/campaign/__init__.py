@@ -29,6 +29,10 @@ from .manager import (
     slugify,
     validate_slug,
 )
+from .bundle import MemoryBundle, Observation
+from .dialogue import DialogueLine, DialogueMemory, ProfileCard
+from .extraction import ExtractedDraft, ExtractedFact, ExtractionStore, rule_extractor
+from .logbook import LogEvent, Logbook
 from .memory import (
     KIND_EPISODIC,
     KIND_PROCEDURAL,
@@ -37,9 +41,12 @@ from .memory import (
     CoalaCli,
     CoalaError,
     CoalaMissing,
+    Episode,
+    EpisodicStore,
     IdentityTranslator,
     MemoryStore,
     Translator,
+    episode_importance,
     search_knowledge,
 )
 from .objective import ObjectiveStore, normalize_subgoals
@@ -50,6 +57,7 @@ from .paths import (
     coala_installer_path,
     knowledge_dir,
 )
+from .recall import RETRIEVAL_WEIGHTS, ScoreWeights, combined_score
 from .spend import SpendLedger, money
 
 __all__ = [
@@ -62,6 +70,13 @@ __all__ = [
     "CoalaError",
     "CoalaInstaller",
     "CoalaMissing",
+    "DialogueLine",
+    "DialogueMemory",
+    "Episode",
+    "EpisodicStore",
+    "ExtractedDraft",
+    "ExtractedFact",
+    "ExtractionStore",
     "IdentityTranslator",
     "InstallerMissing",
     "InvalidKey",
@@ -71,21 +86,31 @@ __all__ = [
     "KIND_SEMANTIC",
     "KNOWLEDGE_NAME",
     "KeyStore",
+    "LogEvent",
+    "Logbook",
     "MODES",
+    "MemoryBundle",
     "MemoryStore",
     "ObjectiveStore",
+    "Observation",
     "PROVIDERS",
+    "ProfileCard",
+    "RETRIEVAL_WEIGHTS",
+    "ScoreWeights",
     "SpendLedger",
     "Translator",
     "UnknownProvider",
     "campanhas_dir",
     "campaign_dir",
     "coala_installer_path",
+    "combined_score",
     "default_manager",
+    "episode_importance",
     "knowledge_dir",
     "mask_key",
     "money",
     "normalize_subgoals",
+    "rule_extractor",
     "search_knowledge",
     "slugify",
     "to_z",

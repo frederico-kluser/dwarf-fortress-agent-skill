@@ -6,7 +6,7 @@ automatizado) e os riscos de `ARQUITETURA.md` §9 "Processo" e "Navegação".
 
 | Workflow | Quando corre | Onde | Precisa de segredos? | Para quê |
 |---|---|---|---|---|
-| `.github/workflows/ci.yml` | `push` a `main`, `pull_request`, manual, `workflow_call` | runners do GitHub | **não** (só `MOTION_TOKEN`, opcional — ver "Web") | testes, sintaxe, segredos, smoke **offline** |
+| `.github/workflows/ci.yml` | `push` a `main`, `pull_request`, manual, `workflow_call` | runners do GitHub | **não** (só `MOTION_TOKEN`, opcional — ver "Web") | testes, lint, **golden set**, segredos, smoke **offline** |
 | `.github/workflows/release.yml` | tag `vX.Y.Z[-pre]` | runners do GitHub | **não** (`GITHUB_TOKEN` efémero) | mesmos testes + GitHub Release com as notas do `CHANGELOG.md` |
 | `.github/workflows/smoke.yml` | manual e semanal (seg. 05:17 UTC) | **runner auto-hospedado** `dwarf-fortress` | **não** | smoke **ao vivo** contra o jogo real (opcional) |
 
@@ -20,7 +20,7 @@ runner auto-hospedado.
 
 | Job | Passos | Falha quando |
 |---|---|---|
-| `python` (3.12 e 3.14) | `pip install -r requirements.txt` · instala `lua5.4` · `compileall` · `pytest -q` · `dfhack/test_bridge.py` · `dfhack/test_snapshot.py` · `luac -p dfhack/*.lua` · `patterns_check.py` · `df_smoke.py --offline` · `scripts/golden.py check` (só se existir) | regressão de código/ponte/Lua, biblioteca de padrões inválida, fluxo do smoke partido |
+| `python` (3.12 e 3.14) | `pip install -r requirements.txt` · instala `lua5.4` · `compileall` · `pytest -q` · `dfhack/test_bridge.py` · `dfhack/test_snapshot.py` · `luac -p dfhack/*.lua` · `patterns_check.py` · `df_smoke.py --offline` · `scripts/golden.py check` (gate do Passo 15, obrigatório) | regressão de código/ponte/Lua, biblioteca de padrões inválida, fluxo do smoke partido, **deriva de prompt/modelo** |
 | `web` | `npm ci --dry-run` · `oxlint` · (com `MOTION_TOKEN`) `npm ci` + `typecheck` + `build` | lock fora de sincronia, erros de lint/tipos/build |
 | `shell` | `bash -n` (+ `shellcheck` **não bloqueante**) | erro de sintaxe nos `.sh` |
 | `secrets` | `git grep` de padrões de chaves nos ficheiros versionados | possível segredo versionado (o valor nunca é impresso) |
@@ -37,8 +37,8 @@ runner auto-hospedado.
 | snapshot | `python3 dfhack/test_snapshot.py` |
 | sintaxe Lua | `luac5.4 -p dfhack/*.lua` (ou `luac`) |
 | biblioteca de padrões | `python3 scripts/smoke/patterns_check.py` |
-| smoke offline | `python3 scripts/smoke/df_smoke.py --offline --report .runtime/smoke-offline.json` |
-| golden set | `python3 scripts/golden.py check` (quando o script existir) |
+| smoke offline | `python3 scripts/smoke/df_smoke.py --offline --report smoke-offline.json` (o mesmo comando do CI: o JSON na raiz é o relatório transitório que o workflow faz upload como artefacto; `.runtime/` reserva-se ao runtime do `sod` — PIDs/logs) |
+| golden set | `python3 scripts/golden.py check` |
 | web: lock | `cd web && npm ci --dry-run --ignore-scripts` |
 | web: lint | `cd web && npm run lint` |
 | web: tipos + build | `cd web && npm ci && npm run typecheck && npm run build` (precisa de `MOTION_TOKEN`) |
@@ -61,6 +61,42 @@ completos: *Settings → Secrets and variables → Actions → New repository se
 `MOTION_TOKEN`. Recomendação de fundo: o `motion-plus` só tem 2 imports
 (`AnimateNumber`, `splitText`); substituí-los por uma alternativa pública tornaria a
 UI compilável por qualquer contribuidor e o CI completo sem segredos.
+
+### Golden set (Passo 15): o gate e a disciplina
+
+O passo `python3 scripts/golden.py check` é **gate obrigatório** do job `python`
+(em PR, `main` e também na `release`, que reutiliza o `ci.yml`): offline,
+determinístico, ~1 s, **sem chaves de API**. Falha (exit 1) com `prompt-drift`
+(o pedido reconstruído pelos *builders* atuais já não dá o hash de
+`prompts.lock.json`), `build-drift`/`seed-drift` (as fontes já não regeneram os
+casos versionados), pin do hold-out adulterado (`HOLDOUT.sha256`) ou etiqueta
+que já não corresponde à regra. Se o script faltar, o passo falha — um gate de
+regressão de prompts não se pode saltar.
+
+**Equivalentes locais** (da raiz, sem rede):
+
+```bash
+python3 scripts/golden.py check          # o mesmo gate do CI
+python3 scripts/golden.py tune-view --role JEV-A --requests   # só casos dev
+```
+
+**Disciplina** (resumo da disciplina anti-overfit; o detalhe — composição,
+regras e limiares — está em `docs/calibracao.md` §14–15):
+
+1. Afina-se com `tune-view`/`show` — **só** casos `dev`; o hold-out nunca é
+   aberto durante o tuning.
+2. `check` depois de cada alteração; **`bless --reason "…"` só para mudanças
+   *intencionais* de prompt** — re-calcula os hashes e regista uma linha em
+   `evals/golden/CHANGELOG.md` (sem linha, a mudança não é legítima). O `bless`
+   nunca "lava" etiquetas: recusa-se se houver qualquer outro problema.
+3. Avaliação contra o modelo real (`run --online`, gasta tokens): `--split dev`
+   enquanto se afina; **`--split holdout` só no fim**, quando já não há nada a
+   afinar (o relatório do hold-out traz métricas agregadas, nunca linhas por caso).
+4. Mudar o conjunto de casos ou o hold-out exige `build` + `freeze-holdout
+   --reason` (decisão explícita, registada) — nunca `bless`.
+
+O CI **nunca** corre `run --online`: os gates são todos offline por desenho, e
+é por isso que o workflow não precisa de chaves de API.
 
 ## 2. Release (`release.yml`)
 

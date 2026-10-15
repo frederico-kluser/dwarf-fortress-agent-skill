@@ -1,5 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="System One Dwarf">
-  <rect width="64" height="64" rx="12" fill="#0B0F14"/>
-  <path d="M18 44V20h7l7 12 7-12h7v24h-6V30l-8 13-8-13v14z" fill="#5BC8FF"/>
-  <circle cx="32" cy="50" r="3" fill="#5DD19A"/>
+  <!-- §2.4 — bigorna/runa a #DFC05B sobre fundo #0B0F14; rx=4, traço 4px (legível a 16px). -->
+  <rect width="64" height="64" rx="4" fill="#0B0F14"/>
+  <g transform="translate(8 8) scale(2)" fill="none" stroke="#DFC05B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M4 9h7l2-2h7v3c0 2.2-1.8 4-4 4h-3l-1 3H9l-1-3H6a2 2 0 0 1-2-2V9z"/>
+  </g>
 </svg>

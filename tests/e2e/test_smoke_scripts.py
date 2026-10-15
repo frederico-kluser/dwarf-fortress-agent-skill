@@ -2053,8 +2053,23 @@ def test_ci_estrutura_e_passos_prometidos():
                    "scripts/smoke/patterns_check.py", "python3 scripts/golden.py check",
                    "bash -n", "shellcheck", "git grep"):
         assert needle in runs, needle
-    # o golden set é guardado: só corre quando o script existe
-    assert re.search(r"if \[ -f scripts/golden\.py \]; then\s+python3 scripts/golden\.py check", runs)
+    # o golden set (Passo 15) é gate obrigatório: corre sempre, sem guardas que
+    # o possam saltar (o script é versionado; a falta dele TEM de falhar o CI)
+    assert "python3 scripts/golden.py check" in runs
+    assert "[ -f scripts/golden.py ]" not in runs
+    # ... e não pode ser neutralizado: o BLOCO do step golden não aceita
+    # `continue-on-error` (gate morto que passa sempre) nem `if:` (passo saltado).
+    # Reprodução (confirmada): acrescentar qualquer um deles ao step
+    # «Golden set (offline)» do ci.yml faz ESTE teste falhar.
+    golden_body = next(body for step_name, body in re.findall(
+        r"(?m)^      - name: (.+)\n((?:        .*\n|\n)+)", text)
+                       if step_name == "Golden set (offline)")
+    assert "continue-on-error" not in golden_body
+    assert not re.search(r"(?m)^\s+if:", golden_body)
+    if data is not None:
+        golden_step = next(s for s in data["jobs"]["python"]["steps"]
+                           if s.get("name") == "Golden set (offline)")
+        assert "continue-on-error" not in golden_step and "if" not in golden_step
     # o único segredo opcional é o do registo Motion+ (nunca outros)
     assert set(re.findall(r"secrets\.([A-Z_]+)", text)) == {"MOTION_TOKEN"}
     assert "shellcheck" in text and re.search(
@@ -2106,7 +2121,7 @@ def test_smoke_so_corre_ao_vivo_num_runner_proprio_e_nunca_em_pr():
 
 
 def test_caminhos_referenciados_nos_workflows_existem():
-    generated = {"smoke-offline.json", "smoke-live.json", "release-notes.md", "scripts/golden.py"}
+    generated = {"smoke-offline.json", "smoke-live.json", "release-notes.md"}
     tokens = re.compile(r"(?<![\w./-])((?:scripts|dfhack|src|tests|docs|web|\.github)/[\w./*-]+|"
                         r"install\.sh|requirements\.txt|pyproject\.toml|CHANGELOG\.md)")
     for name in WORKFLOW_NAMES:
@@ -2119,7 +2134,7 @@ def test_caminhos_referenciados_nos_workflows_existem():
                     assert list(ROOT.glob(token)), (name, token)
                 else:
                     assert (ROOT / token).exists(), (name, token)
-    # o único passo opcional é o golden set, e está guardado por `[ -f ... ]`
+    # o golden set (Passo 15) é obrigatório: o script é versionado e referenciado
     assert "scripts/golden.py" in "\n".join(run_blocks(workflow_text("ci")))
 
 

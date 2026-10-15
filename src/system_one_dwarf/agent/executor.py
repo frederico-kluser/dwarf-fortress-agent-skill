@@ -48,6 +48,21 @@ from pathlib import Path
 from typing import Any, Callable, Mapping, Protocol, Sequence
 
 from ..game.models import GameState
+from .movement import (
+    ARRIVAL_TOLERANCE,
+    LEG_ABORT,
+    LEG_ARRIVED,
+    LEG_BLOCKED,
+    LEG_CONTINUE,
+    MOVEMENT_VERBS,
+    RoutePlan,
+    build_route,
+    evaluate_states,
+    observe_state,
+    route_summary,
+    urgency_level,
+)
+from .stuck import StuckDetector
 from .types import (
     ExecutionResult,
     MacroAction,
@@ -80,6 +95,28 @@ GAME_DOWN_EXITS = (EXIT_NO_DF, EXIT_UNREACHABLE)
 DEFAULT_THREAT_RADIUS = 10
 DEFAULT_MAX_STEPS = 120
 DEFAULT_DELAY = 0.4
+
+#: Alias de verbos do id/da ação para o verbo semântico da rota (``movement`` tem o mesmo mapa).
+_ROUTE_VERB_ALIASES = {"navigate": "navigate_to", "travel": "navigate_to"}
+
+#: Veredicto :func:`.movement.evaluate_leg` → razão de paragem que o loop conhece
+#: (vocabulário dos ``guard:*`` quando é a mesma emergência; ``route:*``/``opportunity:*`` no resto).
+_ROUTE_ABORT_REASONS: Mapping[str, str] = {
+    "adventurer_dead": "guard:adventurer_dead",
+    "focus_changed": "guard:focus_changed",
+    "new_hostile": "guard:threat_appeared",
+    "great_danger_appeared": "guard:great_danger_appeared",
+    "blood_drop": "route:blood_drop",
+    "new_prey": "opportunity:new_prey",
+    "position_unknown": "route:position_unknown",
+}
+
+#: Evento :class:`~.stuck.StuckEvent` → razão de devolução do controlo.
+_STUCK_EVENT_REASONS: Mapping[str, str] = {
+    "death": "guard:adventurer_dead",
+    "damage": "route:damage",
+    "action_loop": "stuck:action_loop",
+}
 
 
 class BridgeRunner(Protocol):
@@ -149,6 +186,10 @@ class MacroExecutor:
             plano se a situação mudou.
         dry_run: monta e valida o plano na ponte sem premir nada (``--dry-run``).
         sleeper: injeção do sono (testes não esperam de verdade).
+        stuck: :class:`~.stuck.StuckDetector` das rotas (paragens: 3 passos sem
+            mudança → exploração forçada; 2.ª ocorrência → re-plano). ``None``
+            cria um detetor próprio com registo na biblioteca de padrões (mudo
+            sob pytest).
     """
 
     def __init__(
@@ -169,6 +210,7 @@ class MacroExecutor:
         dry_run: bool | None = None,
         sleeper: Callable[[float], Any] | None = None,
         clock: Callable[[], str] = utc_now_iso,
+        stuck: Any = None,
     ) -> None:
         self.game = game
         self.config = config
@@ -189,6 +231,8 @@ class MacroExecutor:
         self._sleeper = sleeper
         self._clock = clock
         self._runner = runner if runner is not None else _attr(game, "runner", default=None)
+        #: StuckDetector das rotas (paragens dentro de uma macro-ação de movimento).
+        self.stuck = stuck if stuck is not None else StuckDetector(pattern_sink=True)
         #: Comandos emitidos (auditoria/testes) — só o texto, sem segredos.
         self.commands: list[tuple[str, ...]] = []
 
@@ -442,7 +486,8 @@ class MacroExecutor:
         great = any(bool(getattr(unit, "great_danger", False)) for unit in hostiles)
         return (len(hostiles), distance, identities, great)
 
-    def guard_check(self, state: GameState) -> tuple[bool, str | None, tuple[str, ...]]:
+    def guard_check(self, state: GameState, *,
+                    current: GameState | None = None) -> tuple[bool, str | None, tuple[str, ...]]:
         """A situação ainda é a que foi decidida? ``(ok, reason, warnings)``.
 
         Compara o snapshot atual com o estado que alimentou a decisão: *focus*,
@@ -452,18 +497,22 @@ class MacroExecutor:
         apenas se aproximou de longe (12 → 11 tiles): isso é o dia-a-dia e os
         gates do ``act batch`` continuam a cobri-lo.
 
+        ``current``: snapshot já lido pelo chamador (o corredor de rotas relê
+        uma vez por passo e reutiliza a leitura); ``None`` relê aqui.
+
         Não usável (sem cliente ou sem snapshot) ⇒ ``ok=True`` com aviso: os
         gates do próprio ``act batch`` continuam a proteger a execução.
         """
         if not self.guard_enabled or self.game is None:
             return True, None, ()
-        snapshot = getattr(self.game, "snapshot", None)
-        if not callable(snapshot):
-            return True, None, ("guard unavailable: game client has no snapshot()",)
-        try:
-            current = snapshot()
-        except Exception as exc:  # jogo caiu/ponte falhou: o guard não decide por nós
-            return True, None, (f"guard could not re-read the state: {exc}",)
+        if current is None:
+            snapshot = getattr(self.game, "snapshot", None)
+            if not callable(snapshot):
+                return True, None, ("guard unavailable: game client has no snapshot()",)
+            try:
+                current = snapshot()
+            except Exception as exc:  # jogo caiu/ponte falhou: o guard não decide por nós
+                return True, None, (f"guard could not re-read the state: {exc}",)
         if not isinstance(current, GameState):
             return True, None, ("guard ignored a non-GameState snapshot",)
         if state.focus and current.focus and state.focus != current.focus:
@@ -487,13 +536,22 @@ class MacroExecutor:
     #: Golpes máximos por ação ``attack`` (regra das ≤ 5 tentativas por obstáculo).
     ATTACK_ROUNDS = 5
 
-    def execute(self, action: MacroAction, state: GameState) -> ExecutionResult:
+    def execute(self, action: MacroAction, state: GameState, *,
+                urgency: Any = None) -> ExecutionResult:
         """Executa a macro-ação (plano seguro) com gates de segurança ligados.
 
         Um plano inválido (argumento fora do vocabulário da DSL) **não** derruba o
         passo nem envia nada ao jogo: devolve ``refused`` com o motivo claro.
         ``attack`` não-batch segue por :meth:`_execute_attack` (laço de golpes
         com verificação por passo, ≤ 5 tentativas).
+
+        **Movimento como macro-ação** (mudança 04): uma ação de movimento marcada
+        como macro (``params["macro"]``/``params["route"]`` — as de
+        :func:`.movement_actions.movement_actions`) resolve-se em ROTA e é
+        caminhada *leg* a *leg* por :meth:`_execute_route` — uma decisão
+        (destino + ``urgency``) cobre todo o caminho, com guards e
+        ``--stop-on-threat`` entre passos. ``urgency`` (a resposta ``score`` do
+        JEV-A) define o orçamento da rota; sem ela vale ``params["urgency"]``.
         """
         if not isinstance(action, MacroAction):
             raise TypeError(f"execute expects a MacroAction, got {type(action).__name__}")
@@ -501,6 +559,9 @@ class MacroExecutor:
         verb = action.verb or action.id.split(":", 1)[0]
         if verb == "attack" and not self.dry_run:
             return self._execute_attack(action, state, started)
+        plan = self._resolve_route(action, state, urgency)
+        if plan is not None:
+            return self._execute_route(action, state, plan, started)
         try:
             steps = self.plan(action, state)
         except ValueError as exc:
@@ -542,16 +603,7 @@ class MacroExecutor:
                 ),
             ))
 
-        argv = self.bridge_command(
-            "act", "batch",
-            "--stop-on-focus-change", "--stop-on-threat",
-            "--threat-radius", str(self.threat_radius),
-            "--max-steps", str(self.max_steps),
-            "--delay", str(self.delay),
-        )
-        if self.dry_run:
-            argv.append("--dry-run")
-        argv.append(safe_dsl)
+        argv = self._batch_argv(safe_dsl)
 
         try:
             proc = self._run(argv)
@@ -589,6 +641,210 @@ class MacroExecutor:
             report=report if isinstance(report, Mapping) else None, errors=errors,
         ))
 
+    # ------------------------------------------------- macro-ação de movimento
+
+    def _batch_argv(self, dsl: str) -> list[str]:
+        """``act batch`` de um passo — **sempre** com os gates de segurança ligados."""
+        argv = self.bridge_command(
+            "act", "batch",
+            "--stop-on-focus-change", "--stop-on-threat",
+            "--threat-radius", str(self.threat_radius),
+            "--max-steps", str(self.max_steps),
+            "--delay", str(self.delay),
+        )
+        if self.dry_run:
+            argv.append("--dry-run")
+        argv.append(dsl)
+        return argv
+
+    def _batch_once(self, dsl: str) -> tuple[str, bool, str | None]:
+        """Corre UMA leva de um passo: ``(status, ok, razão)`` (razão = o que a ponte disse)."""
+        try:
+            proc = self._run(self._batch_argv(dsl))
+        except Exception as exc:  # ponte ausente, timeout, OSError…
+            return "error", False, f"bridge_failed: {exc}"
+        code = getattr(proc, "returncode", None)
+        report = _parse_report(getattr(proc, "stdout", "") or "")
+        status, ok_flag, failure = self._classify(code, report, dry_run=self.dry_run)
+        reason = None
+        if isinstance(report, Mapping) and report.get("reason"):
+            reason = str(report.get("reason"))
+        return status, ok_flag, reason or failure
+
+    def _resolve_route(self, action: MacroAction, state: GameState,
+                       urgency: Any = None) -> RoutePlan | None:
+        """Rota da macro-ação de movimento (``None`` ⇒ caminho clássico, um passo).
+
+        Só ações de movimento MARCADAS como macro (``params["macro"]`` ou com
+        ``params["route"]`` — as que :func:`.movement_actions.movement_actions`
+        gera) viram rota: as macro-ações clássicas continuam pelo plano de sempre.
+        A rota é reconstruída do zero — urgência decidida + posição fresca do
+        estado — porque o candidato só trouxe a pré-visualização; essa só entra
+        como reserva quando a origem é desconhecida, e aí cada leg é revalidado
+        por :meth:`.movement.RoutePlan.from_params`. Lixo nunca levanta: ``None``
+        cai no caminho clássico, que recusa plano inválido como sempre.
+        """
+        params = dict(action.params or {})
+        if not (params.get("macro") or isinstance(params.get("route"), Mapping)):
+            return None
+        verb = (action.verb or action.id.split(":", 1)[0]).strip().lower().split(":", 1)[0]
+        verb = _ROUTE_VERB_ALIASES.get(verb, verb)
+        if verb not in MOVEMENT_VERBS:
+            return None
+        level = urgency_level(urgency if urgency is not None else params.get("urgency"))
+        goal = params.get("destination") or (action.target if verb == "navigate_to" else None)
+        plan = build_route(params, observe_state(state).pos, level, verb=verb,
+                           goal_name=goal if isinstance(goal, str) else None)
+        if plan is None and isinstance(params.get("route"), Mapping):
+            plan = RoutePlan.from_params(params)
+        return plan
+
+    def _execute_route(self, action: MacroAction, state: GameState, plan: RoutePlan,
+                       started: float) -> ExecutionResult:
+        """Caminha a rota *leg* a *leg*: uma decisão (destino+urgência), N passos.
+
+        Por cada passo (``goto`` do leg, o plano B ``move`` quando o ``goto``
+        não anda, ou a exploração forçada do :class:`~.stuck.StuckDetector`):
+
+        1. relê o snapshot e corre o :meth:`guard_check` da decisão (focus, morte,
+           ameaças — as razões ``guard:*`` de sempre);
+        2. corre **UM** ``act batch`` com ``--stop-on-threat``/``--stop-on-focus-change``
+           (a ponte aborta sozinha se algo aparecer durante o passo);
+        3. relê o snapshot e avalia o passo (:func:`.movement.evaluate_states`)
+           e alimenta o ``StuckDetector`` (``moved=``: posição real, não o hash).
+
+        Paragens — a escada do detetor, sem duplicar nada: **3 passos sem
+        mudança → exploração forçada** num rumo ainda não tentado (sem aprovação:
+        anti-congelamento) e **2.ª ocorrência → re-plano**: o controlo devolve-se
+        com ``reason="stuck:replan"``. Ameaça nova, focus, dano, morte ou abort
+        da ponte devolvem o controlo com ``guard:*``/``route:*``. Fim dos legs ⇒
+        ``executed`` (``"arrived"`` ou ``"route:completed"`` quando o orçamento
+        da urgência cortou a viagem — ``truncated``). Reavalia depois de cada
+        passo (``reassess_every`` do perfil é um teto de otimização, não uma
+        promessa de menos leituras).
+        """
+        if self.dry_run or self.game is None or not callable(getattr(self.game, "snapshot", None)):
+            # sem jogo para observar entre legs (ou dry-run): a rota inteira numa
+            # leva — os gates de segurança continuam ligados e a ponte valida tudo
+            steps = tuple(PlanStep(plan.to_dsl(leg, with_budget=True) or plan.to_dsl(leg))
+                          for leg in plan.legs)
+            return self._run_batch(action, state, tuple(s for s in steps if s.dsl.strip()), started)
+
+        attempts: list[dict[str, Any]] = []
+        stuck_events: list[dict[str, Any]] = []
+        walked: list[str] = []
+        warnings: list[str] = []
+        legs_executed = 0
+        forced = 0
+        last_pos = observe_state(state).pos
+        mark = len(self.commands)
+
+        def arrived() -> bool:
+            """Chegou ao waypoint final da rota (o destino pedido quando não truncada)."""
+            if last_pos is None:
+                return False
+            return (max(abs(last_pos[0] - plan.final.x),
+                        abs(last_pos[1] - plan.final.y)) <= ARRIVAL_TOLERANCE)
+
+        def reached_goal() -> bool:
+            return arrived() and not plan.truncated
+
+        def finish(status: str, ok: bool, reason: str | None) -> ExecutionResult:
+            full_dsl = "; ".join(filter(None, (plan.to_dsl(leg, with_budget=True) or plan.to_dsl(leg)
+                                               for leg in plan.legs)))
+            return _with_duration(ExecutionResult(
+                action_id=action.id, status=status, ok=ok, reason=reason,
+                dsl=full_dsl, executed_dsl="; ".join(walked),
+                steps_planned=len(plan.legs), steps_executed=legs_executed,
+                commands=tuple(self.commands[mark:]), errors=tuple(warnings),
+                report={
+                    "route_id": plan.id, "goal": plan.goal_name, "urgency": plan.urgency,
+                    "route_summary": route_summary(plan), "truncated": plan.truncated,
+                    "watch_prey": plan.watch_prey,
+                    "legs_planned": len(plan.legs), "legs_executed": legs_executed,
+                    "arrived": reached_goal(), "forced_explorations": forced,
+                    "attempts": attempts, "stuck_events": stuck_events,
+                },
+            ), started)
+
+        def step(dsl: str, leg: Any, kind: str):
+            """Guard → lote (gates ligados) → veredicto + detetor.
+
+            ``("stop", status, reason)`` ou ``("verdict", LegVerdict, StuckEvent | None)``.
+            """
+            nonlocal legs_executed, forced, last_pos
+            before = self._fresh_state()
+            if before is not None:
+                ok, reason, extra = self.guard_check(state, current=before)
+                warnings.extend(extra)
+                if not ok:
+                    attempts.append({"kind": kind, "dsl": dsl, "verdict": "abort", "reason": reason})
+                    return ("stop", "aborted", reason)
+            status, _ok, failure = self._batch_once(dsl)
+            if status != "executed":
+                reason = failure or "bridge stopped the route"
+                attempts.append({"kind": kind, "dsl": dsl, "verdict": status, "reason": reason})
+                return ("stop", status if status in ("aborted", "error") else "aborted", reason)
+            walked.append(dsl)
+            after = self._fresh_state() or before
+            verdict = evaluate_states(before, after, leg, stop_on_new_prey=plan.watch_prey)
+            event = (self.stuck.observe(after, moved=verdict.kind != LEG_BLOCKED)
+                     if after is not None else None)
+            if event is not None:
+                stuck_events.append(event.as_dict())
+            last_pos = observe_state(after).pos or last_pos
+            attempts.append({
+                "kind": kind, "leg": getattr(leg, "index", None), "dsl": dsl,
+                "verdict": verdict.kind, "reason": verdict.reason,
+                "moved": verdict.moved, "distance": verdict.distance,
+            })
+            return ("verdict", verdict, event)
+
+        for leg in plan.legs:
+            queue = [plan.to_dsl(leg, with_budget=True) or plan.to_dsl(leg)]
+            fallback = plan.fallback_dsl(leg)
+            if fallback and fallback not in queue:
+                queue.append(fallback)
+            for dsl in queue:
+                outcome = step(dsl, leg, "goto" if dsl.startswith("goto ") else "fallback")
+                if outcome[0] == "stop":
+                    return finish(outcome[1], False, outcome[2])
+                verdict, event = outcome[1], outcome[2]
+                if verdict.kind == LEG_ABORT:  # segurança primeiro (ameaça/focus/dano/morte)
+                    return finish("aborted", False, _ROUTE_ABORT_REASONS.get(
+                        verdict.reason, f"route:{verdict.reason}"))
+                kind = getattr(event, "kind", None)
+                if kind in _STUCK_EVENT_REASONS:
+                    return finish("aborted", False, _STUCK_EVENT_REASONS[kind])
+                escalation = getattr(event, "escalation", None)
+                if escalation == "replan":
+                    return finish("aborted", False, "stuck:replan")
+                if escalation == "force_explore":
+                    forced += 1
+                    direction = getattr(event, "direction", None) or "n"
+                    exploration = step(f"move {direction} times={max(1, plan.stride)}",
+                                       None, "forced_explore")
+                    if exploration[0] == "stop":
+                        return finish(exploration[1], False, exploration[2])
+                    ex_verdict, ex_event = exploration[1], exploration[2]
+                    if ex_verdict.kind == LEG_ABORT:
+                        return finish("aborted", False, _ROUTE_ABORT_REASONS.get(
+                            ex_verdict.reason, f"route:{ex_verdict.reason}"))
+                    ex_kind = getattr(ex_event, "kind", None)
+                    if ex_kind in _STUCK_EVENT_REASONS:
+                        return finish("aborted", False, _STUCK_EVENT_REASONS[ex_kind])
+                    if getattr(ex_event, "escalation", None) == "replan":
+                        return finish("aborted", False, "stuck:replan")
+                if verdict.kind in (LEG_ARRIVED, LEG_CONTINUE):
+                    legs_executed += 1
+                    break  # leg andou: o próximo leg continua a rota do sítio novo
+                # LEG_BLOCKED: o plano B do leg está na fila; sem ele, o próximo leg
+
+        if reached_goal():
+            return finish("executed", True, "arrived")
+        if legs_executed:
+            return finish("executed", True, "route:completed")
+        return finish("aborted", False, "route:blocked")
 
     @staticmethod
     def _classify(code: Any, report: Any, *, dry_run: bool) -> tuple[str, bool, str | None]:

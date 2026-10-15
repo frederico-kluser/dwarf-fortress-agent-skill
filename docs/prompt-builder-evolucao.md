@@ -150,7 +150,7 @@ com 2 falhas pré-existentes, corrigidas aqui).
   180 s em 3 das 4 sessões (uma com JSON truncado na reposição); as runs
   prosseguiram só com os cenários pinados e parte das chamadas ficou **pendente
   de conciliação** (pode ter sido cobrada). Próximo ciclo: `stages` pinados ou
-  geração antecipada.
+  geração antecipada. → **resolvido na re-rodada com `stages` pinados (§9)**.
 
 ## 7. Como re-correr o benchmark
 
@@ -172,3 +172,153 @@ teto diário da máquina US$ 20). Depois de mudar prompts em `fleet.py`, seguir 
 fluxo do espelho (`bench/gerar.py --sync-evals` → `golden.py build` →
 `freeze-holdout --reason` → `bless --reason` → `check` → pytest) — ver
 `bench/README.md`.
+
+> **Re-rodada (Passo 2):** os comandos acima continuam certos, MAS `--budget 10`
+> já **não passa** nas arenas de texto (3 iterações × 20 cenários pinados) —
+> usar os tetos da §10 e ler a política de decisão da §8 antes de aplicar
+> qualquer vencedor.
+
+## 8. Política de promoção (regra escrita — vale desde a re-rodada)
+
+Substitui o julgamento ad hoc da rodada de 2026-10-11 (que terminou em empates
+sem regra). Um prompt candidato só muda de estado por **UM** destes caminhos;
+tudo o resto não promove. Vale para os papéis de texto (`narrator.py`,
+`questions.py`, `planning.py`/`hunt_plan.py`, `translator.py`) e para as
+definições de decisão (`fleet.py`).
+
+### 8.1 Promover — exige UM destes dois caminhos
+
+1. **Por significância** (caminho normal): gate **max-T a 5%** por iteração
+   (`test.pAdjusted` ≤ 0,05 sobre as K variantes) **E** margem prática
+   (`minGain` do tool) **E** confirmação no holdout (p unilateral ≤ 0,05 — o
+   único p de confirmação da sessão) **sem regressão** (`holdout.regressed`
+   falso). No `jev compare`: diferença pareada com p < 0,05 (corrigido para
+   múltiplas células) na métrica primária **sem perda** nas secundárias.
+2. **Por efeito grande e consistente** (exceção, para quando o poder não chega):
+   o ganho **corrigido** é grande — ≥ **20 p.p.** de judge-score no arena ou ≥
+   **5 p.p.** de accuracy (JEV) — **e consistente**: mesma direção em **3/3**
+   repetições (`repeats: 3`) com `flipRate` ≤ 0,10, e sem regressão no holdout.
+   Fica registado como **«promovido por efeito grande (p ≥ 0,05)»** e é
+   obrigatoriamente re-testado em sombra (Passo 3, A/B shadow) antes de ganhar
+   estatuto pleno. *(Os limiares de "grande" são a decisão operacional desta
+   política — ajustáveis pelo dono; ver `OPEN` do relatório de preparação.)*
+
+### 8.2 Não promover — estados do resto
+
+- **Aposentado**: regressão confirmada (Δ < 0 com p < 0,05 **ou**
+  `holdout.regressed: true`) ou violação persistente de contrato `neverBreak`.
+  A variante sai do campeonato e não volta a concorrer sem nova evidência.
+- **Mantido por decisão registada** (o baseline continua): tudo o resto —
+  efeitos pequenos/médios sem significância, empates, e "efeito grande" sem
+  consistência nas repetições. O registo diz **«mantido»**, nunca «validado».
+
+### 8.3 Registo e aplicação — obrigatórios
+
+- Cada promoção/aposentação/manutenção entra nas tabelas §4/§5 deste doc com:
+  data, papel, Δ bruto e corrigido, p (ajustado e de holdout), `flipRate`,
+  veredito e id da run/sessão. **Sem registo não houve decisão.**
+- Promover **implica** aplicar no código (`fleet.py`, `narrator.py`,
+  `questions.py`, `planning.py`/`hunt_plan.py`, `translator.py`) pelo fluxo do
+  espelho: `bench/gerar.py --sync-evals` → `golden.py build` →
+  `freeze-holdout --reason` (se o build o pedir) → `bless --reason` →
+  `golden.py check` **verde** + `pytest -q` **verde**. Sem espelho verde a
+  promoção fica **por aplicar**.
+- `sessions winner <id> --apply` com `holdout.regressed` é recusado pelo tool
+  (exit 10): só passa com `--override "<motivo>"`, e o motivo fica registado
+  aqui.
+
+Mecânica subjacente (não contornada): gate max-T por iteração + UM teste final
+em holdout + paciência ≥ 2 mantêm P(promoção falsa por sessão) ≤ 6% sob H0
+(docs `train` do tool). Re-avaliação limpa (`gate.reeval`) que não confirme o
+ganho **barra** a promoção — não é falha.
+
+## 9. Datagen pinado e configs 3+/3+ (preparação da re-rodada, 2026-10-13)
+
+**Problema (§6):** o datagen (+4 suplementares por config) deu *timeout* de
+180 s em 3/4 sessões (`[datagen] lote 1/1 falhou: timeout total (180000ms,
+papel datagen)` + uma reposição com JSON truncado em `bench/relatorios/train-
+*-run.log`) e os suplementares nunca entraram pareados antes/depois.
+
+**Solução escolhida — a mais conservadora, formato dos artefactos inalterado:**
+`stages` **100% pinados**, datagen nunca é chamado.
+
+| Definição | Onde vive (FONTE) | Valor |
+|---|---|---|
+| Iterações de treino | `bench/gerar.py:48` (`TRAINING`) | `3` (era 2) |
+| Suplementares do datagen | `bench/gerar.py:58` (`SUPLEMENTARES`) | `0` (era 4 — datagen desligado) |
+| `stages` por config | `bench/gerar.py:78` | `len(pinned) + SUPLEMENTARES` ⇒ só pinados |
+| Repetições JEV | `bench/gerar.py:168` (`jev_config`) | `repeats: 3` (era 2) — para o `flipRate` |
+| Regeneração segura | `bench/gerar.py:285,371` (`--arena-only`) | só `bench/configs/`, sem tocar em `bench/jev/casos/` |
+
+- O conjunto-semente passa a ser o **gold expandido**: `bench/cenarios/` ficou
+  em **20 cenários/papel** (fechado 2026-10-12, 72→112), que cobre o piso de 20
+  para o **holdout de verdade** (deixar de ser pulado). `stages` acompanha o
+  gold automaticamente: quando o gold JEV fechar, `bench/gerar.py` completo
+  regenera tudo com as mesmas constantes.
+- Alternativa registada (não usada): **pré-gerar** os suplementares e piná-los
+  em `scenarios[]` (mesmo formato `arena-config@1`) — se um dia voltar a haver
+  suplementares, nunca depender do datagen dentro de uma run paga.
+- **Evidência `--dry-run` (2026-10-13, sem gastar):** `prompt-builder estimate
+  -c bench/configs/train-narrador.json` → premissas `datagenBatches **0**`;
+  a forma antiga (`stages` = 20 pinados + 4) → `datagenBatches **6**` (o
+  caminho que estourava). Os 4 `train --config … --dry-run` confirmam
+  `datagenBatches 0` e saem sem recusa com o teto da §10.
+- Os 4 `bench/configs/train-*.json` foram regenerados (`gerar.py --arena-only`)
+  e passam em `prompt-builder config validate` (20/20 pinados, `iterations: 3`).
+  Os `bench/jev/*.json` ganham `repeats: 3` quando a peça do espelho correr
+  `bench/gerar.py` completo depois do gold JEV fechar (esta peça não escreve em
+  `bench/jev/casos/`).
+
+## 10. Orçamento (só estimativas `--dry-run` — 2026-10-13)
+
+Nenhuma corrida paga foi executada nesta preparação; os números vêm de
+`--dry-run`/`estimate` com as configs finais (20 cenários pinados, 3 iterações;
+JEV com `repeats: 3`).
+
+### 10.1 Arena MIMO (`prompt-builder train --config bench/configs/train-*.json`)
+
+| Papel | stages × iters | `estimate.low` | `estimate.high` | `--budget` necessário |
+|---|---|---|---|---|
+| Narrador | 20 × 3 | US$ 2,75 | US$ 11,56 | **12** |
+| Perguntas PT | 20 × 3 | US$ 2,75 | US$ 11,56 | **12** |
+| Plano de caça | 20 × 3 | US$ 2,90 | US$ 12,17 | **13** |
+| Tradutor | 20 × 3 | US$ 2,75 | US$ 11,56 | **12** |
+| **Total (4 runs)** | | **US$ 11,06** | **US$ 46,85** | — |
+
+Com `--budget 10` as quatro recusam de novo (exit 2): 10 fica **dentro** da
+faixa (ex.: 2,75–11,56) ⇒ `usage.confirmation_required` fora de TTY. Com
+`--budget` **≥ `estimate.high`** (12/12/13/12) o dry-run sai **0** com
+`wouldRefuse: []` — regra: **`--budget = ceil(estimate.high)`**, sempre.
+
+### 10.2 JEV (`prompt-builder jev compare -c bench/jev/<papel>.json`, repeats 3)
+
+| Papel (casos hoje) | `estimate.low` | `estimate.high` | `--budget` |
+|---|---|---|---|
+| acao (19) | US$ 0,0028 | US$ 0,0053 | 10 |
+| duvida (10) | US$ 0,0016 | US$ 0,0029 | 10 |
+| memoria (10) | US$ 0,0020 | US$ 0,0037 | 10 |
+| recuperacao (13) | US$ 0,0026 | US$ 0,0048 | 10 |
+
+Com o gold ≥ 20–30 casos/papel o custo escala ~linearmente e continua **abaixo
+de US$ 0,02 por papel**: `--budget 10` (o `budgetUsd` embutido) passa com folga.
+Delta detectável hoje: 8,6–11,8 p.p. (melhora com o gold a mais).
+
+### 10.3 Leitura e execução da re-rodada
+
+- **O `estimate.high` é conservador por desenho**: no arena o juiz JEV é
+  contado como o painel LLM inteiro (docs `budget` do tool) e a faixa é larga
+  (~2,2×). Gasto real esperado: **US$ 12–16** para as 4 arenas (GUESS:
+  ×1,5–2,5 sobre os US$ 2,52/2,09/1,70/0,60 da rodada de 2 iterações × 12–16
+  stages) — mas o teto do `--budget` é o `estimate.high`, para nunca cair em
+  recusa nem em parada a meio.
+- **Teto diário da máquina: US$ 20** (`prompt-builder limits show`): o
+  worst-case das 4 arenas (US$ 46,85) não cabe num dia ⇒ sequenciar (2 runs/dia,
+  realista com o gasto esperado) ou subir o teto no gatilho — decisão do dono.
+  Os JEV são cêntimos e cabem sempre.
+- **Gatilho (uma linha por papel, quando o gold JEV fechar):**
+  `.venv/bin/python bench/gerar.py` → `config validate`/`jev validate` →
+  `--dry-run` (re-estimar e fixar `--budget = ceil(estimate.high)`) →
+  `prompt-builder train --config bench/configs/train-<papel>.json --budget <n>
+  --idempotency-key pb-train-<papel>-2 --output-format ndjson` (e `jev compare
+  -c bench/jev/<papel>.json --budget 10 --idempotency-key pb-jev-<papel>-2
+  --output-format ndjson`). Decidir por §8 e registar aqui.

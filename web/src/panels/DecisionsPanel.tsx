@@ -25,7 +25,6 @@ import {
   SheetHandle,
   SheetPanel,
 } from '@/components/motion-ui/sheet';
-import { ProgressBar } from '@/components/motion-ui/progress-bar';
 import { errorMessage } from '../api/events';
 import {
   BAND_DESCRIPTION,
@@ -43,7 +42,8 @@ import type { Decision, DecisionBand, DecisionStatus, JevAgent } from '../api/ty
 import { AgentChip, BandChip, DecisionStatusChip } from '../components/Chips';
 import FreshnessIndicator from '../components/FreshnessIndicator';
 import PanelShell from '../components/PanelShell';
-import { PanelEmpty, PanelError, PanelLoading } from '../components/PanelState';
+import { PanelError, PanelLoading } from '../components/PanelState';
+import { EmptyState } from '../components/rpg/EmptyState';
 import SectionCard from '../components/SectionCard';
 import { useNow } from '../hooks/useSparkSeries';
 import { MONO_FONT } from '../theme';
@@ -60,6 +60,22 @@ function answerSummary(decision: Decision): string {
 
 function probabilityList(decision: Decision): [string, number][] {
   return Object.entries(decision.probabilities ?? {}).sort((a, b) => b[1] - a[1]);
+}
+
+/**
+ * Barra de probabilidade fina (§5.5): 2px, `--primary` para a escolhida e
+ * `--border` para as restantes. Estática — §6/§7: linhas de tabela não animam e
+ * dados nunca esperam por animação (o valor numérico é a leitura primária).
+ */
+function ProbabilityBar({ value, chosen }: { value: number; chosen: boolean }) {
+  return (
+    <div className="h-0.5 w-full overflow-hidden rounded-sm bg-muted" aria-hidden="true">
+      <div
+        className={chosen ? 'h-full bg-primary' : 'h-full bg-border'}
+        style={{ width: `${Math.max(0, Math.min(1, value)) * 100}%` }}
+      />
+    </div>
+  );
 }
 
 /** Confiança baixa para o filtro rápido: ausente/0 conta como indisponível. */
@@ -116,6 +132,14 @@ export default function DecisionsPanel() {
     agent !== ALL || band !== ALL || status !== ALL || lowConfidenceOnly || search.trim().length > 0;
   const detail = decisions.find((decision) => decision.id === detailId) ?? null;
 
+  const clearFilters = () => {
+    setAgent(ALL);
+    setBand(ALL);
+    setStatus(ALL);
+    setSearch('');
+    setLowConfidenceOnly(false);
+  };
+
   return (
     <PanelShell
       title="Log de decisões JEV"
@@ -153,16 +177,7 @@ export default function DecisionsPanel() {
           subtitle="Reduz o log por papel, banda, confiança baixa ou texto"
           action={
             filtersActive ? (
-              <Button
-                size="small"
-                onClick={() => {
-                  setAgent(ALL);
-                  setBand(ALL);
-                  setStatus(ALL);
-                  setSearch('');
-                  setLowConfidenceOnly(false);
-                }}
-              >
+              <Button size="small" sx={{ minHeight: 40 }} onClick={clearFilters}>
                 Limpar filtros
               </Button>
             ) : null
@@ -258,12 +273,24 @@ export default function DecisionsPanel() {
           flush
         >
           {filtered.length === 0 ? (
-            <PanelEmpty
-              message="Sem decisões para mostrar."
-              hint={
+            /* §5.7 — a mensagem nomeia o objeto real («Sem decisões: o loop
+             * ainda não correu») e diz o que falta e porquê. */
+            <EmptyState
+              glyph="scroll"
+              title={
                 filtersActive
-                  ? 'Nenhuma decisão corresponde aos filtros ativos.'
-                  : 'O log enche-se à medida que o JEV decide.'
+                  ? 'Nenhuma decisão corresponde aos filtros ativos'
+                  : 'Sem decisões: o loop ainda não correu'
+              }
+              body={
+                filtersActive
+                  ? 'Os filtros ativos estão a esconder o resto do log — limpa-os para veres todas as decisões carregadas.'
+                  : 'Cada chamada ao JEV entra aqui com banda, confiança, custo e probabilidades. O log enche-se assim que o loop começar a decidir.'
+              }
+              action={
+                filtersActive
+                  ? { label: 'Limpar filtros', onClick: clearFilters }
+                  : { label: 'Atualizar decisões', onClick: () => void decisionsQuery.refetch() }
               }
             />
           ) : (
@@ -298,10 +325,22 @@ export default function DecisionsPanel() {
                       <TableRow
                         key={decision.id}
                         hover
+                        /* H.1.1.01: o alvo do rato (linha inteira) passa a ser
+                         * também o alvo do teclado — Enter/Space abrem o detalhe. */
+                        tabIndex={0}
+                        aria-label={`Ver detalhe da decisão ${decision.id}: ${decision.request_summary}`}
                         sx={{ cursor: 'pointer' }}
                         onClick={() => setDetailId(decision.id)}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault();
+                            setDetailId(decision.id);
+                          }
+                        }}
                       >
-                        <TableCell sx={{ fontFamily: MONO_FONT, whiteSpace: 'nowrap' }}>
+                        <TableCell
+                          sx={{ fontFamily: MONO_FONT, whiteSpace: 'nowrap', color: 'text.secondary' }}
+                        >
                           {formatTime(decision.ts)}
                         </TableCell>
                         <TableCell>
@@ -325,20 +364,28 @@ export default function DecisionsPanel() {
                           )}
                         </TableCell>
                         <TableCell sx={{ maxWidth: 340 }}>
-                          <Stack spacing={0.25}>
+                          <Stack spacing={0.5}>
                             <Typography variant="body2" noWrap>
                               {decision.request_summary}
                             </Typography>
                             {top ? (
-                              <Typography
-                                variant="caption"
-                                sx={{ color: 'text.secondary', fontFamily: MONO_FONT }}
-                              >
-                                melhor: {top[0]} {(top[1] * 100).toFixed(0)} %
-                                {probabilities.length > 1
-                                  ? ` · +${probabilities.length - 1} opção(ões) no detalhe`
-                                  : ''}
-                              </Typography>
+                              <>
+                                <Typography
+                                  variant="caption"
+                                  sx={{
+                                    color: 'text.secondary',
+                                    fontFamily: MONO_FONT,
+                                    fontSize: '0.8125rem',
+                                    fontVariantNumeric: 'tabular-nums',
+                                  }}
+                                >
+                                  melhor: {top[0]} {(top[1] * 100).toFixed(0)} %
+                                  {probabilities.length > 1
+                                    ? ` · +${probabilities.length - 1} opção(ões) no detalhe`
+                                    : ''}
+                                </Typography>
+                                <ProbabilityBar value={top[1]} chosen />
+                              </>
                             ) : null}
                           </Stack>
                         </TableCell>
@@ -350,6 +397,7 @@ export default function DecisionsPanel() {
                             <IconButton
                               size="small"
                               aria-label={`Ver detalhe da decisão ${decision.id}`}
+                              sx={{ width: 40, height: 40 }}
                               onClick={(event) => {
                                 event.stopPropagation();
                                 setDetailId(decision.id);
@@ -401,7 +449,7 @@ export default function DecisionsPanel() {
           <SheetHandle />
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <h2 id="detalhe-decisao-titulo" className="text-sm font-bold text-card-foreground">
+              <h2 id="detalhe-decisao-titulo" className="text-sm font-bold text-foreground">
                 Decisão {detail?.id ?? '—'}
               </h2>
               <p className="mt-0.5 text-xs text-muted-foreground">
@@ -491,26 +539,29 @@ export default function DecisionsPanel() {
                   </Typography>
                 ) : (
                   <Stack spacing={1}>
-                    {probabilityList(detail).map(([option, value]) => (
+                    {probabilityList(detail).map(([option, value], index) => (
                       <Stack key={option} spacing={0.25}>
                         <Stack
                           direction="row"
                           spacing={1}
                           sx={{ alignItems: 'center', justifyContent: 'space-between' }}
                         >
-                          <Typography variant="body2" sx={{ fontFamily: MONO_FONT }}>
+                          <Typography variant="body2" sx={{ fontFamily: MONO_FONT, fontSize: '0.8125rem' }}>
                             {option}
                           </Typography>
-                          <Typography variant="caption" sx={{ fontFamily: MONO_FONT }}>
+                          <Typography
+                            variant="caption"
+                            sx={{
+                              fontFamily: MONO_FONT,
+                              fontSize: '0.8125rem',
+                              fontVariantNumeric: 'tabular-nums',
+                            }}
+                          >
                             {(value * 100).toFixed(1)} %
+                            {index === 0 ? ' · escolhida' : ''}
                           </Typography>
                         </Stack>
-                        <ProgressBar
-                          value={value}
-                          size="sm"
-                          progressbar
-                          aria-label={`Probabilidade de ${option}: ${(value * 100).toFixed(1)} por cento`}
-                        />
+                        <ProbabilityBar value={value} chosen={index === 0} />
                       </Stack>
                     ))}
                   </Stack>

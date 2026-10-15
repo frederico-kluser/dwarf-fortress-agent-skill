@@ -1,0 +1,116 @@
+{
+  "format": 1,
+  "models": {
+    "typesafe/jev-1.13": {
+      "classes": {
+        "costly": {
+          "max_risk": 0.05,
+          "observed_risk": null,
+          "reason": "insufficient_support",
+          "support": 8,
+          "threshold": null,
+          "upper_bound": null,
+          "verified": false
+        },
+        "destructive": {
+          "max_risk": 0.03,
+          "observed_risk": null,
+          "reason": "insufficient_support",
+          "support": 6,
+          "threshold": null,
+          "upper_bound": null,
+          "verified": false
+        },
+        "irreversible": {
+          "max_risk": 0.05,
+          "observed_risk": null,
+          "reason": "insufficient_support",
+          "support": 3,
+          "threshold": null,
+          "upper_bound": null,
+          "verified": false
+        },
+        "reversible": {
+          "max_risk": 0.1,
+          "observed_risk": null,
+          "reason": "insufficient_support",
+          "support": 17,
+          "threshold": null,
+          "upper_bound": null,
+          "verified": false
+        }
+      },
+      "eval_fingerprint": "sha256:970c8c9fc52a439ea3084584b9bb19e7a233b630b3630dbc650d876f15babab8",
+      "metrics": {
+        "accuracy": 0.8534,
+        "brier": 0.1056,
+        "ece": 0.0997,
+        "ece_label": "acceptable",
+        "mean_confidence": 0.8101
+      },
+      "report_date": "2026-10-13",
+      "resolved_model": null,
+      "roles": {
+        "JEV-A": {
+          "accuracy": 0.8727,
+          "brier": 0.098,
+          "ece": 0.0997,
+          "ece_label": "acceptable",
+          "mean_confidence": 0.812,
+          "n": 110,
+          "unavailable_confidence": 5
+        },
+        "JEV-D": {
+          "accuracy": 0.7903,
+          "brier": 0.1394,
+          "ece": 0.0786,
+          "ece_label": "acceptable",
+          "mean_confidence": 0.7973,
+          "n": 62,
+          "unavailable_confidence": 3
+        },
+        "JEV-M": {
+          "accuracy": 0.8947,
+          "brier": 0.1104,
+          "ece": 0.1217,
+          "ece_label": "bad",
+          "mean_confidence": 0.7905,
+          "n": 76,
+          "unavailable_confidence": 8
+        },
+        "JEV-R": {
+          "accuracy": 0.8452,
+          "brier": 0.0959,
+          "ece": 0.1279,
+          "ece_label": "bad",
+          "mean_confidence": 0.8223,
+          "n": 168,
+          "unavailable_confidence": 3
+        }
+      },
+      "samples": {
+        "by_class": {
+          "costly": 8,
+          "destructive": 6,
+          "irreversible": 3,
+          "reversible": 17
+        },
+        "by_role": {
+          "JEV-A": 110,
+          "JEV-D": 62,
+          "JEV-M": 76,
+          "JEV-R": 168
+        },
+        "total": 416
+      },
+      "settings": {
+        "bins": 10,
+        "bound": "wilson",
+        "grid": 0.01,
+        "min_support": 30,
+        "z": 1.96
+      },
+      "source": "fake-model"
+    }
+  }
+}

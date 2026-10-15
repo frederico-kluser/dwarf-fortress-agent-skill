@@ -829,6 +829,55 @@ class Logbook:
             meta_set(conn, "last_reflected_id", scanned_to)
         return stored[0] if stored else None
 
+    # --------------------------------------------------- projeção episódica
+
+    @guarded(lambda: 0)
+    def project_episodes(self, memory: Any, *, limit: int = 500) -> int:
+        """Projeta os eventos novos na camada episódica CoALA (append-only).
+
+        Os eventos **vivem** em ``diario.sqlite`` (a fonte, com os triggers
+        append-only); esta projeção copia cada um para a camada episódica da
+        campanha (``…/memory/coala.sqlite``, via ``MemoryStore.add_episode``) como
+        entrada ``episodic`` citável: ``source='diario:<id>'``, chave
+        ``diario:<id>`` e etiquetas ``episode,evento,<kind>,importance:<n>``.
+        Repetir a projeção é idempotente (a mesma chave suplanta a cópia anterior
+        — nunca se reescreve nem se apaga à mão) e o marcador
+        ``projected_through_id`` só avança depois de cada ``add`` com sucesso.
+
+        ``memory``: qualquer objeto com ``add_episode(content, *, key, tags, source)``
+        (o :class:`.memory.MemoryStore`). Devolve quantos eventos projetou.
+        """
+        add = getattr(memory, "add_episode", None)
+        if not callable(add):
+            log.debug("project_episodes: memory without add_episode — skipping")
+            return 0
+        with self._session() as conn:
+            try:
+                last = int(meta_get(conn, "projected_through_id", "0") or 0)
+            except ValueError:
+                last = 0
+            rows = conn.execute(
+                "SELECT * FROM events WHERE id > ? ORDER BY id ASC LIMIT ?", (last, max(1, int(limit)))
+            ).fetchall()
+        done = 0
+        for row in rows:
+            ev = self._event(row)
+            try:
+                add(
+                    f"[{ev.kind} {ev.importance}/10] {ev.text}",
+                    key=f"diario:{ev.id}",
+                    tags=f"episode,evento,{ev.kind},importance:{ev.importance}",
+                    source=f"diario:{ev.id}",
+                )
+            except Exception:
+                log.warning("episode projection failed at event %s; will retry", ev.id, exc_info=True)
+                break
+            done += 1
+        if done:
+            with self._session() as conn:
+                meta_set(conn, "projected_through_id", int(rows[done - 1]["id"]))
+        return done
+
     # ---------------------------------------------------------------- read
 
     @staticmethod
@@ -857,6 +906,24 @@ class Logbook:
         with self._session() as conn:
             rows = conn.execute(
                 f"SELECT * FROM events{where} ORDER BY id DESC LIMIT ?", (*(wanted or ()), max(1, int(limit)))
+            ).fetchall()
+        return [self._event(r) for r in rows]
+
+    @guarded(list)
+    def events_after(self, after_id: Any = 0, limit: int = 500) -> list[LogEvent]:
+        """Eventos com ``id`` > ``after_id``, pela ordem do diário (extração derivada).
+
+        Só leitura: a transcrição/eventos brutos nunca são apagados nem
+        reescritos pela extração (``campaign/extraction.py``).
+        """
+        try:
+            after = int(after_id)
+        except (TypeError, ValueError):
+            after = 0
+        with self._session() as conn:
+            rows = conn.execute(
+                "SELECT * FROM events WHERE id > ? ORDER BY id ASC LIMIT ?",
+                (max(0, after), max(1, int(limit))),
             ).fetchall()
         return [self._event(r) for r in rows]
 
@@ -921,7 +988,12 @@ class Logbook:
 
     @guarded(list)
     def memory_items(self, situation: Any, k: int = 5, now: Any = None) -> list[dict[str, Any]]:
-        """Itens ``{id,key,content,tags,title}`` na forma da memória do loop (para o JEV-R)."""
+        """Itens ``{id,key,content,tags,title}`` na forma da memória do loop (para o JEV-R).
+
+        ``score`` é o composto da loja (min-max); ``recency``/``importance``/
+        ``relevance`` são os valores BRUTOS, para o top-K do JEV-R fundir lojas
+        diferentes com :func:`.recall.combined_score` (``campaign/bundle.py``).
+        """
         items: list[dict[str, Any]] = []
         for hit in self.recall(situation, k=k, now=now):
             ev = hit.item
@@ -933,5 +1005,7 @@ class Logbook:
                 "tags": ",".join((ev.kind, "logbook", *[t.replace(",", " ") for t in ev.tags])),
                 "importance": ev.importance,
                 "score": round(hit.score, 4),
+                "recency": round(hit.raw_recency, 4),
+                "relevance": round(hit.raw_relevance, 4),
             })
         return items

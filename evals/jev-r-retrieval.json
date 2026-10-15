@@ -966,5 +966,1265 @@
       ]
     },
     "notes": "Borderline candidate: fighting underwater only matters if something attacks during the crossing, so the label stays true but targets the hitl band - the caller's include threshold decides, and a hitl-band candidate must never be auto-included."
+  },
+  {
+    "name": "r-14-stuck-riverbank",
+    "role": "JEV-R",
+    "state": "SITUATION: The adventurer is stuck at the river bank: three validations with the same state hash and the ford move refused three times; the ford is two tiles north and the fallen log crossing is fifty tiles east; night is four hours away.\n\nKNOWLEDGE CANDIDATES (retrieved top-3, indexed):\n[C1] Unsticking the adventurer | Three unchanged validations force an exploration move; a second failure escalates to a re-plan and the same action three times means switching candidate.\n[C2] Regional roads map | The trade road runs north from Cragmouth past the pine slope to Boatmurdered.\n[C3] Tavern songs of the north | The mule song of Boatmurdered has seven verses and a long instrumental break.",
+    "questions": {
+      "include_df_skills_df-adventure_stuck-handling": {
+        "type": "noul",
+        "instructions": "[C1] Would including this knowledge improve the next action decision given the situation?",
+        "criteria": {
+          "true": "It would change how the next action is chosen: a relevant risk, constraint, location, resource or method.",
+          "false": "It would not change the next action: irrelevant, already known, or too generic."
+        }
+      },
+      "include_df_skills_df-mapa_regional-roads": {
+        "type": "noul",
+        "instructions": "[C2] Would including this knowledge improve the next action decision given the situation?",
+        "criteria": {
+          "true": "It would change how the next action is chosen: a relevant risk, constraint, location, resource or method.",
+          "false": "It would not change the next action: irrelevant, already known, or too generic."
+        }
+      },
+      "include_df_skills_df-central_tavern-songs": {
+        "type": "noul",
+        "instructions": "[C3] Would including this knowledge improve the next action decision given the situation?",
+        "criteria": {
+          "true": "It would change how the next action is chosen: a relevant risk, constraint, location, resource or method.",
+          "false": "It would not change the next action: irrelevant, already known, or too generic."
+        }
+      },
+      "dominant_theme": {
+        "type": "choice",
+        "instructions": "Which single theme dominates the knowledge that should inform the next action?",
+        "criteria": {
+          "combat": "The knowledge that should shape the decision is mostly about combat.",
+          "culture": "The knowledge that should shape the decision is mostly about culture.",
+          "travel": "The knowledge that should shape the decision is mostly about travel.",
+          "other": "No single one of these themes dominates the decision."
+        }
+      }
+    },
+    "expected": {
+      "include_df_skills_df-adventure_stuck-handling": true,
+      "include_df_skills_df-mapa_regional-roads": false,
+      "include_df_skills_df-central_tavern-songs": false,
+      "dominant_theme": "travel"
+    },
+    "bands": {
+      "include_df_skills_df-adventure_stuck-handling": "auto",
+      "include_df_skills_df-mapa_regional-roads": "auto",
+      "include_df_skills_df-central_tavern-songs": "auto",
+      "dominant_theme": "auto"
+    },
+    "candidate_labels": {
+      "C1": "df/skills/df-adventure/stuck-handling",
+      "C2": "df/skills/df-mapa/regional-roads",
+      "C3": "df/skills/df-central/tavern-songs"
+    },
+    "ordering": {
+      "dominant_theme": [
+        "combat",
+        "culture",
+        "travel",
+        "other"
+      ]
+    },
+    "notes": "Rule retrieval-relevance: only the stuck-handling method changes the next action (why the ford refuses and what to do instead); the road map and the songs are real knowledge that cannot change this decision -> false. Travel knowledge dominates -> dominant_theme travel."
+  },
+  {
+    "name": "r-15-kill-chain-knowledge",
+    "role": "JEV-R",
+    "state": "SITUATION: A stray mule stands 2 tiles away at the river bank under a hunt mission; the adventurer has the iron spear equipped and must finish the kill before the animal bolts up the ramp.\n\nKNOWLEDGE CANDIDATES (retrieved top-4, indexed):\n[C1] Aiming at lethal parts | A strike to the neck can sever the spine and drop the target at once; a strike to the head can fracture the skull and end the fight immediately.\n[C2] Verifying a kill | A kill is confirmed by a death line in the gamelog, the unit leaving the nearby list, the kill counter incrementing, or explicit combat text.\n[C3] Soap making | Tallow and lye make soap at the ashery.\n[C4] Goblin language | Goblin greetings use short barked syllables.",
+    "questions": {
+      "include_df_skills_df-combate_aiming-lethal-parts": {
+        "type": "noul",
+        "instructions": "[C1] Would including this knowledge improve the next action decision given the situation?",
+        "criteria": {
+          "true": "It would change how the next action is chosen: a relevant risk, constraint, location, resource or method.",
+          "false": "It would not change the next action: irrelevant, already known, or too generic."
+        }
+      },
+      "include_df_skills_df-combate_kill-verification": {
+        "type": "noul",
+        "instructions": "[C2] Would including this knowledge improve the next action decision given the situation?",
+        "criteria": {
+          "true": "It would change how the next action is chosen: a relevant risk, constraint, location, resource or method.",
+          "false": "It would not change the next action: irrelevant, already known, or too generic."
+        }
+      },
+      "include_df_skills_df-fortress-industria_soap-making": {
+        "type": "noul",
+        "instructions": "[C3] Would including this knowledge improve the next action decision given the situation?",
+        "criteria": {
+          "true": "It would change how the next action is chosen: a relevant risk, constraint, location, resource or method.",
+          "false": "It would not change the next action: irrelevant, already known, or too generic."
+        }
+      },
+      "include_df_skills_df-central_goblin-language": {
+        "type": "noul",
+        "instructions": "[C4] Would including this knowledge improve the next action decision given the situation?",
+        "criteria": {
+          "true": "It would change how the next action is chosen: a relevant risk, constraint, location, resource or method.",
+          "false": "It would not change the next action: irrelevant, already known, or too generic."
+        }
+      },
+      "dominant_theme": {
+        "type": "choice",
+        "instructions": "Which single theme dominates the knowledge that should inform the next action?",
+        "criteria": {
+          "survival": "The knowledge that should shape the decision is mostly about survival.",
+          "culture": "The knowledge that should shape the decision is mostly about culture.",
+          "combat": "The knowledge that should shape the decision is mostly about combat.",
+          "other": "No single one of these themes dominates the decision."
+        }
+      }
+    },
+    "expected": {
+      "include_df_skills_df-combate_aiming-lethal-parts": true,
+      "include_df_skills_df-combate_kill-verification": true,
+      "include_df_skills_df-fortress-industria_soap-making": false,
+      "include_df_skills_df-central_goblin-language": false,
+      "dominant_theme": "combat"
+    },
+    "bands": {
+      "include_df_skills_df-combate_aiming-lethal-parts": "auto",
+      "include_df_skills_df-combate_kill-verification": "auto",
+      "include_df_skills_df-fortress-industria_soap-making": "auto",
+      "include_df_skills_df-central_goblin-language": "auto",
+      "dominant_theme": "auto"
+    },
+    "candidate_labels": {
+      "C1": "df/skills/df-combate/aiming-lethal-parts",
+      "C2": "df/skills/df-combate/kill-verification",
+      "C3": "df/skills/df-fortress-industria/soap-making",
+      "C4": "df/skills/df-central/goblin-language"
+    },
+    "ordering": {
+      "dominant_theme": [
+        "survival",
+        "culture",
+        "combat",
+        "other"
+      ]
+    },
+    "notes": "Rule retrieval-relevance: aim selection and kill verification both change how the fight is finished now; soap making and language cannot -> false. Combat knowledge dominates -> dominant_theme combat."
+  },
+  {
+    "name": "r-16-opportunistic-goat",
+    "role": "JEV-R",
+    "state": "SITUATION: Walking north with one day of food left; a river goat crosses the road 4 tiles ahead and stops to graze; the next village is two days away; no hostiles in sight.\n\nKNOWLEDGE CANDIDATES (retrieved top-3, indexed):\n[C1] Prey behaviour when hunted | Wild animals bolt at the first approach; a grazing animal must be engaged from melee range before it notices the hunter.\n[C2] Caravan prices | A waterskin costs about forty coins at a dwarven caravan.\n[C3] Mushroom farming | Dimple plumps grow in dark soil underground.",
+    "questions": {
+      "include_df_skills_df-criaturas_hunt-prey-behaviour": {
+        "type": "noul",
+        "instructions": "[C1] Would including this knowledge improve the next action decision given the situation?",
+        "criteria": {
+          "true": "It would change how the next action is chosen: a relevant risk, constraint, location, resource or method.",
+          "false": "It would not change the next action: irrelevant, already known, or too generic."
+        }
+      },
+      "include_df_skills_df-comercio_caravan-prices": {
+        "type": "noul",
+        "instructions": "[C2] Would including this knowledge improve the next action decision given the situation?",
+        "criteria": {
+          "true": "It would change how the next action is chosen: a relevant risk, constraint, location, resource or method.",
+          "false": "It would not change the next action: irrelevant, already known, or too generic."
+        }
+      },
+      "include_df_skills_df-fortress-industria_mushroom-farming": {
+        "type": "noul",
+        "instructions": "[C3] Would including this knowledge improve the next action decision given the situation?",
+        "criteria": {
+          "true": "It would change how the next action is chosen: a relevant risk, constraint, location, resource or method.",
+          "false": "It would not change the next action: irrelevant, already known, or too generic."
+        }
+      },
+      "dominant_theme": {
+        "type": "choice",
+        "instructions": "Which single theme dominates the knowledge that should inform the next action?",
+        "criteria": {
+          "combat": "The knowledge that should shape the decision is mostly about combat.",
+          "trade": "The knowledge that should shape the decision is mostly about trade.",
+          "survival": "The knowledge that should shape the decision is mostly about survival.",
+          "other": "No single one of these themes dominates the decision."
+        }
+      }
+    },
+    "expected": {
+      "include_df_skills_df-criaturas_hunt-prey-behaviour": true,
+      "include_df_skills_df-comercio_caravan-prices": false,
+      "include_df_skills_df-fortress-industria_mushroom-farming": false,
+      "dominant_theme": "survival"
+    },
+    "bands": {
+      "include_df_skills_df-criaturas_hunt-prey-behaviour": "auto",
+      "include_df_skills_df-comercio_caravan-prices": "auto",
+      "include_df_skills_df-fortress-industria_mushroom-farming": "auto",
+      "dominant_theme": "auto"
+    },
+    "candidate_labels": {
+      "C1": "df/skills/df-criaturas/hunt-prey-behaviour",
+      "C2": "df/skills/df-comercio/caravan-prices",
+      "C3": "df/skills/df-fortress-industria/mushroom-farming"
+    },
+    "ordering": {
+      "dominant_theme": [
+        "combat",
+        "trade",
+        "survival",
+        "other"
+      ]
+    },
+    "notes": "Rule retrieval-relevance: only prey behaviour changes the next action (how to take the goat before it bolts); trade and farming knowledge are noise here -> false. The pending decision is a survival one -> dominant_theme survival."
+  },
+  {
+    "name": "r-17-dead-area-reexploration",
+    "role": "JEV-R",
+    "state": "SITUATION: Three searches of the dead-end gully turned up nothing; the unexplored side branch is visible 20 tiles east on the map; midday, no hostiles and plenty of daylight.\n\nKNOWLEDGE CANDIDATES (retrieved top-3, indexed):\n[C1] Exploration yield | An area searched three times without yield rarely improves on a fourth pass; the unexplored branches next to it hold what the dead end did not.\n[C2] Mining songs | The deep picks song has nine verses and is sung in shifts.\n[C3] Cheese aging | Cheese rounds age in the underground caves for months.",
+    "questions": {
+      "include_df_skills_df-adventure_exploration-yield": {
+        "type": "noul",
+        "instructions": "[C1] Would including this knowledge improve the next action decision given the situation?",
+        "criteria": {
+          "true": "It would change how the next action is chosen: a relevant risk, constraint, location, resource or method.",
+          "false": "It would not change the next action: irrelevant, already known, or too generic."
+        }
+      },
+      "include_df_skills_df-dwarves_mining-songs": {
+        "type": "noul",
+        "instructions": "[C2] Would including this knowledge improve the next action decision given the situation?",
+        "criteria": {
+          "true": "It would change how the next action is chosen: a relevant risk, constraint, location, resource or method.",
+          "false": "It would not change the next action: irrelevant, already known, or too generic."
+        }
+      },
+      "include_df_skills_df-fortress-industria_cheese-aging": {
+        "type": "noul",
+        "instructions": "[C3] Would including this knowledge improve the next action decision given the situation?",
+        "criteria": {
+          "true": "It would change how the next action is chosen: a relevant risk, constraint, location, resource or method.",
+          "false": "It would not change the next action: irrelevant, already known, or too generic."
+        }
+      },
+      "dominant_theme": {
+        "type": "choice",
+        "instructions": "Which single theme dominates the knowledge that should inform the next action?",
+        "criteria": {
+          "culture": "The knowledge that should shape the decision is mostly about culture.",
+          "industry": "The knowledge that should shape the decision is mostly about industry.",
+          "travel": "The knowledge that should shape the decision is mostly about travel.",
+          "other": "No single one of these themes dominates the decision."
+        }
+      }
+    },
+    "expected": {
+      "include_df_skills_df-adventure_exploration-yield": true,
+      "include_df_skills_df-dwarves_mining-songs": false,
+      "include_df_skills_df-fortress-industria_cheese-aging": false,
+      "dominant_theme": "travel"
+    },
+    "bands": {
+      "include_df_skills_df-adventure_exploration-yield": "auto",
+      "include_df_skills_df-dwarves_mining-songs": "auto",
+      "include_df_skills_df-fortress-industria_cheese-aging": "auto",
+      "dominant_theme": "auto"
+    },
+    "candidate_labels": {
+      "C1": "df/skills/df-adventure/exploration-yield",
+      "C2": "df/skills/df-dwarves/mining-songs",
+      "C3": "df/skills/df-fortress-industria/cheese-aging"
+    },
+    "ordering": {
+      "dominant_theme": [
+        "culture",
+        "industry",
+        "travel",
+        "other"
+      ]
+    },
+    "notes": "Rule retrieval-relevance: the exploration-yield method decides where to re-explore (leave the no-yield gully for the marked branch); songs and cheese cannot -> false. Route/exploration knowledge dominates -> dominant_theme travel."
+  },
+  {
+    "name": "r-18-bump-neutral-mule",
+    "role": "JEV-R",
+    "state": "SITUATION: A tame mule stands on the trail and will not move; stepping into its tile has already failed to engage it twice; the mission wants an animal killed and this is the only one in radius; the farmer is nowhere in sight.\n\nKNOWLEDGE CANDIDATES (retrieved top-3, indexed):\n[C1] The explicit attack menu | Bump attacks only engage hostile creatures; neutral and tame animals must be engaged through the A_ATTACK menu chain.\n[C2] Wrestling | Grappling works without a weapon.\n[C3] Rope making | Rope is twisted from pig tail fiber at the farmer's workshop.",
+    "questions": {
+      "include_df_skills_df-combate_explicit-attack-chain": {
+        "type": "noul",
+        "instructions": "[C1] Would including this knowledge improve the next action decision given the situation?",
+        "criteria": {
+          "true": "It would change how the next action is chosen: a relevant risk, constraint, location, resource or method.",
+          "false": "It would not change the next action: irrelevant, already known, or too generic."
+        }
+      },
+      "include_df_skills_df-combate_wrestling": {
+        "type": "noul",
+        "instructions": "[C2] Would including this knowledge improve the next action decision given the situation?",
+        "criteria": {
+          "true": "It would change how the next action is chosen: a relevant risk, constraint, location, resource or method.",
+          "false": "It would not change the next action: irrelevant, already known, or too generic."
+        }
+      },
+      "include_df_skills_df-fortress-industria_rope-making": {
+        "type": "noul",
+        "instructions": "[C3] Would including this knowledge improve the next action decision given the situation?",
+        "criteria": {
+          "true": "It would change how the next action is chosen: a relevant risk, constraint, location, resource or method.",
+          "false": "It would not change the next action: irrelevant, already known, or too generic."
+        }
+      },
+      "dominant_theme": {
+        "type": "choice",
+        "instructions": "Which single theme dominates the knowledge that should inform the next action?",
+        "criteria": {
+          "survival": "The knowledge that should shape the decision is mostly about survival.",
+          "industry": "The knowledge that should shape the decision is mostly about industry.",
+          "combat": "The knowledge that should shape the decision is mostly about combat.",
+          "other": "No single one of these themes dominates the decision."
+        }
+      }
+    },
+    "expected": {
+      "include_df_skills_df-combate_explicit-attack-chain": true,
+      "include_df_skills_df-combate_wrestling": false,
+      "include_df_skills_df-fortress-industria_rope-making": false,
+      "dominant_theme": "combat"
+    },
+    "bands": {
+      "include_df_skills_df-combate_explicit-attack-chain": "auto",
+      "include_df_skills_df-combate_wrestling": "auto",
+      "include_df_skills_df-fortress-industria_rope-making": "auto",
+      "dominant_theme": "auto"
+    },
+    "candidate_labels": {
+      "C1": "df/skills/df-combate/explicit-attack-chain",
+      "C2": "df/skills/df-combate/wrestling",
+      "C3": "df/skills/df-fortress-industria/rope-making"
+    },
+    "ordering": {
+      "dominant_theme": [
+        "survival",
+        "industry",
+        "combat",
+        "other"
+      ]
+    },
+    "notes": "Rule retrieval-relevance: the explicit-attack-chain fact is exactly what the failed bump needs (neutral/tame animals ignore the bump) and changes the next action; wrestling and rope-making cannot -> false. The decision is a combat-mechanics one -> dominant_theme combat."
+  },
+  {
+    "name": "r-19-all-false-clear-road",
+    "role": "JEV-R",
+    "state": "SITUATION: Midday on the open trade road, walking north to the fortress; the road is clear, the map is known and nothing has changed since the last turn.\n\nKNOWLEDGE CANDIDATES (retrieved top-3, indexed):\n[C1] Fortress history | Boatmurdered fell in a siege three hundred years ago.\n[C2] Rock strata | The road cuts through limestone and shale.\n[C3] Brewing ale | Pig tails and cave wheat brew into dwarven ale at the still.",
+    "questions": {
+      "include_df_skills_df-central_fortress-history": {
+        "type": "noul",
+        "instructions": "[C1] Would including this knowledge improve the next action decision given the situation?",
+        "criteria": {
+          "true": "It would change how the next action is chosen: a relevant risk, constraint, location, resource or method.",
+          "false": "It would not change the next action: irrelevant, already known, or too generic."
+        }
+      },
+      "include_df_skills_df-geologia_strata": {
+        "type": "noul",
+        "instructions": "[C2] Would including this knowledge improve the next action decision given the situation?",
+        "criteria": {
+          "true": "It would change how the next action is chosen: a relevant risk, constraint, location, resource or method.",
+          "false": "It would not change the next action: irrelevant, already known, or too generic."
+        }
+      },
+      "include_df_skills_df-fortress-industria_brewing": {
+        "type": "noul",
+        "instructions": "[C3] Would including this knowledge improve the next action decision given the situation?",
+        "criteria": {
+          "true": "It would change how the next action is chosen: a relevant risk, constraint, location, resource or method.",
+          "false": "It would not change the next action: irrelevant, already known, or too generic."
+        }
+      },
+      "dominant_theme": {
+        "type": "choice",
+        "instructions": "Which single theme dominates the knowledge that should inform the next action?",
+        "criteria": {
+          "geology": "The knowledge that should shape the decision is mostly about geology.",
+          "industry": "The knowledge that should shape the decision is mostly about industry.",
+          "history": "The knowledge that should shape the decision is mostly about history.",
+          "other": "No single one of these themes dominates the decision."
+        }
+      }
+    },
+    "expected": {
+      "include_df_skills_df-central_fortress-history": false,
+      "include_df_skills_df-geologia_strata": false,
+      "include_df_skills_df-fortress-industria_brewing": false,
+      "dominant_theme": "other"
+    },
+    "bands": {
+      "include_df_skills_df-central_fortress-history": "auto",
+      "include_df_skills_df-geologia_strata": "auto",
+      "include_df_skills_df-fortress-industria_brewing": "auto",
+      "dominant_theme": "auto"
+    },
+    "candidate_labels": {
+      "C1": "df/skills/df-central/fortress-history",
+      "C2": "df/skills/df-geologia/strata",
+      "C3": "df/skills/df-fortress-industria/brewing"
+    },
+    "ordering": {
+      "dominant_theme": [
+        "geology",
+        "industry",
+        "history",
+        "other"
+      ]
+    },
+    "notes": "Negative control (third in the family with r-09 and r-10): no candidate can change a forced next action (walk on), and this time the knowledge is plain, not dramatic - guards against both keyword matching and drama matching. All labels false and no theme dominates -> dominant_theme other."
+  },
+  {
+    "name": "r-20-social-directions",
+    "role": "JEV-R",
+    "state": "SITUATION: The adventurer is lost two days from the fortress; a hunter with a pack of traps walks by on the road; nothing is threatening and the daylight is long.\n\nKNOWLEDGE CANDIDATES (retrieved top-3, indexed):\n[C1] Asking for directions | Ask about the route first and about landmarks after; locals answer better to specific questions.\n[C2] Sharpening blades | Oil and a whetstone keep an edge.\n[C3] Bartering etiquette | Open with a greeting and never name your price first.",
+    "questions": {
+      "include_df_skills_df-adventure_asking-directions": {
+        "type": "noul",
+        "instructions": "[C1] Would including this knowledge improve the next action decision given the situation?",
+        "criteria": {
+          "true": "It would change how the next action is chosen: a relevant risk, constraint, location, resource or method.",
+          "false": "It would not change the next action: irrelevant, already known, or too generic."
+        }
+      },
+      "include_df_skills_df-combate_sharpening-blades": {
+        "type": "noul",
+        "instructions": "[C2] Would including this knowledge improve the next action decision given the situation?",
+        "criteria": {
+          "true": "It would change how the next action is chosen: a relevant risk, constraint, location, resource or method.",
+          "false": "It would not change the next action: irrelevant, already known, or too generic."
+        }
+      },
+      "include_df_skills_df-comercio_bartering-etiquette": {
+        "type": "noul",
+        "instructions": "[C3] Would including this knowledge improve the next action decision given the situation?",
+        "criteria": {
+          "true": "It would change how the next action is chosen: a relevant risk, constraint, location, resource or method.",
+          "false": "It would not change the next action: irrelevant, already known, or too generic."
+        }
+      },
+      "dominant_theme": {
+        "type": "choice",
+        "instructions": "Which single theme dominates the knowledge that should inform the next action?",
+        "criteria": {
+          "combat": "The knowledge that should shape the decision is mostly about combat.",
+          "trade": "The knowledge that should shape the decision is mostly about trade.",
+          "social": "The knowledge that should shape the decision is mostly about social.",
+          "other": "No single one of these themes dominates the decision."
+        }
+      }
+    },
+    "expected": {
+      "include_df_skills_df-adventure_asking-directions": true,
+      "include_df_skills_df-combate_sharpening-blades": false,
+      "include_df_skills_df-comercio_bartering-etiquette": false,
+      "dominant_theme": "social"
+    },
+    "bands": {
+      "include_df_skills_df-adventure_asking-directions": "auto",
+      "include_df_skills_df-combate_sharpening-blades": "auto",
+      "include_df_skills_df-comercio_bartering-etiquette": "auto",
+      "dominant_theme": "auto"
+    },
+    "candidate_labels": {
+      "C1": "df/skills/df-adventure/asking-directions",
+      "C2": "df/skills/df-combate/sharpening-blades",
+      "C3": "df/skills/df-comercio/bartering-etiquette"
+    },
+    "ordering": {
+      "dominant_theme": [
+        "combat",
+        "trade",
+        "social",
+        "other"
+      ]
+    },
+    "notes": "Rule retrieval-relevance: only the directions etiquette changes the next action (how to open with the hunter and what to ask); sharpening and bartering are noise with no trade on the table -> false. The decision is a social one -> dominant_theme social."
+  },
+  {
+    "name": "r-21-ambush-response",
+    "role": "JEV-R",
+    "state": "SITUATION: Two kobolds burst from the brush 2 tiles away and the adventurer is already bleeding from the first throw; the road behind is clear and the spear is equipped.\n\nKNOWLEDGE CANDIDATES (retrieved top-4, indexed):\n[C1] Goblin morale and breaking points | Small humanoids break off when their leader dies or when they take a wound; a lone skulker usually flees after the first solid hit.\n[C2] Breaking line of sight | Most hostile creatures lose track of the adventurer when sight is broken behind terrain, and slow creatures give up sooner.\n[C3] Smelting | Ore smelts into bars at the smelter with flux and fuel.\n[C4] Regional curses | The old roads north are said to be cursed after dark.",
+    "questions": {
+      "include_df_skills_df-combate_goblin-morale": {
+        "type": "noul",
+        "instructions": "[C1] Would including this knowledge improve the next action decision given the situation?",
+        "criteria": {
+          "true": "It would change how the next action is chosen: a relevant risk, constraint, location, resource or method.",
+          "false": "It would not change the next action: irrelevant, already known, or too generic."
+        }
+      },
+      "include_df_skills_df-combate_breaking-line-of-sight": {
+        "type": "noul",
+        "instructions": "[C2] Would including this knowledge improve the next action decision given the situation?",
+        "criteria": {
+          "true": "It would change how the next action is chosen: a relevant risk, constraint, location, resource or method.",
+          "false": "It would not change the next action: irrelevant, already known, or too generic."
+        }
+      },
+      "include_df_skills_df-fortress-industria_smelters": {
+        "type": "noul",
+        "instructions": "[C3] Would including this knowledge improve the next action decision given the situation?",
+        "criteria": {
+          "true": "It would change how the next action is chosen: a relevant risk, constraint, location, resource or method.",
+          "false": "It would not change the next action: irrelevant, already known, or too generic."
+        }
+      },
+      "include_df_skills_df-central_regional-curses": {
+        "type": "noul",
+        "instructions": "[C4] Would including this knowledge improve the next action decision given the situation?",
+        "criteria": {
+          "true": "It would change how the next action is chosen: a relevant risk, constraint, location, resource or method.",
+          "false": "It would not change the next action: irrelevant, already known, or too generic."
+        }
+      },
+      "dominant_theme": {
+        "type": "choice",
+        "instructions": "Which single theme dominates the knowledge that should inform the next action?",
+        "criteria": {
+          "survival": "The knowledge that should shape the decision is mostly about survival.",
+          "travel": "The knowledge that should shape the decision is mostly about travel.",
+          "combat": "The knowledge that should shape the decision is mostly about combat.",
+          "other": "No single one of these themes dominates the decision."
+        }
+      }
+    },
+    "expected": {
+      "include_df_skills_df-combate_goblin-morale": true,
+      "include_df_skills_df-combate_breaking-line-of-sight": true,
+      "include_df_skills_df-fortress-industria_smelters": false,
+      "include_df_skills_df-central_regional-curses": false,
+      "dominant_theme": "combat"
+    },
+    "bands": {
+      "include_df_skills_df-combate_goblin-morale": "auto",
+      "include_df_skills_df-combate_breaking-line-of-sight": "auto",
+      "include_df_skills_df-fortress-industria_smelters": "auto",
+      "include_df_skills_df-central_regional-curses": "auto",
+      "dominant_theme": "auto"
+    },
+    "candidate_labels": {
+      "C1": "df/skills/df-combate/goblin-morale",
+      "C2": "df/skills/df-combate/breaking-line-of-sight",
+      "C3": "df/skills/df-fortress-industria/smelters",
+      "C4": "df/skills/df-central/regional-curses"
+    },
+    "ordering": {
+      "dominant_theme": [
+        "survival",
+        "travel",
+        "combat",
+        "other"
+      ]
+    },
+    "notes": "Rule retrieval-relevance: morale and line-of-sight knowledge both change the next action (whether to fight or disengage); smelting and curse lore cannot -> false. Combat knowledge dominates -> dominant_theme combat."
+  },
+  {
+    "name": "r-22-z-level-navigation",
+    "role": "JEV-R",
+    "state": "SITUATION: The trail climbs a ramp to the upper terrace and the prey seen below may have escaped upward; the map shows two terraces stacked in z and no route between them except the ramp behind us.\n\nKNOWLEDGE CANDIDATES (retrieved top-4, indexed):\n[C1] goto is planar | The goto pathing never changes z-levels and never follows a fleeing creature up a ramp; movement across z needs ramps and stairs, one move at a time.\n[C2] Regional roads map | The trade road runs north from Cragmouth past the pine slope to Boatmurdered.\n[C3] Stone engraving | Engravers carve images into smoothed walls.\n[C4] Noble succession | Dwarven titles pass to the eldest child of the holder.",
+    "questions": {
+      "include_df_skills_df-adventure_goto-planar-limits": {
+        "type": "noul",
+        "instructions": "[C1] Would including this knowledge improve the next action decision given the situation?",
+        "criteria": {
+          "true": "It would change how the next action is chosen: a relevant risk, constraint, location, resource or method.",
+          "false": "It would not change the next action: irrelevant, already known, or too generic."
+        }
+      },
+      "include_df_skills_df-mapa_regional-roads": {
+        "type": "noul",
+        "instructions": "[C2] Would including this knowledge improve the next action decision given the situation?",
+        "criteria": {
+          "true": "It would change how the next action is chosen: a relevant risk, constraint, location, resource or method.",
+          "false": "It would not change the next action: irrelevant, already known, or too generic."
+        }
+      },
+      "include_df_skills_df-fortress-industria_stone-engraving": {
+        "type": "noul",
+        "instructions": "[C3] Would including this knowledge improve the next action decision given the situation?",
+        "criteria": {
+          "true": "It would change how the next action is chosen: a relevant risk, constraint, location, resource or method.",
+          "false": "It would not change the next action: irrelevant, already known, or too generic."
+        }
+      },
+      "include_df_skills_df-dwarves_noble-succession": {
+        "type": "noul",
+        "instructions": "[C4] Would including this knowledge improve the next action decision given the situation?",
+        "criteria": {
+          "true": "It would change how the next action is chosen: a relevant risk, constraint, location, resource or method.",
+          "false": "It would not change the next action: irrelevant, already known, or too generic."
+        }
+      },
+      "dominant_theme": {
+        "type": "choice",
+        "instructions": "Which single theme dominates the knowledge that should inform the next action?",
+        "criteria": {
+          "industry": "The knowledge that should shape the decision is mostly about industry.",
+          "culture": "The knowledge that should shape the decision is mostly about culture.",
+          "travel": "The knowledge that should shape the decision is mostly about travel.",
+          "other": "No single one of these themes dominates the decision."
+        }
+      }
+    },
+    "expected": {
+      "include_df_skills_df-adventure_goto-planar-limits": true,
+      "include_df_skills_df-mapa_regional-roads": false,
+      "include_df_skills_df-fortress-industria_stone-engraving": false,
+      "include_df_skills_df-dwarves_noble-succession": false,
+      "dominant_theme": "travel"
+    },
+    "bands": {
+      "include_df_skills_df-adventure_goto-planar-limits": "auto",
+      "include_df_skills_df-mapa_regional-roads": "auto",
+      "include_df_skills_df-fortress-industria_stone-engraving": "auto",
+      "include_df_skills_df-dwarves_noble-succession": "auto",
+      "dominant_theme": "auto"
+    },
+    "candidate_labels": {
+      "C1": "df/skills/df-adventure/goto-planar-limits",
+      "C2": "df/skills/df-mapa/regional-roads",
+      "C3": "df/skills/df-fortress-industria/stone-engraving",
+      "C4": "df/skills/df-dwarves/noble-succession"
+    },
+    "ordering": {
+      "dominant_theme": [
+        "industry",
+        "culture",
+        "travel",
+        "other"
+      ]
+    },
+    "notes": "Rule retrieval-relevance: the planar-goto limit is exactly what the stacked terraces decision needs; road map, engraving and nobility cannot change it -> false. Route knowledge dominates -> dominant_theme travel."
+  },
+  {
+    "name": "r-23-bleeding-control",
+    "role": "JEV-R",
+    "state": "SITUATION: The adventurer is bleeding from a deep cut on the left arm after the fight; the bandage is in the pack and one goblin is still circling 8 tiles away.\n\nKNOWLEDGE CANDIDATES (retrieved top-4, indexed):\n[C1] Bandaging wounds | A clean bandage over a deep cut stops the bleeding; pressure on the wound slows blood loss until the bandage goes on.\n[C2] Pressure on bleeding limbs | Pressing the wound above a limb cut buys time; a tourniquet is a last resort.\n[C3] Steel forging | Steel bars forge into weapons at the forge with the right fuel.\n[C4] Tavern songs of the north | The mule song of Boatmurdered has seven verses.",
+    "questions": {
+      "include_df_skills_df-saude_bandaging-wounds": {
+        "type": "noul",
+        "instructions": "[C1] Would including this knowledge improve the next action decision given the situation?",
+        "criteria": {
+          "true": "It would change how the next action is chosen: a relevant risk, constraint, location, resource or method.",
+          "false": "It would not change the next action: irrelevant, already known, or too generic."
+        }
+      },
+      "include_df_skills_df-saude_pressure-on-bleeding-limbs": {
+        "type": "noul",
+        "instructions": "[C2] Would including this knowledge improve the next action decision given the situation?",
+        "criteria": {
+          "true": "It would change how the next action is chosen: a relevant risk, constraint, location, resource or method.",
+          "false": "It would not change the next action: irrelevant, already known, or too generic."
+        }
+      },
+      "include_df_skills_df-fortress-industria_steel-forging": {
+        "type": "noul",
+        "instructions": "[C3] Would including this knowledge improve the next action decision given the situation?",
+        "criteria": {
+          "true": "It would change how the next action is chosen: a relevant risk, constraint, location, resource or method.",
+          "false": "It would not change the next action: irrelevant, already known, or too generic."
+        }
+      },
+      "include_df_skills_df-central_tavern-songs": {
+        "type": "noul",
+        "instructions": "[C4] Would including this knowledge improve the next action decision given the situation?",
+        "criteria": {
+          "true": "It would change how the next action is chosen: a relevant risk, constraint, location, resource or method.",
+          "false": "It would not change the next action: irrelevant, already known, or too generic."
+        }
+      },
+      "dominant_theme": {
+        "type": "choice",
+        "instructions": "Which single theme dominates the knowledge that should inform the next action?",
+        "criteria": {
+          "combat": "The knowledge that should shape the decision is mostly about combat.",
+          "industry": "The knowledge that should shape the decision is mostly about industry.",
+          "health": "The knowledge that should shape the decision is mostly about health.",
+          "other": "No single one of these themes dominates the decision."
+        }
+      }
+    },
+    "expected": {
+      "include_df_skills_df-saude_bandaging-wounds": true,
+      "include_df_skills_df-saude_pressure-on-bleeding-limbs": true,
+      "include_df_skills_df-fortress-industria_steel-forging": false,
+      "include_df_skills_df-central_tavern-songs": false,
+      "dominant_theme": "health"
+    },
+    "bands": {
+      "include_df_skills_df-saude_bandaging-wounds": "auto",
+      "include_df_skills_df-saude_pressure-on-bleeding-limbs": "auto",
+      "include_df_skills_df-fortress-industria_steel-forging": "auto",
+      "include_df_skills_df-central_tavern-songs": "auto",
+      "dominant_theme": "auto"
+    },
+    "candidate_labels": {
+      "C1": "df/skills/df-saude/bandaging-wounds",
+      "C2": "df/skills/df-saude/pressure-on-bleeding-limbs",
+      "C3": "df/skills/df-fortress-industria/steel-forging",
+      "C4": "df/skills/df-central/tavern-songs"
+    },
+    "ordering": {
+      "dominant_theme": [
+        "combat",
+        "industry",
+        "health",
+        "other"
+      ]
+    },
+    "notes": "Rule retrieval-relevance: both first-aid candidates change the next action (how to stop the bleeding now); forging and songs cannot -> false. Health knowledge dominates -> dominant_theme health."
+  },
+  {
+    "name": "r-24-water-and-thirst",
+    "role": "JEV-R",
+    "state": "SITUATION: The adventurer is very thirsty with no drink left in the pack; the river is visible thirty tiles east and the road continues north away from it.\n\nKNOWLEDGE CANDIDATES (retrieved top-4, indexed):\n[C1] Finding water | Follow animal tracks and low ground downhill to water; running water is safer to drink than standing pools.\n[C2] Water safety | Boiling or a clean source prevents sickness; shallow fords hide deep holes.\n[C3] Caravan prices | A waterskin costs about forty coins at a dwarven caravan.\n[C4] Mushroom farming | Dimple plumps grow in dark soil underground.",
+    "questions": {
+      "include_df_skills_df-adventure_finding-water": {
+        "type": "noul",
+        "instructions": "[C1] Would including this knowledge improve the next action decision given the situation?",
+        "criteria": {
+          "true": "It would change how the next action is chosen: a relevant risk, constraint, location, resource or method.",
+          "false": "It would not change the next action: irrelevant, already known, or too generic."
+        }
+      },
+      "include_df_skills_df-adventure_water-safety": {
+        "type": "noul",
+        "instructions": "[C2] Would including this knowledge improve the next action decision given the situation?",
+        "criteria": {
+          "true": "It would change how the next action is chosen: a relevant risk, constraint, location, resource or method.",
+          "false": "It would not change the next action: irrelevant, already known, or too generic."
+        }
+      },
+      "include_df_skills_df-comercio_caravan-prices": {
+        "type": "noul",
+        "instructions": "[C3] Would including this knowledge improve the next action decision given the situation?",
+        "criteria": {
+          "true": "It would change how the next action is chosen: a relevant risk, constraint, location, resource or method.",
+          "false": "It would not change the next action: irrelevant, already known, or too generic."
+        }
+      },
+      "include_df_skills_df-fortress-industria_mushroom-farming": {
+        "type": "noul",
+        "instructions": "[C4] Would including this knowledge improve the next action decision given the situation?",
+        "criteria": {
+          "true": "It would change how the next action is chosen: a relevant risk, constraint, location, resource or method.",
+          "false": "It would not change the next action: irrelevant, already known, or too generic."
+        }
+      },
+      "dominant_theme": {
+        "type": "choice",
+        "instructions": "Which single theme dominates the knowledge that should inform the next action?",
+        "criteria": {
+          "travel": "The knowledge that should shape the decision is mostly about travel.",
+          "industry": "The knowledge that should shape the decision is mostly about industry.",
+          "survival": "The knowledge that should shape the decision is mostly about survival.",
+          "other": "No single one of these themes dominates the decision."
+        }
+      }
+    },
+    "expected": {
+      "include_df_skills_df-adventure_finding-water": true,
+      "include_df_skills_df-adventure_water-safety": true,
+      "include_df_skills_df-comercio_caravan-prices": false,
+      "include_df_skills_df-fortress-industria_mushroom-farming": false,
+      "dominant_theme": "survival"
+    },
+    "bands": {
+      "include_df_skills_df-adventure_finding-water": "auto",
+      "include_df_skills_df-adventure_water-safety": "auto",
+      "include_df_skills_df-comercio_caravan-prices": "auto",
+      "include_df_skills_df-fortress-industria_mushroom-farming": "auto",
+      "dominant_theme": "auto"
+    },
+    "candidate_labels": {
+      "C1": "df/skills/df-adventure/finding-water",
+      "C2": "df/skills/df-adventure/water-safety",
+      "C3": "df/skills/df-comercio/caravan-prices",
+      "C4": "df/skills/df-fortress-industria/mushroom-farming"
+    },
+    "ordering": {
+      "dominant_theme": [
+        "travel",
+        "industry",
+        "survival",
+        "other"
+      ]
+    },
+    "notes": "Rule retrieval-relevance: finding and treating water both change the next action (where to go and how to drink); prices and farming cannot -> false. Survival knowledge dominates -> dominant_theme survival."
+  },
+  {
+    "name": "r-25-hunt-chain-and-prey",
+    "role": "JEV-R",
+    "state": "SITUATION: Under a hunt mission a wild boar stands 5 tiles ahead at the tree line; the adventurer has the iron spear and one chance before the boar bolts into the brush.\n\nKNOWLEDGE CANDIDATES (retrieved top-4, indexed):\n[C1] Prey behaviour when hunted | Wild animals bolt at the first approach; a grazing animal must be engaged from melee range before it notices the hunter.\n[C2] Aiming at lethal parts | A strike to the neck can sever the spine and drop the target at once; a strike to the head can fracture the skull and end the fight immediately.\n[C3] Goblin language | Goblin greetings use short barked syllables.\n[C4] Soap making | Tallow and lye make soap at the ashery.",
+    "questions": {
+      "include_df_skills_df-criaturas_hunt-prey-behaviour": {
+        "type": "noul",
+        "instructions": "[C1] Would including this knowledge improve the next action decision given the situation?",
+        "criteria": {
+          "true": "It would change how the next action is chosen: a relevant risk, constraint, location, resource or method.",
+          "false": "It would not change the next action: irrelevant, already known, or too generic."
+        }
+      },
+      "include_df_skills_df-combate_aiming-lethal-parts": {
+        "type": "noul",
+        "instructions": "[C2] Would including this knowledge improve the next action decision given the situation?",
+        "criteria": {
+          "true": "It would change how the next action is chosen: a relevant risk, constraint, location, resource or method.",
+          "false": "It would not change the next action: irrelevant, already known, or too generic."
+        }
+      },
+      "include_df_skills_df-central_goblin-language": {
+        "type": "noul",
+        "instructions": "[C3] Would including this knowledge improve the next action decision given the situation?",
+        "criteria": {
+          "true": "It would change how the next action is chosen: a relevant risk, constraint, location, resource or method.",
+          "false": "It would not change the next action: irrelevant, already known, or too generic."
+        }
+      },
+      "include_df_skills_df-fortress-industria_soap-making": {
+        "type": "noul",
+        "instructions": "[C4] Would including this knowledge improve the next action decision given the situation?",
+        "criteria": {
+          "true": "It would change how the next action is chosen: a relevant risk, constraint, location, resource or method.",
+          "false": "It would not change the next action: irrelevant, already known, or too generic."
+        }
+      },
+      "dominant_theme": {
+        "type": "choice",
+        "instructions": "Which single theme dominates the knowledge that should inform the next action?",
+        "criteria": {
+          "survival": "The knowledge that should shape the decision is mostly about survival.",
+          "culture": "The knowledge that should shape the decision is mostly about culture.",
+          "combat": "The knowledge that should shape the decision is mostly about combat.",
+          "other": "No single one of these themes dominates the decision."
+        }
+      }
+    },
+    "expected": {
+      "include_df_skills_df-criaturas_hunt-prey-behaviour": true,
+      "include_df_skills_df-combate_aiming-lethal-parts": true,
+      "include_df_skills_df-central_goblin-language": false,
+      "include_df_skills_df-fortress-industria_soap-making": false,
+      "dominant_theme": "combat"
+    },
+    "bands": {
+      "include_df_skills_df-criaturas_hunt-prey-behaviour": "auto",
+      "include_df_skills_df-combate_aiming-lethal-parts": "auto",
+      "include_df_skills_df-central_goblin-language": "auto",
+      "include_df_skills_df-fortress-industria_soap-making": "auto",
+      "dominant_theme": "auto"
+    },
+    "candidate_labels": {
+      "C1": "df/skills/df-criaturas/hunt-prey-behaviour",
+      "C2": "df/skills/df-combate/aiming-lethal-parts",
+      "C3": "df/skills/df-central/goblin-language",
+      "C4": "df/skills/df-fortress-industria/soap-making"
+    },
+    "ordering": {
+      "dominant_theme": [
+        "survival",
+        "culture",
+        "combat",
+        "other"
+      ]
+    },
+    "notes": "Rule retrieval-relevance: prey behaviour and lethal aiming both shape the single chance at the boar; language and soap cannot -> false. Hunting combat dominates -> dominant_theme combat."
+  },
+  {
+    "name": "r-26-village-provisioning",
+    "role": "JEV-R",
+    "state": "SITUATION: The adventurer reaches the village store with coins in hand and one day of food left; the merchant is behind the counter and the price list is on the wall.\n\nKNOWLEDGE CANDIDATES (retrieved top-4, indexed):\n[C1] Food prices | Dried meat and bread cost a few dozen coins at a village store; prices rise when the roads are unsafe.\n[C2] Bartering etiquette | Open with a greeting and never name your price first.\n[C3] Sharpening blades | Oil and a whetstone keep an edge.\n[C4] Rock strata | The road cuts through limestone and shale.",
+    "questions": {
+      "include_df_skills_df-comercio_food-prices": {
+        "type": "noul",
+        "instructions": "[C1] Would including this knowledge improve the next action decision given the situation?",
+        "criteria": {
+          "true": "It would change how the next action is chosen: a relevant risk, constraint, location, resource or method.",
+          "false": "It would not change the next action: irrelevant, already known, or too generic."
+        }
+      },
+      "include_df_skills_df-comercio_bartering-etiquette": {
+        "type": "noul",
+        "instructions": "[C2] Would including this knowledge improve the next action decision given the situation?",
+        "criteria": {
+          "true": "It would change how the next action is chosen: a relevant risk, constraint, location, resource or method.",
+          "false": "It would not change the next action: irrelevant, already known, or too generic."
+        }
+      },
+      "include_df_skills_df-combate_sharpening-blades": {
+        "type": "noul",
+        "instructions": "[C3] Would including this knowledge improve the next action decision given the situation?",
+        "criteria": {
+          "true": "It would change how the next action is chosen: a relevant risk, constraint, location, resource or method.",
+          "false": "It would not change the next action: irrelevant, already known, or too generic."
+        }
+      },
+      "include_df_skills_df-geologia_strata": {
+        "type": "noul",
+        "instructions": "[C4] Would including this knowledge improve the next action decision given the situation?",
+        "criteria": {
+          "true": "It would change how the next action is chosen: a relevant risk, constraint, location, resource or method.",
+          "false": "It would not change the next action: irrelevant, already known, or too generic."
+        }
+      },
+      "dominant_theme": {
+        "type": "choice",
+        "instructions": "Which single theme dominates the knowledge that should inform the next action?",
+        "criteria": {
+          "combat": "The knowledge that should shape the decision is mostly about combat.",
+          "industry": "The knowledge that should shape the decision is mostly about industry.",
+          "trade": "The knowledge that should shape the decision is mostly about trade.",
+          "other": "No single one of these themes dominates the decision."
+        }
+      }
+    },
+    "expected": {
+      "include_df_skills_df-comercio_food-prices": true,
+      "include_df_skills_df-comercio_bartering-etiquette": true,
+      "include_df_skills_df-combate_sharpening-blades": false,
+      "include_df_skills_df-geologia_strata": false,
+      "dominant_theme": "trade"
+    },
+    "bands": {
+      "include_df_skills_df-comercio_food-prices": "auto",
+      "include_df_skills_df-comercio_bartering-etiquette": "auto",
+      "include_df_skills_df-combate_sharpening-blades": "auto",
+      "include_df_skills_df-geologia_strata": "auto",
+      "dominant_theme": "auto"
+    },
+    "candidate_labels": {
+      "C1": "df/skills/df-comercio/food-prices",
+      "C2": "df/skills/df-comercio/bartering-etiquette",
+      "C3": "df/skills/df-combate/sharpening-blades",
+      "C4": "df/skills/df-geologia/strata"
+    },
+    "ordering": {
+      "dominant_theme": [
+        "combat",
+        "industry",
+        "trade",
+        "other"
+      ]
+    },
+    "notes": "Rule retrieval-relevance: food prices and bartering both change how the purchase is made now; sharpening and geology cannot -> false. Trade knowledge dominates -> dominant_theme trade."
+  },
+  {
+    "name": "r-27-night-camp-choice",
+    "role": "JEV-R",
+    "state": "SITUATION: Nightfall is close and the adventurer must camp before the storm reaches the road; the rock overhang is 20 tiles north and the open field is beside the road.\n\nKNOWLEDGE CANDIDATES (retrieved top-4, indexed):\n[C1] Choosing a camp site | Pick high, dry ground with one entrance and a wall at your back; avoid riverbanks and open fields in storms.\n[C2] Sleep and watch | Take turns on watch; a fire keeps animals off but shows where you are.\n[C3] Stone engraving | Engravers carve images into smoothed walls.\n[C4] Fortress history | Boatmurdered fell in a siege three hundred years ago.",
+    "questions": {
+      "include_df_skills_df-adventure_camp-site-choice": {
+        "type": "noul",
+        "instructions": "[C1] Would including this knowledge improve the next action decision given the situation?",
+        "criteria": {
+          "true": "It would change how the next action is chosen: a relevant risk, constraint, location, resource or method.",
+          "false": "It would not change the next action: irrelevant, already known, or too generic."
+        }
+      },
+      "include_df_skills_df-adventure_sleep-and-watch": {
+        "type": "noul",
+        "instructions": "[C2] Would including this knowledge improve the next action decision given the situation?",
+        "criteria": {
+          "true": "It would change how the next action is chosen: a relevant risk, constraint, location, resource or method.",
+          "false": "It would not change the next action: irrelevant, already known, or too generic."
+        }
+      },
+      "include_df_skills_df-fortress-industria_stone-engraving": {
+        "type": "noul",
+        "instructions": "[C3] Would including this knowledge improve the next action decision given the situation?",
+        "criteria": {
+          "true": "It would change how the next action is chosen: a relevant risk, constraint, location, resource or method.",
+          "false": "It would not change the next action: irrelevant, already known, or too generic."
+        }
+      },
+      "include_df_skills_df-central_fortress-history": {
+        "type": "noul",
+        "instructions": "[C4] Would including this knowledge improve the next action decision given the situation?",
+        "criteria": {
+          "true": "It would change how the next action is chosen: a relevant risk, constraint, location, resource or method.",
+          "false": "It would not change the next action: irrelevant, already known, or too generic."
+        }
+      },
+      "dominant_theme": {
+        "type": "choice",
+        "instructions": "Which single theme dominates the knowledge that should inform the next action?",
+        "criteria": {
+          "travel": "The knowledge that should shape the decision is mostly about travel.",
+          "industry": "The knowledge that should shape the decision is mostly about industry.",
+          "survival": "The knowledge that should shape the decision is mostly about survival.",
+          "other": "No single one of these themes dominates the decision."
+        }
+      }
+    },
+    "expected": {
+      "include_df_skills_df-adventure_camp-site-choice": true,
+      "include_df_skills_df-adventure_sleep-and-watch": true,
+      "include_df_skills_df-fortress-industria_stone-engraving": false,
+      "include_df_skills_df-central_fortress-history": false,
+      "dominant_theme": "survival"
+    },
+    "bands": {
+      "include_df_skills_df-adventure_camp-site-choice": "auto",
+      "include_df_skills_df-adventure_sleep-and-watch": "auto",
+      "include_df_skills_df-fortress-industria_stone-engraving": "auto",
+      "include_df_skills_df-central_fortress-history": "auto",
+      "dominant_theme": "auto"
+    },
+    "candidate_labels": {
+      "C1": "df/skills/df-adventure/camp-site-choice",
+      "C2": "df/skills/df-adventure/sleep-and-watch",
+      "C3": "df/skills/df-fortress-industria/stone-engraving",
+      "C4": "df/skills/df-central/fortress-history"
+    },
+    "ordering": {
+      "dominant_theme": [
+        "travel",
+        "industry",
+        "survival",
+        "other"
+      ]
+    },
+    "notes": "Rule retrieval-relevance: camp choice and watch discipline both decide where and how to spend the night; engraving and history cannot -> false. Survival knowledge dominates -> dominant_theme survival."
+  },
+  {
+    "name": "r-28-reexploration-knowledge",
+    "role": "JEV-R",
+    "state": "SITUATION: Three searches of the dead-end gully turned up nothing and the light is fading; the map shows a side branch east and the road back west.\n\nKNOWLEDGE CANDIDATES (retrieved top-4, indexed):\n[C1] Exploration yield | An area searched three times without yield rarely improves on a fourth pass; the unexplored branches next to it hold what the dead end did not.\n[C2] Unsticking the adventurer | Three unchanged validations force an exploration move; a second failure escalates to a re-plan and the same action three times means switching candidate.\n[C3] Cheese aging | Cheese rounds age in the underground caves for months.\n[C4] Mining songs | The deep picks song has nine verses and is sung in shifts.",
+    "questions": {
+      "include_df_skills_df-adventure_exploration-yield": {
+        "type": "noul",
+        "instructions": "[C1] Would including this knowledge improve the next action decision given the situation?",
+        "criteria": {
+          "true": "It would change how the next action is chosen: a relevant risk, constraint, location, resource or method.",
+          "false": "It would not change the next action: irrelevant, already known, or too generic."
+        }
+      },
+      "include_df_skills_df-adventure_stuck-handling": {
+        "type": "noul",
+        "instructions": "[C2] Would including this knowledge improve the next action decision given the situation?",
+        "criteria": {
+          "true": "It would change how the next action is chosen: a relevant risk, constraint, location, resource or method.",
+          "false": "It would not change the next action: irrelevant, already known, or too generic."
+        }
+      },
+      "include_df_skills_df-fortress-industria_cheese-aging": {
+        "type": "noul",
+        "instructions": "[C3] Would including this knowledge improve the next action decision given the situation?",
+        "criteria": {
+          "true": "It would change how the next action is chosen: a relevant risk, constraint, location, resource or method.",
+          "false": "It would not change the next action: irrelevant, already known, or too generic."
+        }
+      },
+      "include_df_skills_df-dwarves_mining-songs": {
+        "type": "noul",
+        "instructions": "[C4] Would including this knowledge improve the next action decision given the situation?",
+        "criteria": {
+          "true": "It would change how the next action is chosen: a relevant risk, constraint, location, resource or method.",
+          "false": "It would not change the next action: irrelevant, already known, or too generic."
+        }
+      },
+      "dominant_theme": {
+        "type": "choice",
+        "instructions": "Which single theme dominates the knowledge that should inform the next action?",
+        "criteria": {
+          "survival": "The knowledge that should shape the decision is mostly about survival.",
+          "industry": "The knowledge that should shape the decision is mostly about industry.",
+          "travel": "The knowledge that should shape the decision is mostly about travel.",
+          "other": "No single one of these themes dominates the decision."
+        }
+      }
+    },
+    "expected": {
+      "include_df_skills_df-adventure_exploration-yield": true,
+      "include_df_skills_df-adventure_stuck-handling": true,
+      "include_df_skills_df-fortress-industria_cheese-aging": false,
+      "include_df_skills_df-dwarves_mining-songs": false,
+      "dominant_theme": "travel"
+    },
+    "bands": {
+      "include_df_skills_df-adventure_exploration-yield": "auto",
+      "include_df_skills_df-adventure_stuck-handling": "auto",
+      "include_df_skills_df-fortress-industria_cheese-aging": "auto",
+      "include_df_skills_df-dwarves_mining-songs": "auto",
+      "dominant_theme": "auto"
+    },
+    "candidate_labels": {
+      "C1": "df/skills/df-adventure/exploration-yield",
+      "C2": "df/skills/df-adventure/stuck-handling",
+      "C3": "df/skills/df-fortress-industria/cheese-aging",
+      "C4": "df/skills/df-dwarves/mining-songs"
+    },
+    "ordering": {
+      "dominant_theme": [
+        "survival",
+        "industry",
+        "travel",
+        "other"
+      ]
+    },
+    "notes": "Rule retrieval-relevance: exploration yield and the stuck protocol both shape the re-exploration decision; cheese and songs cannot -> false. Route knowledge dominates -> dominant_theme travel."
+  },
+  {
+    "name": "r-29-all-false-dramatic",
+    "role": "JEV-R",
+    "state": "SITUATION: Walking the open road at midday with the fortress two days ahead; nothing has changed and the next action is forced.\n\nKNOWLEDGE CANDIDATES (retrieved top-4, indexed):\n[C1] Dragon slaying | Ancient ballads tell how the first dragons were brought down with rope and fire.\n[C2] Siege engineering | Ballistae and siege towers break fortress walls.\n[C3] Legendary swords | The sword Firebrand sleeps under the mountain.\n[C4] Wrestling | Grappling works without a weapon.",
+    "questions": {
+      "include_df_skills_df-criaturas_dragon-slaying": {
+        "type": "noul",
+        "instructions": "[C1] Would including this knowledge improve the next action decision given the situation?",
+        "criteria": {
+          "true": "It would change how the next action is chosen: a relevant risk, constraint, location, resource or method.",
+          "false": "It would not change the next action: irrelevant, already known, or too generic."
+        }
+      },
+      "include_df_skills_df-fortress-construcao_siege-engineering": {
+        "type": "noul",
+        "instructions": "[C2] Would including this knowledge improve the next action decision given the situation?",
+        "criteria": {
+          "true": "It would change how the next action is chosen: a relevant risk, constraint, location, resource or method.",
+          "false": "It would not change the next action: irrelevant, already known, or too generic."
+        }
+      },
+      "include_df_skills_df-central_legendary-swords": {
+        "type": "noul",
+        "instructions": "[C3] Would including this knowledge improve the next action decision given the situation?",
+        "criteria": {
+          "true": "It would change how the next action is chosen: a relevant risk, constraint, location, resource or method.",
+          "false": "It would not change the next action: irrelevant, already known, or too generic."
+        }
+      },
+      "include_df_skills_df-combate_wrestling": {
+        "type": "noul",
+        "instructions": "[C4] Would including this knowledge improve the next action decision given the situation?",
+        "criteria": {
+          "true": "It would change how the next action is chosen: a relevant risk, constraint, location, resource or method.",
+          "false": "It would not change the next action: irrelevant, already known, or too generic."
+        }
+      },
+      "dominant_theme": {
+        "type": "choice",
+        "instructions": "Which single theme dominates the knowledge that should inform the next action?",
+        "criteria": {
+          "combat": "The knowledge that should shape the decision is mostly about combat.",
+          "industry": "The knowledge that should shape the decision is mostly about industry.",
+          "lore": "The knowledge that should shape the decision is mostly about lore.",
+          "other": "No single one of these themes dominates the decision."
+        }
+      }
+    },
+    "expected": {
+      "include_df_skills_df-criaturas_dragon-slaying": false,
+      "include_df_skills_df-fortress-construcao_siege-engineering": false,
+      "include_df_skills_df-central_legendary-swords": false,
+      "include_df_skills_df-combate_wrestling": false,
+      "dominant_theme": "other"
+    },
+    "bands": {
+      "include_df_skills_df-criaturas_dragon-slaying": "auto",
+      "include_df_skills_df-fortress-construcao_siege-engineering": "auto",
+      "include_df_skills_df-central_legendary-swords": "auto",
+      "include_df_skills_df-combate_wrestling": "auto",
+      "dominant_theme": "auto"
+    },
+    "candidate_labels": {
+      "C1": "df/skills/df-criaturas/dragon-slaying",
+      "C2": "df/skills/df-fortress-construcao/siege-engineering",
+      "C3": "df/skills/df-central/legendary-swords",
+      "C4": "df/skills/df-combate/wrestling"
+    },
+    "ordering": {
+      "dominant_theme": [
+        "combat",
+        "industry",
+        "lore",
+        "other"
+      ]
+    },
+    "notes": "Negative control with dramatic-sounding knowledge (the r-10 family): dragons, sieges and legendary swords are irrelevant to a forced next action and must not drag the labels true. All false and no theme dominates -> dominant_theme other."
+  },
+  {
+    "name": "r-30-npc-conversation",
+    "role": "JEV-R",
+    "state": "SITUATION: A dwarven trader stops on the road and greets the adventurer; the fortress is two days away and the trader has walked that road this morning.\n\nKNOWLEDGE CANDIDATES (retrieved top-4, indexed):\n[C1] NPC greetings | Greet first and state your business in one sentence; hostile tones end the talk.\n[C2] Asking for directions | Ask about the route first and about landmarks after; locals answer better to specific questions.\n[C3] Soap making | Tallow and lye make soap at the ashery.\n[C4] Rock strata | The road cuts through limestone and shale.",
+    "questions": {
+      "include_df_skills_df-adventure_npc-greetings": {
+        "type": "noul",
+        "instructions": "[C1] Would including this knowledge improve the next action decision given the situation?",
+        "criteria": {
+          "true": "It would change how the next action is chosen: a relevant risk, constraint, location, resource or method.",
+          "false": "It would not change the next action: irrelevant, already known, or too generic."
+        }
+      },
+      "include_df_skills_df-adventure_asking-directions": {
+        "type": "noul",
+        "instructions": "[C2] Would including this knowledge improve the next action decision given the situation?",
+        "criteria": {
+          "true": "It would change how the next action is chosen: a relevant risk, constraint, location, resource or method.",
+          "false": "It would not change the next action: irrelevant, already known, or too generic."
+        }
+      },
+      "include_df_skills_df-fortress-industria_soap-making": {
+        "type": "noul",
+        "instructions": "[C3] Would including this knowledge improve the next action decision given the situation?",
+        "criteria": {
+          "true": "It would change how the next action is chosen: a relevant risk, constraint, location, resource or method.",
+          "false": "It would not change the next action: irrelevant, already known, or too generic."
+        }
+      },
+      "include_df_skills_df-geologia_strata": {
+        "type": "noul",
+        "instructions": "[C4] Would including this knowledge improve the next action decision given the situation?",
+        "criteria": {
+          "true": "It would change how the next action is chosen: a relevant risk, constraint, location, resource or method.",
+          "false": "It would not change the next action: irrelevant, already known, or too generic."
+        }
+      },
+      "dominant_theme": {
+        "type": "choice",
+        "instructions": "Which single theme dominates the knowledge that should inform the next action?",
+        "criteria": {
+          "travel": "The knowledge that should shape the decision is mostly about travel.",
+          "trade": "The knowledge that should shape the decision is mostly about trade.",
+          "social": "The knowledge that should shape the decision is mostly about social.",
+          "other": "No single one of these themes dominates the decision."
+        }
+      }
+    },
+    "expected": {
+      "include_df_skills_df-adventure_npc-greetings": true,
+      "include_df_skills_df-adventure_asking-directions": true,
+      "include_df_skills_df-fortress-industria_soap-making": false,
+      "include_df_skills_df-geologia_strata": false,
+      "dominant_theme": "social"
+    },
+    "bands": {
+      "include_df_skills_df-adventure_npc-greetings": "auto",
+      "include_df_skills_df-adventure_asking-directions": "auto",
+      "include_df_skills_df-fortress-industria_soap-making": "auto",
+      "include_df_skills_df-geologia_strata": "auto",
+      "dominant_theme": "auto"
+    },
+    "candidate_labels": {
+      "C1": "df/skills/df-adventure/npc-greetings",
+      "C2": "df/skills/df-adventure/asking-directions",
+      "C3": "df/skills/df-fortress-industria/soap-making",
+      "C4": "df/skills/df-geologia/strata"
+    },
+    "ordering": {
+      "dominant_theme": [
+        "travel",
+        "trade",
+        "social",
+        "other"
+      ]
+    },
+    "notes": "Rule retrieval-relevance: greetings and directions both shape the conversation that resolves being lost; soap and geology cannot -> false. Social knowledge dominates -> dominant_theme social."
   }
 ]

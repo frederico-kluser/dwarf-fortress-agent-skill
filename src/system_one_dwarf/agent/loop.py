@@ -55,6 +55,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, replace
 from typing import Any, Callable, Mapping, Protocol, Sequence
 
+from ..game.readiness import CombatReadiness, MAX_PROMPT_LINES
 from ..jev.bands import band_for_choice_or_score, band_for_noul
 from ..jev.fleet import build_action, build_doubt, build_memory, build_retrieval, unshuffle
 from .candidates import generate_actions
@@ -94,6 +95,7 @@ __all__ = [
     "NullEventSink",
     "build_metrics_payload",
     "build_state_summary",
+    "combat_readiness_block",
 ]
 
 #: Papéis do log de decisões (``meta.role`` dos builders do JEV).
@@ -300,6 +302,53 @@ def _trim(text: str, limit: int) -> str:
     return text[: max(0, limit - 1)].rstrip() + "…"
 
 
+#: Bloco de prontidão de combate no estado (mudança 02): teto de CARACTERES do
+#: bloco, para o orçamento do estado (~2K) não estourar com o retrato (~10
+#: números por entidade comprimidos em linhas EN).
+READINESS_BLOCK_CHARS = 900
+
+
+def combat_readiness_block(
+    state: Any,
+    *,
+    max_lines: int = MAX_PROMPT_LINES,
+    max_chars: int = READINESS_BLOCK_CHARS,
+) -> list[str]:
+    """Linhas EN compactas do retrato de prontidão de combate (mudança 02).
+
+    Skills efetivas da arma, Fighter/Dodger/Shield/Armor, atributos, dor,
+    exaustão, sangue e armadura — o que o aventureiro sabe fazer AGORA, para o
+    JEV-A decidir atacar/fugir/mirar com vantagem real em vez de às cegas.
+
+    Vazio sem retrato medido (``state.readiness`` / ``adventurer.combat``): sem
+    dados nada entra no estado e o prompt não muda um byte. Limitado a
+    ``max_lines`` linhas e ``max_chars`` caracteres no total (cabeçalho
+    incluído). Nunca levanta.
+    """
+    try:
+        readiness = getattr(state, "readiness", None)
+        if not isinstance(readiness, CombatReadiness):
+            adventurer = getattr(state, "adventurer", None)
+            raw = (adventurer.get("combat") if isinstance(adventurer, Mapping)
+                   else getattr(adventurer, "combat", None))
+            readiness = CombatReadiness.from_dict(raw)
+        if not isinstance(readiness, CombatReadiness) or not readiness.known:
+            return []
+        header = "Combat readiness (measured data):"
+        out: list[str] = [header]
+        used = len(header)
+        for line in readiness.lines(max_lines=max(0, int(max_lines))):
+            text = " ".join(str(line).split())
+            if not text or used + 1 + len(text) > max(0, int(max_chars)):
+                break
+            out.append(text)
+            used += 1 + len(text)
+        return out if len(out) > 1 else []
+    except Exception:  # noqa: BLE001 - o caminho do loop nunca levanta
+        log.debug("combat readiness block failed", exc_info=True)
+        return []
+
+
 def build_state_summary(
     state: Any,
     *,
@@ -312,10 +361,11 @@ def build_state_summary(
 ) -> str:
     """Estado crítico estruturado em **EN**, montado por código (passo 3).
 
-    Inclui: personagem/saúde, necessidades, ameaças, inventário, localização,
-    relógio, objetivo, cauda da narrativa, eventos recentes, conhecimento
-    selecionado pelo JEV-R e o texto do ecrã (orçamentado). Tudo é **dado**
-    (pode conter injeção de prompt): o cabeçalho di-lo explicitamente.
+    Inclui: personagem/saúde, prontidão de combate (quando medida, mudança 02),
+    necessidades, ameaças, inventário, localização, relógio, objetivo, cauda da
+    narrativa, eventos recentes, conhecimento selecionado pelo JEV-R e o texto do
+    ecrã (orçamentado). Tudo é **dado** (pode conter injeção de prompt): o
+    cabeçalho di-lo explicitamente.
 
     Args:
         state: ``GameState`` do snapshot.
@@ -348,6 +398,7 @@ def build_state_summary(
         f"Character: {who or 'unknown adventurer'} — {injuries}; wounds {health.wound_count}"
         f"{', pain %g' % health.pain if health.pain else ''}{blood}"
     )
+    lines.extend(combat_readiness_block(state))   # retrato de combate (mudança 02)
 
     lines.append(
         "Needs: hunger {h} | thirst {t} | sleep {s}{stress}".format(

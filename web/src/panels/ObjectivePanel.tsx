@@ -4,7 +4,6 @@ import Button from '@mui/material/Button';
 import Checkbox from '@mui/material/Checkbox';
 import Chip from '@mui/material/Chip';
 import IconButton from '@mui/material/IconButton';
-import LinearProgress from '@mui/material/LinearProgress';
 import List from '@mui/material/List';
 import ListItem from '@mui/material/ListItem';
 import Stack from '@mui/material/Stack';
@@ -21,8 +20,10 @@ import { formatPercent } from '../api/format';
 import { useMetrics, useObjective, usePutObjective } from '../api/queries';
 import type { Objective } from '../api/types';
 import PanelShell from '../components/PanelShell';
-import { PanelError, PanelLoading, PanelNotice } from '../components/PanelState';
-import SectionCard from '../components/SectionCard';
+import { PanelError, PanelNotice } from '../components/PanelState';
+import { EmptyState, RunaGlyph, RunaRule } from '../components/rpg';
+import { RunaLoading, RunaSection, runaType } from '../components/RunaKit';
+import { ProgressBar } from '@/components/motion-ui/progress-bar';
 
 /**
  * Forma editável do objetivo: o texto que o humano lê e escreve.
@@ -88,6 +89,7 @@ export default function ObjectivePanel() {
       <Button
         variant="outlined"
         startIcon={<Undo />}
+        sx={{ minHeight: 40 }}
         disabled={!dirty || saveMutation.isPending}
         onClick={() => {
           setEdit(null);
@@ -99,6 +101,7 @@ export default function ObjectivePanel() {
       <Button
         variant="contained"
         startIcon={<Save />}
+        sx={{ minHeight: 40 }}
         loading={saveMutation.isPending}
         loadingPosition="start"
         disabled={!canSave}
@@ -115,7 +118,7 @@ export default function ObjectivePanel() {
       description="O que o agente deve cumprir. Escreve em português: o servidor traduz PT→EN antes de entrar nos prompts."
       actions={actions}
     >
-      {objectiveQuery.isLoading ? <PanelLoading label="A carregar objetivo…" /> : null}
+      {objectiveQuery.isLoading ? <RunaLoading label="A carregar objetivo…" /> : null}
 
       {objectiveQuery.isError ? (
         <PanelError
@@ -138,10 +141,21 @@ export default function ObjectivePanel() {
             </Alert>
           ) : null}
 
-          <SectionCard
+          <RunaSection
             title="Narrativa do objetivo"
             subtitle="Substituída por inteiro no PUT /objective (o servidor traduz PT→EN)"
-            action={dirty ? <Chip size="small" color="warning" label="alterações por guardar" /> : null}
+            glyph="scroll"
+            texture
+            action={
+              dirty ? (
+                <Chip
+                  size="small"
+                  color="warning"
+                  icon={<RunaGlyph name="alert" size={14} />}
+                  label="alterações por guardar"
+                />
+              ) : null
+            }
           >
             <TextField
               id="objetivo-narrativa"
@@ -160,16 +174,20 @@ export default function ObjectivePanel() {
                     : 'Ex.: «Chegar ao portão de pedra a nordeste, vivo e com água para dois dias.»'
               }
             />
-          </SectionCard>
+          </RunaSection>
 
-          <SectionCard
+          <RunaRule />
+
+          <RunaSection
             title="Sub-objetivos"
             subtitle={`${subgoals.filter((goal) => goal.done).length} de ${subgoals.length} concluídos`}
+            glyph="map"
             flush
             action={
               <Button
                 size="small"
                 startIcon={<Add />}
+                sx={{ minHeight: 40 }}
                 onClick={() =>
                   update({
                     ...draft,
@@ -185,23 +203,29 @@ export default function ObjectivePanel() {
             }
           >
             <Stack spacing={1.5} sx={{ px: 2, pt: 2 }}>
-              <Stack spacing={0.5}>
-                <LinearProgress
-                  variant="determinate"
-                  value={Math.round((percent ?? 0) * 100)}
-                  aria-label="Progresso do objetivo"
-                />
-                <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                  Progresso reportado pelo agente: {formatPercent(percent)}{' '}
-                  {activeSubgoalId ? `· sub-objetivo ativo: ${activeSubgoalId}` : ''}
-                </Typography>
-              </Stack>
+              <ProgressBar
+                value={percent ?? 0}
+                highlight
+                progressbar
+                aria-label="Progresso do objetivo"
+              />
+              <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                Progresso reportado pelo agente: {formatPercent(percent)}{' '}
+                {activeSubgoalId ? (
+                  <>
+                    · sub-objetivo ativo:{' '}
+                    <span style={runaType('data')}>{activeSubgoalId}</span>
+                  </>
+                ) : null}
+              </Typography>
             </Stack>
 
             {subgoals.length === 0 ? (
-              <Typography variant="body2" sx={{ p: 2, color: 'text.secondary' }}>
-                Sem sub-objetivos. Adiciona o primeiro passo concreto.
-              </Typography>
+              <EmptyState
+                glyph="map"
+                title="Sem sub-objetivos."
+                body="Adiciona o primeiro passo concreto — cada sub-objetivo é marcável à medida que o agente o cumpre."
+              />
             ) : (
               <List dense disablePadding sx={{ pt: 1 }}>
                 {subgoals.map((goal, index) => (
@@ -262,13 +286,20 @@ export default function ObjectivePanel() {
                       sx={{ mr: 6 }}
                     />
                     {activeSubgoalId === goal.id ? (
-                      <Chip size="small" color="primary" variant="outlined" label="ativo" sx={{ ml: 1 }} />
+                      <Chip
+                        size="small"
+                        color="primary"
+                        variant="outlined"
+                        icon={<RunaGlyph name="diamond" size={14} />}
+                        label="ativo"
+                        sx={{ ml: 1 }}
+                      />
                     ) : null}
                   </ListItem>
                 ))}
               </List>
             )}
-          </SectionCard>
+          </RunaSection>
 
           <PanelNotice severity="info">
             O contrato devolve <code>narrative_pt</code> e <code>subgoals[].text_pt</code> quando

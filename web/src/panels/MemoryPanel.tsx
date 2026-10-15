@@ -21,8 +21,9 @@ import { useMemory, usePatchMemory } from '../api/queries';
 import type { MemoryEpisode } from '../api/types';
 import FreshnessIndicator from '../components/FreshnessIndicator';
 import PanelShell from '../components/PanelShell';
-import { PanelError, PanelLoading, PanelNotice } from '../components/PanelState';
-import SectionCard from '../components/SectionCard';
+import { PanelError, PanelNotice } from '../components/PanelState';
+import { EmptyState, RunaGlyph, RunaRule } from '../components/rpg';
+import { RunaLoading, RunaSection } from '../components/RunaKit';
 import { useNow } from '../hooks/useSparkSeries';
 import { MONO_FONT } from '../theme';
 
@@ -66,6 +67,7 @@ export default function MemoryPanel() {
       <Button
         variant="outlined"
         startIcon={<Undo />}
+        sx={{ minHeight: 40 }}
         disabled={!dirty || saveMutation.isPending}
         onClick={() => {
           setEdit(null);
@@ -77,6 +79,7 @@ export default function MemoryPanel() {
       <Button
         variant="contained"
         startIcon={<Save />}
+        sx={{ minHeight: 40 }}
         loading={saveMutation.isPending}
         loadingPosition="start"
         disabled={!dirty || draft.trim().length === 0}
@@ -93,7 +96,7 @@ export default function MemoryPanel() {
       description="A memória canónica é guardada em inglês; aqui vês e editas a versão em português."
       actions={actions}
     >
-      {memoryQuery.isLoading ? <PanelLoading label="A carregar memória…" /> : null}
+      {memoryQuery.isLoading ? <RunaLoading label="A carregar memória…" /> : null}
 
       {memoryQuery.isError ? (
         <PanelError
@@ -110,11 +113,22 @@ export default function MemoryPanel() {
             </Alert>
           ) : null}
 
-          <SectionCard
+          <RunaSection
             title="Narrativa (PT)"
             subtitle={`Atualizada em ${formatDateTime(memory.updated_at)}`}
             headingLevel="h2"
-            action={dirty ? <Chip size="small" color="warning" label="alterações por guardar" /> : null}
+            glyph="scroll"
+            texture
+            action={
+              dirty ? (
+                <Chip
+                  size="small"
+                  color="warning"
+                  icon={<RunaGlyph name="alert" size={14} />}
+                  label="alterações por guardar"
+                />
+              ) : null
+            }
           >
             <TextField
               id="memoria-narrativa"
@@ -125,19 +139,25 @@ export default function MemoryPanel() {
               minRows={6}
               fullWidth
               helperText="Escreve em português. Ao guardar, o servidor traduz PT→EN antes de gravar a memória canónica."
+              sx={{ maxWidth: '72ch' }}
             />
-          </SectionCard>
+          </RunaSection>
 
-          <SectionCard
+          <RunaRule />
+
+          <RunaSection
             title="Episódios"
             subtitle={`${memory.episodes.length} registos · do mais recente para o mais antigo`}
             headingLevel="h2"
+            glyph="scroll"
             flush
           >
             {memory.episodes.length === 0 ? (
-              <Typography variant="body2" sx={{ p: 2, color: 'text.secondary' }}>
-                Ainda não há episódios nesta campanha.
-              </Typography>
+              <EmptyState
+                glyph="scroll"
+                title="Ainda não há episódios nesta campanha."
+                body="Os episódios são registados pelo servidor à medida que o agente joga — cada momento relevante entra aqui, do mais recente para o mais antigo."
+              />
             ) : (
               <List dense disablePadding>
                 {sortEpisodes(memory.episodes).map((episode) => (
@@ -146,21 +166,30 @@ export default function MemoryPanel() {
                       primary={episode.content_pt}
                       secondary={`${formatDateTime(episode.ts)} · ${valuePt(episode.kind)} · ${episode.id}`}
                       slotProps={{
-                        primary: { variant: 'body2' },
-                        secondary: { variant: 'caption', sx: { fontFamily: MONO_FONT } },
+                        primary: {
+                          variant: 'body2',
+                          sx: { maxWidth: '72ch', textWrap: 'pretty' },
+                        },
+                        secondary: {
+                          variant: 'caption',
+                          sx: { fontFamily: MONO_FONT, fontVariantNumeric: 'tabular-nums' },
+                        },
                       }}
                     />
                   </ListItem>
                 ))}
               </List>
             )}
-          </SectionCard>
+          </RunaSection>
 
           <Accordion variant="outlined" disableGutters>
             <AccordionSummary expandIcon={<ExpandMore />} aria-controls="memoria-trabalho-conteudo" id="memoria-trabalho-cabecalho">
-              <Typography variant="h5" component="h2">
-                Memória de trabalho (canónica, em inglês)
-              </Typography>
+              <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                <RunaGlyph name="key" size={20} />
+                <Typography variant="h5" component="h2">
+                  Memória de trabalho (canónica, em inglês)
+                </Typography>
+              </Stack>
             </AccordionSummary>
             <AccordionDetails>
               <PanelNotice severity="info">
@@ -170,7 +199,13 @@ export default function MemoryPanel() {
               </PanelNotice>
               <Typography
                 variant="body2"
-                sx={{ mt: 1.5, fontFamily: MONO_FONT, whiteSpace: 'pre-wrap' }}
+                sx={{
+                  mt: 1.5,
+                  fontFamily: MONO_FONT,
+                  whiteSpace: 'pre-wrap',
+                  maxWidth: '72ch',
+                  fontVariantNumeric: 'tabular-nums',
+                }}
               >
                 {memory.working_memory || '—'}
               </Typography>

@@ -1049,6 +1049,24 @@ class DialogueMemory:
         )
 
     @guarded(list)
+    def lines_after(self, after_id: Any = 0, limit: int = 500) -> list[DialogueLine]:
+        """Falas com ``id`` > ``after_id``, pela ordem do diário (para a extração derivada).
+
+        É assim que a extração assíncrona (``campaign/extraction.py``) percorre a
+        transcrição **bruta** sem a tocar: só lê, nunca apaga nem reescreve.
+        """
+        try:
+            after = int(after_id)
+        except (TypeError, ValueError):
+            after = 0
+        with self._session() as conn:
+            rows = conn.execute(
+                f"SELECT {self._COLUMNS} FROM lines WHERE id > ? ORDER BY id ASC LIMIT ?",
+                (max(0, after), max(1, int(limit))),
+            ).fetchall()
+            return [self._line(r) for r in rows]
+
+    @guarded(list)
     def recall(
         self, query: Any, interlocutor: Any = None, k: int = 5, now: Any = None
     ) -> list[Scored[DialogueLine]]:
@@ -1182,7 +1200,12 @@ class DialogueMemory:
     def memory_items(
         self, query: Any, interlocutor: Any = None, k: int = 3, now: Any = None
     ) -> list[dict[str, Any]]:
-        """Itens ``{id,key,content,tags,title}`` na forma da memória do loop (para o JEV-R)."""
+        """Itens ``{id,key,content,tags,title}`` na forma da memória do loop (para o JEV-R).
+
+        ``score`` é o composto da loja (min-max); ``recency``/``importance``/
+        ``relevance`` são os valores BRUTOS, para o top-K do JEV-R fundir lojas
+        diferentes com :func:`.recall.combined_score` (``campaign/bundle.py``).
+        """
         items: list[dict[str, Any]] = []
         for hit in self.recall(query, interlocutor=interlocutor, k=k, now=now):
             line = hit.item
@@ -1195,5 +1218,7 @@ class DialogueMemory:
                 "tags": ",".join(("dialogue", line.role, who)),
                 "importance": line.importance10,
                 "score": round(hit.score, 4),
+                "recency": round(hit.raw_recency, 4),
+                "relevance": round(hit.raw_relevance, 4),
             })
         return items

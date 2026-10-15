@@ -1,118 +1,169 @@
-import Tab from '@mui/material/Tab';
-import Tabs from '@mui/material/Tabs';
-import Badge from '@mui/material/Badge';
-import Box from '@mui/material/Box';
-import Tooltip from '@mui/material/Tooltip';
+import { Fragment, type KeyboardEvent } from 'react';
 
-import { panelsInNavOrder, panelRegionId, panelTabId, type PanelId } from '../panels/registry';
+import { RunaGlyph } from '../components/rpg/RunaGlyph';
+import { NAV_GROUPS, panelById, panelRegionId, type PanelId } from '../panels/registry';
+import { panelMobileTabId } from './navIds';
 
-/**
- * Navegação em ecrãs estreitos. Abaixo de `md` é a ÚNICA navegação (auditoria
- * F.2.2.03: antes havia drawer temporário + 8 separadores com os mesmos itens).
- * De `md` para cima os separadores continuam a existir para alcançar «Perguntas»
- * num clique, mas sem rótulo visível — a navegação por teclado só toca no
- * `tablist` ativo (o inativo fica `visibility: hidden`, logo fora da ordem de foco).
- *
- * Tab↔painel ligados por `id`/`aria-controls`/`aria-labelledby`.
- */
-export default function PanelTabs({
-  active,
-  onSelect,
-}: {
+export interface PanelNavProps {
   active: PanelId;
   onSelect: (id: PanelId) => void;
-}) {
-  const panels = panelsInNavOrder();
+  /** Perguntas pendentes — badge em «Perguntas» (spec §5.2). */
+  pendingQuestions?: number;
+  /** Aprovações retidas pendentes — badge em «Controlo» (spec §5.2). */
+  pendingApprovals?: number;
+}
 
+/** Contador de pendentes (spec §5.2): nº em mono 12px, fill `--warning` + `--on-solid`. */
+export function PendingCountBadge({ count }: { count: number }) {
   return (
-    <Box
-      sx={{
-        display: { xs: 'block', md: 'none' },
-        borderBottom: '1px solid var(--mui-palette-divider)',
-        backgroundColor: 'var(--mui-palette-background-paper)',
-      }}
+    <span
+      aria-hidden="true"
+      className="ml-1 inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-sm bg-warning px-1.5 font-mono text-[0.75rem] font-medium leading-none tabular-nums text-on-solid"
     >
-      <Tabs
-        value={active}
-        onChange={(_event, value: PanelId) => onSelect(value)}
-        variant="scrollable"
-        scrollButtons="auto"
-        allowScrollButtonsMobile
-        aria-label="Painéis disponíveis"
-      >
-        {panels.map((panel) => (
-          <Tab
-            key={panel.id}
-            value={panel.id}
-            id={panelTabId(panel.id)}
-            aria-controls={panelRegionId(panel.id)}
-            label={panel.label}
-            icon={panel.icon}
-            iconPosition="start"
-            sx={{ minHeight: 44, textTransform: 'none' }}
-          />
-        ))}
-      </Tabs>
-    </Box>
+      {count > 99 ? '99+' : count}
+    </span>
+  );
+}
+
+/** Overline Cinzel de grupo (§5.2) com o diamante runa — ornamento nível 1 (§4.5). */
+function RotuloGrupo({ label }: { label: string }) {
+  return (
+    <span
+      aria-hidden="true"
+      className="flex shrink-0 select-none items-center gap-1.5 self-center px-2 font-display text-overline text-muted-foreground"
+    >
+      <RunaGlyph name="diamond" className="text-[var(--accent)]" />
+      {label}
+    </span>
   );
 }
 
 /**
- * Barra de separadores só-ícone para `md`+: mantém a fila de perguntas a um clique
- * sem duplicar a lista completa de alternativas da navegação lateral.
+ * Navegação primária em ecrãs estreitos (F.1.1.04): a tira de separadores
+ * mantém-se ÚNICA abaixo de `md`, mas agrupada pelos NAV_GROUPS
+ * («Supervisão · Agente · Memória») com overline Cinzel — nunca a lista plana
+ * de 9 itens idênticos. Item ativo = texto `--foreground` + sublinhado 2px
+ * `--accent` + glifo 20px; inativo `--muted`; hover `snap` (§5.2).
+ *
+ * Tab↔painel ligados por `id`/`aria-controls`/`aria-labelledby`; alvos ≥ 44px.
  */
-export function PanelIconTabs({
+export default function PanelTabs({
   active,
   onSelect,
   pendingQuestions = 0,
-}: {
-  active: PanelId;
-  onSelect: (id: PanelId) => void;
-  pendingQuestions?: number;
-}) {
-  const panels = panelsInNavOrder();
+  pendingApprovals = 0,
+}: PanelNavProps) {
+  /** Roving tabindex + setas/Home/End — paridade de teclado com o Tabs MUI. */
+  const handleTabListKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    const tabs = Array.from(
+      event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]'),
+    );
+    const index = tabs.indexOf(document.activeElement as HTMLButtonElement);
+    if (index < 0) return;
+    let next = -1;
+    if (event.key === 'ArrowRight') next = (index + 1) % tabs.length;
+    else if (event.key === 'ArrowLeft') next = (index - 1 + tabs.length) % tabs.length;
+    else if (event.key === 'Home') next = 0;
+    else if (event.key === 'End') next = tabs.length - 1;
+    if (next >= 0) {
+      event.preventDefault();
+      tabs[next]?.focus();
+    }
+  };
 
   return (
-    <Box
-      sx={{
-        display: { xs: 'none', md: 'block' },
-        borderBottom: '1px solid var(--mui-palette-divider)',
-        backgroundColor: 'var(--mui-palette-background-paper)',
-      }}
-    >
-      <Tabs
-        value={active}
-        onChange={(_event, value: PanelId) => onSelect(value)}
-        variant="scrollable"
-        scrollButtons={false}
-        aria-label="Acesso rápido aos painéis"
-        sx={{ minHeight: 40 }}
+    <div className="border-b border-border bg-card shadow-[inset_0_1px_0_var(--carve-top)] md:hidden">
+      <div
+        role="tablist"
+        aria-label="Painéis disponíveis"
+        onKeyDown={handleTabListKeyDown}
+        className="flex items-stretch gap-1 overflow-x-auto px-2"
       >
-        {panels.map((panel) => (
-          <Tooltip key={panel.id} title={panel.label}>
-            <Tab
-              value={panel.id}
-              id={panelTabId(panel.id)}
-              aria-controls={panelRegionId(panel.id)}
-              aria-label={
-                panel.id === 'perguntas' && pendingQuestions > 0
-                  ? `${panel.label} (${pendingQuestions} pendentes)`
-                  : panel.label
-              }
-              icon={
-                panel.id === 'perguntas' && pendingQuestions > 0 ? (
-                  <Badge badgeContent={pendingQuestions} color="warning" max={99}>
+        {NAV_GROUPS.map((group) => (
+          <Fragment key={group.id}>
+            <RotuloGrupo label={group.label} />
+            {group.panels.map((id) => {
+              const panel = panelById(id);
+              const selected = id === active;
+              const pending =
+                id === 'perguntas' ? pendingQuestions : id === 'controlo' ? pendingApprovals : 0;
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  role="tab"
+                  id={panelMobileTabId(id)}
+                  aria-controls={panelRegionId(id)}
+                  aria-selected={selected}
+                  tabIndex={selected ? 0 : -1}
+                  aria-label={pending > 0 ? `${panel.label} (${pending} pendentes)` : panel.label}
+                  onClick={() => onSelect(id)}
+                  className={
+                    selected
+                      ? 'flex min-h-11 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border-b-2 border-[var(--accent)] px-3 text-small text-foreground transition hover:-translate-y-px'
+                      : 'flex min-h-11 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border-b-2 border-transparent px-3 text-small text-muted-foreground transition hover:-translate-y-px hover:bg-surface-raised'
+                  }
+                >
+                  <span aria-hidden="true" className="shrink-0">
                     {panel.icon}
-                  </Badge>
-                ) : (
-                  panel.icon
-                )
-              }
-              sx={{ minWidth: 52, minHeight: 40, px: 1.5 }}
-            />
-          </Tooltip>
+                  </span>
+                  <span>{panel.label}</span>
+                  {pending > 0 ? <PendingCountBadge count={pending} /> : null}
+                </button>
+              );
+            })}
+          </Fragment>
         ))}
-      </Tabs>
-    </Box>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Acesso secundário para `md`+ (auditoria F.2.2.03): NÃO é uma segunda lista de
+ * destinos — são os dois atalhos de trabalho humano («Perguntas» e «Controlo»,
+ * os do spec §5.2 com badge de pendentes). A navegação completa e agrupada é o
+ * `NavDrawer`; a duplicação de 9 controlos em 9 destinos ficou resolvida.
+ */
+export function NavQuickAccess({
+  active,
+  onSelect,
+  pendingQuestions = 0,
+  pendingApprovals = 0,
+}: PanelNavProps) {
+  const quickPanels: PanelId[] = ['perguntas', 'controlo'];
+
+  return (
+    <nav
+      aria-label="Acesso rápido de navegação"
+      className="hidden items-center gap-2 border-b border-border bg-card px-4 py-1.5 shadow-[inset_0_1px_0_var(--carve-top)] md:flex"
+    >
+      <RotuloGrupo label="Acesso rápido" />
+      {quickPanels.map((id) => {
+        const panel = panelById(id);
+        const selected = id === active;
+        const pending = id === 'perguntas' ? pendingQuestions : pendingApprovals;
+        return (
+          <button
+            key={id}
+            type="button"
+            onClick={() => onSelect(id)}
+            aria-current={selected ? 'page' : undefined}
+            aria-label={pending > 0 ? `${panel.label} (${pending} pendentes)` : panel.label}
+            className={
+              selected
+                ? 'flex min-h-10 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border-b-2 border-[var(--accent)] px-3 text-small text-foreground transition hover:-translate-y-px'
+                : 'flex min-h-10 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border-b-2 border-transparent px-3 text-small text-muted-foreground transition hover:-translate-y-px hover:bg-surface-raised'
+            }
+          >
+            <span aria-hidden="true" className="shrink-0">
+              {panel.icon}
+            </span>
+            <span>{panel.label}</span>
+            {pending > 0 ? <PendingCountBadge count={pending} /> : null}
+          </button>
+        );
+      })}
+    </nav>
   );
 }

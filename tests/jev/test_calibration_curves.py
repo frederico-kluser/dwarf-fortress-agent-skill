@@ -690,3 +690,101 @@ def test_fake_model_is_deterministic_and_scores_every_labeled_answer(cli):
     assert 0.7 < accuracy < 0.97
     assert all(0.0 <= r["confidence"] <= 1.0 for r in first)
     assert not any(math.isnan(r["confidence"]) for r in first)
+
+
+# ------------------------------------------- ACEITE / NÃO-ACEITE (suporte)
+
+
+def action_rows(plan, confidence=0.95):
+    """Linhas ``jev.mjs eval`` de ``action`` com a distribuição de classes dada."""
+    rows, index = [], 0
+    for action_id, count, correct in plan:
+        for _ in range(count):
+            rows.append({"name": f"r{index}", "qid": "action", "type": "choice", "role": "JEV-A",
+                         "expected": action_id, "predicted": action_id, "correct": correct,
+                         "confidence": confidence})
+            index += 1
+    return rows
+
+
+def run_rows(cli, tmp_path, rows, name="report"):
+    evals = tmp_path / "evals"
+    evals.mkdir(exist_ok=True)
+    write_cases(evals / "a.json")
+    results = tmp_path / "rows.json"
+    results.write_text(json.dumps({"rows": rows, "model": "typesafe/jev-1.13"}), encoding="utf-8")
+    out, table = tmp_path / f"{name}.json", tmp_path / f"{name}-calibration.json"
+    code = cli.main(["report", "--evals", str(evals), "--results", str(results), "--out", str(out),
+                     "--table", str(table), "--date", "2026-10-13"])
+    return code, json.loads(out.read_text()), json.loads(table.read_text()), table
+
+
+def test_cli_report_marks_n_below_30_not_accepted(cli, tmp_path, capsys):
+    # o formato real de hoje: ~25 respostas ``action`` por quatro classes (13/7/0/5)
+    rows = action_rows([("explore:north", 13, True), ("flee:s", 7, True), ("steal:coin", 5, True)])
+    code, report, stored, table_path = run_rows(cli, tmp_path, rows)
+    assert code == 0
+    by_class = report["by_class"]
+    assert [by_class[k]["n"] for k in ("reversible", "costly", "irreversible", "destructive")] == [13, 7, 0, 5]
+    for klass in ("reversible", "costly", "irreversible", "destructive"):
+        assert by_class[klass]["accepted"] is False
+        assert "NÃO-ACEITE" in by_class[klass]["verdict"]
+        assert "suporte insuficiente" in by_class[klass]["verdict"]
+    # a curva risco-cobertura por classe está no relatório (e cobre tudo no fim)
+    curve = by_class["reversible"]["curve"]
+    assert curve and curve[-1]["accepted"] == 13 and curve[-1]["coverage"] == 1.0
+    assert by_class["reversible"]["aurc"] is not None
+    assert set(report["by_role"]) == {"JEV-A"}
+    # a entrada da tabela regista n por classe e marca NÃO-ACEITE: threshold null
+    classes = stored["models"]["typesafe/jev-1.13"]["classes"]
+    assert {k: classes[k]["support"] for k in classes} == {
+        "reversible": 13, "costly": 7, "irreversible": 0, "destructive": 5}
+    assert all(classes[k]["threshold"] is None and not classes[k]["verified"] for k in classes)
+    assert classes["reversible"]["reason"] == "insufficient_support"
+    assert classes["irreversible"]["reason"] == "no_samples"
+    # entrada não-aceite ⇒ limiares efetivos = pisos da política (nada a aplicar)
+    calibration = cal.load_calibration(table_path, "typesafe/jev-1.13")
+    assert risk.class_thresholds(calibration) == {c: risk.POLICY_FLOORS[c] for c in risk.RISK_CLASSES}
+    assert "NÃO-ACEITE" in capsys.readouterr().out
+
+
+def test_cli_acceptance_is_wilson_95_not_just_min_support(cli, tmp_path):
+    # 30/30 acertos: suporte chega ao mínimo, mas o limite de Wilson 95 %
+    # (≈ 11,4 %) não cabe nem no risco-alvo de 10 % do reversible ⇒ NÃO-ACEITE
+    rows30 = action_rows([("explore:north", 30, True)])
+    code, report, stored, _ = run_rows(cli, tmp_path, rows30, name="n30")
+    reversible = report["by_class"]["reversible"]
+    assert code == 0 and reversible["accepted"] is False
+    assert reversible["verdict"] == "NÃO-ACEITE (unattainable)" and reversible["n"] == 30
+    assert stored["models"]["typesafe/jev-1.13"]["classes"]["reversible"]["threshold"] is None
+    # com 35/35 o Wilson (≈ 9,9 %) já cabe em 10 % ⇒ ACEITE
+    rows35 = action_rows([("explore:north", 35, True)])
+    code, report, stored, table_path = run_rows(cli, tmp_path, rows35, name="n35")
+    reversible = report["by_class"]["reversible"]
+    assert code == 0 and reversible["accepted"] is True and reversible["verdict"] == "ACEITE"
+    entry = stored["models"]["typesafe/jev-1.13"]["classes"]["reversible"]
+    assert entry["reason"] == "ok" and entry["threshold"] == pytest.approx(0.50)
+    # ...e a entrada ACEITE continua sem baixar o piso da política
+    assert risk.thresholds_for("reversible", cal.load_calibration(table_path, "typesafe/jev-1.13")) \
+        == pytest.approx(risk.POLICY_FLOORS["reversible"])
+
+
+def test_snapshot_change_requires_recalibration_before_the_table_applies(tmp_path):
+    # entrada que SOBE o limiar de irreversible (risco observado alto)
+    samples = ([labeled(0.99, True, "irreversible")] * 60 + [labeled(0.97, False, "irreversible")] * 12
+               + [labeled(0.99, True, "irreversible")] * 40)
+    report = cal.build_report(samples, model="typesafe/jev-1.13", report_date="2026-10-13",
+                              resolved_model="typesafe/jev-1.13-20260917", source="eval")
+    table = cal.CalibrationTable()
+    table.put(cal.ModelCalibration.from_report(report))
+    path = table.save(tmp_path / "t.json")
+    # mesmo snapshot: o limiar calibrado aplica-se
+    same = cal.load_calibration(path, "typesafe/jev-1.13", "typesafe/jev-1.13-20260917")
+    threshold = same.entry_for("irreversible").threshold
+    assert not same.is_default and threshold is not None and threshold > 0.97
+    assert risk.thresholds_for("irreversible", same) == pytest.approx(threshold)
+    # snapshot resolvido mudou ⇒ RECALIBRAR: a entrada não descreve o modelo novo
+    stale = cal.load_calibration(path, "typesafe/jev-1.13", "typesafe/jev-1.13-20261101")
+    assert stale.is_default and stale.classes == {}
+    assert risk.class_thresholds(stale) == {c: risk.POLICY_FLOORS[c] for c in risk.RISK_CLASSES}
+    assert table.lookup("typesafe/jev-1.13", "typesafe/jev-1.13-20261101").status == "stale_resolved"

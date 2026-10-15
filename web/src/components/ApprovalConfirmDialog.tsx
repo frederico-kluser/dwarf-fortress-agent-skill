@@ -92,7 +92,9 @@ export default function ApprovalConfirmDialog({
         </Stack>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onCancel}>Cancelar</Button>
+        <Button sx={{ minHeight: 40 }} onClick={onCancel}>
+          Cancelar
+        </Button>
         <Button
           variant="contained"
           color={approve ? 'primary' : 'error'}
@@ -100,6 +102,7 @@ export default function ApprovalConfirmDialog({
           loading={busy}
           loadingPosition="start"
           startIcon={approve ? <TaskAlt /> : <Block />}
+          sx={{ minHeight: 40 }}
           onClick={onConfirm}
         >
           {approve ? 'Confirmar e aprovar' : 'Confirmar e rejeitar'}

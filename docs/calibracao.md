@@ -591,6 +591,37 @@ complementa os cenários rotulados, não os substitui, e continua sujeito à reg
 **Procedimento ao mudar de snapshot:** `online` → `report --table` → rever
 `thresholds` → só então (se houver suporte ≥ 100 e decisão humana) `--mark-verified`.
 
+**Regras de disciplina (obrigatórias).**
+
+1. **Primeiro calibrar, depois mexer no prompt** (mudança 06 de
+   `ARQUITETURA.md` §8): a calibragem mede o prompt+snapshot atuais — se o
+   prompt mudar, os números já não descrevem o que o loop faz. Ordem:
+   `online` / `from-decisions` → `report --table` → rever `thresholds` →
+   **só então** mexer no prompt; qualquer mudança de prompt volta a exigir
+   calibragem (a deriva de prompt é coberta pelo golden set, §14).
+2. **`--mark-verified` é um ato humano explícito.** Exige suporte ≥ 100
+   (`MIN_SUPPORT_TO_LOWER`) na classe e **nunca** se aplica a `destructive`
+   (nem com suporte: a classe nem sequer tem `auto` por omissão). Uma corrida
+   automatizada nunca marca nada — sem marca, a tabela só pode **subir**
+   limiares (§12, regra 1).
+3. **n < 30 ⇒ NÃO-ACEITE** (suporte insuficiente). A entrada fica
+   `threshold: null` + `reason: "insufficient_support"` (ou `"no_samples"`
+   sem amostras) e o relatório marca a classe `accepted: false` com o
+   veredicto `NÃO-ACEITE (suporte insuficiente: n=… < 30)`; o piso da §12
+   manda. É o estado honesto da maioria das classes hoje, não um defeito.
+4. **Snapshot trocado ⇒ recalibrar.** `resolved_model` observado diferente do
+   registado (`stale_resolved`) — ou modelo novo (`missing`) — devolve os
+   pisos da política: os limiares não transferem entre snapshots (§8).
+
+**Estado (2026-10-13, PRELIMINAR).** `evals/calibration.json` foi gerada com
+`report --evals evals --fake-model` (entrada `source=fake-model`, ignorada
+pelo carregador): n por classe **17 / 8 / 3 / 6**
+(reversible / costly / irreversible / destructive), todas **NÃO-ACEITE**, e
+os limiares efetivos são os pisos da §12. Re-executar quando o gold expandido
+(Passo 1) e os logs reais entrarem — `from-decisions` sobre `campanhas/` hoje
+não encontra decisões rotuláveis (as decisões viviam em anéis em memória; o
+store SQLite é o Passo 16).
+
 ---
 
 ## 14. Golden set e disciplina do hold-out (`scripts/golden.py`, `evals/golden/`)

@@ -1,0 +1,168 @@
+{
+  "kind": "pre-redesign baseline",
+  "generated_for": "dwarf-fortress-game web UI",
+  "interface_type": "dashboard",
+  "interface_type_note": "Dashboard operacional («mission control») dominante, com superfícies adjacentes: fila de perguntas tipo ai-chat, log de decisões tipo data-table e wizard de aventura tipo onboarding/modal. Avaliado como dashboard (Partes 1, 2, 4 + 6 para acessibilidade). Método: skill uxui-evaluator por conhecimento interno (sem UXUI_API_KEY), sobre o código de web/src (panels, layout, components, api) no estado atual pós-auditorias v1–v4; contraste/estados verificados no código, sem renderização de browser. Serve de linha de base para comparar com o redesenho visual em estilo RPG medieval.",
+  "overall_score": 68,
+  "band": "good",
+  "findings": [
+    {
+      "id": "finding-1",
+      "principle": {
+        "code": "F.1.1.03",
+        "slug": "mental-model",
+        "title": "Mental Model",
+        "part": "part-1"
+      },
+      "severity": "warning",
+      "message": "O campo «Resposta livre» do QuestionCard é `multiline` mas Enter não insere quebra de linha (`event.preventDefault()`, QuestionCard.tsx:355-363) e dispara o fluxo de revisão: 1.º Enter abre a pré-visualização «passo 2 de 2», o 2.º Enter abre o diálogo de confirmação — um utilizador a escrever uma resposta multi-linha comete o fluxo de envio sem querer. O helper text (QuestionCard.tsx:369) não documenta o comportamento e o botão «Rever e enviar» segue um caminho diferente (1 passo: diálogo direto), contrariando o modelo mental de textarea e o princípio recognition-rather-than-recall.",
+      "remediation": "Alinhar os dois caminhos num só: manter Enter = quebra de linha (comportamento esperado de textarea) e iniciar a revisão apenas pelo botão, OU documentar explicitamente no helperText «Enter envia para revisão · Shift+Enter quebra linha» e fazer o botão passar pela mesma pré-visualização de 2 passos. Meta verificável: nenhuma tecla de edição de texto origina um estado de envio não intencional.",
+      "business_impact": null
+    },
+    {
+      "id": "finding-2",
+      "principle": {
+        "code": "F.2.2.03",
+        "slug": "hicks-law",
+        "title": "Hick's Law",
+        "part": "part-1"
+      },
+      "severity": "warning",
+      "message": "Em `md+` existem duas superfícies de navegação montadas em simultâneo (AppShell.tsx:294-295): o NavDrawer agrupado (9 itens em 3 grupos) e o PanelIconTabs que renderiza os 9 painéis em ícones — apesar do comentário prometer «sem duplicar a lista completa de alternativas» (PanelTabs.tsx:60-63). Cada vista desktop oferece 18 controlos de navegação para 9 destinos, com o estado ativo duplicado e os rótulos do tabstrip só-ícone dependentes de hover (Tooltip). A redundância aumenta o custo de decisão por visita e dilui a hierarquia por trabalho real que os NAV_GROUPS criaram.",
+      "remediation": "Reduzir o tabstrip de ícones a 1-2 atalhos de ação rápida (ex.: «Perguntas» com badge e «Controlo») ou removê-lo; se mantido, mostrar só destinos com trabalho pendente (badge > 0). Meta verificável: uma única superfície de navegação completa visível por breakpoint (o resto como atalho contextual, não como lista paralela).",
+      "business_impact": null
+    },
+    {
+      "id": "finding-3",
+      "principle": {
+        "code": "I.2.2.02",
+        "slug": "fitts-law",
+        "title": "Fitts's Law",
+        "part": "part-4"
+      },
+      "severity": "suggestion",
+      "message": "Alvos secundários ficam abaixo do padrão de 40 px adotado para as ações primárias (`TARGET_SX = { minHeight: 40 }`, AventuraPanel.tsx:43): os `IconButton size=\"small\"` de refresh (FreshnessIndicator.tsx:87-94), congelar/copiar (ScreenPanel.tsx:70-93) e detalhe de decisão (DecisionsPanel.tsx:348-360) rendem ~30 px. Na TopBar, o kill-switch (ação destrutiva global) fica adjacente aos botões-badge de uso frequente (perguntas/aprovações, TopBar.tsx:162-170) sem separação adicional — em tátil, o risco de mis-tap para o kill-switch só é travado pelo alertdialog seguinte.",
+      "remediation": "Aplicar minHeight/minWidth 40 px a todas as ações recorrentes (refresh, congelar, copiar, detalhe) e separar o kill-switch dos badges com gap ≥ 12 px, divisor ou agrupamento visual próprio. Meta verificável: nenhum alvo interativo < 40 px nas superfícies de uso repetido; nenhuma ação destrutiva colada a ação frequente.",
+      "business_impact": null
+    },
+    {
+      "id": "finding-4",
+      "principle": {
+        "code": "F.1.1.04",
+        "slug": "millers-law",
+        "title": "Miller's Law",
+        "part": "part-1"
+      },
+      "severity": "suggestion",
+      "message": "A segmentação por grupos (Supervisão/Agente/Memória, registry.tsx:147-166) existe só no NavDrawer desktop: em ecrãs estreitos a navegação é uma tira plana de 9 separadores scrollables (PanelTabs.tsx:43-54), sem rastro dos grupos — regressão ao padrão de itens planos que a auditoria F.2.2.03 corrigiu no desktop. O utilizador mobile decide entre 9 itens idênticos sem chunking, e os itens fora do ecrã dependem dos botões de scroll.",
+      "remediation": "Levar o chunking ao mobile: separadores agrupados com cabeçalhos/encaixes (Supervisão · Agente · Memória) ou um único botão de menu agrupado + faixa fixa para «Perguntas» (trabalho do humano). Meta verificável: em 360 px, nenhum grupo de navegação aparece como lista plana de 9 itens.",
+      "business_impact": null
+    },
+    {
+      "id": "finding-5",
+      "principle": {
+        "code": "H.1.1.01",
+        "slug": "perceivable-principle",
+        "title": "Perceivable Principle (WCAG)",
+        "part": "part-6"
+      },
+      "severity": "suggestion",
+      "message": "IDs de DOM duplicados: `painel-tab-<id>` é renderizado por PanelTabs (PanelTabs.tsx:47) e por PanelIconTabs (PanelTabs.tsx:95) e ambos ficam montados em qualquer breakpoint (AppShell.tsx:294-295, com visibilidade alternada por CSS). IDs não únicos violam a unicidade do HTML e tornam a resolução de `aria-labelledby` do painel (`AppShell.tsx:306-311`) dependente da ordem do DOM — atualmente resolve para a instância certa por acaso de ordem, não por desenho.",
+      "remediation": "Sufixar os IDs por superfície (ex.: `painel-tab-mobile-*` / `painel-tab-icon-*`) e apontar `aria-labelledby` para o tablist visível no breakpoint, ou renderizar condicionalmente apenas a superfície ativa. Meta verificável: `document.querySelectorAll('[id]')` sem valores repetidos em qualquer viewport.",
+      "business_impact": null
+    },
+    {
+      "id": "finding-6",
+      "principle": {
+        "code": "H.1.1.01",
+        "slug": "perceivable-principle",
+        "title": "Perceivable Principle (WCAG)",
+        "part": "part-6"
+      },
+      "severity": "suggestion",
+      "message": "No log de decisões, a linha inteira abre o detalhe ao clique do rato (`TableRow onClick` + `cursor:pointer`, DecisionsPanel.tsx:298-303) mas não é focável por teclado: o caminho de teclado/AT é o pequeno `IconButton` de ~30 px na última coluna (DecisionsPanel.tsx:348-360). O alvo grande (linha) serve só o rato e o alvo pequeno serve o teclado — paridade de interação desigual na tabela mais usada para auditoria.",
+      "remediation": "Tornar o resumo da linha focável (`tabIndex={0}` com Enter/Space a abrir o detalhe, `aria-label` com o contexto da decisão) ou estender o clique à linha mantendo o botão como alternativa com alvo ≥ 40 px. Meta verificável: o detalhe de qualquer decisão é alcançável por teclado com alvo de largura comparável à do rato.",
+      "business_impact": null
+    },
+    {
+      "id": "finding-7",
+      "principle": {
+        "code": "H.1.1.01",
+        "slug": "perceivable-principle",
+        "title": "Perceivable Principle (WCAG)",
+        "part": "part-6"
+      },
+      "severity": "suggestion",
+      "message": "A semântica dos modos de autonomia vive só em tooltips (ControlPanel.tsx:405-413): «Autopiloto» («o agente decide e age sozinho») e «Em pausa» são explicados apenas em hover/focus, e em dispositivos táteis o Tooltip do MUI não abre por toque — o supervisor mobile escolhe um modo de segurança sem a explicação. O Alert inline (ControlPanel.tsx:416-422) cobre só Checkpoints e a retoma, não o significado de Autopiloto; o subtitle (ControlPanel.tsx:394) explica bandas, não modos.",
+      "remediation": "Ligar descrições persistentes por opção (`aria-describedby` + helperText/legenda visível, ex. «age sozinho», «para e pergunta», «não age») e manter os tooltips como complemento, nunca como única fonte. Meta verificável: com hover/tap impossibilitado, o significado dos 3 modos continua legível no ecrã.",
+      "business_impact": null
+    },
+    {
+      "id": "finding-8",
+      "principle": {
+        "code": "C.1.1.01",
+        "slug": "consistency-standards",
+        "title": "Consistency and Standards",
+        "part": "part-2"
+      },
+      "severity": "suggestion",
+      "message": "O ScreenPanel faz a frescura «à mão» — `Typography` com «última atualização HH:MM:SS · há X» + `IconButton` de refresh próprios (ScreenPanel.tsx:66-94) — em vez do `FreshnessIndicator` partilhado que todos os outros painéis usam (métricas, perguntas, decisões, memória, gastos, aventura). Mesma informação, dois componentes, textos e alvos diferentes: o padrão que a auditoria C.1.1.01 unificou fica quebrado num painel.",
+      "remediation": "Substituir o bloco manual por `<FreshnessIndicator ts={screen?.ts} showClock onRefresh=… refreshLabel=\"Atualizar o ecrã agora\" />`, mantendo os botões de congelar/copiar como ações próprias. Meta verificável: um único componente de frescura referenciado em todos os painéis com dados vivos.",
+      "business_impact": null
+    }
+  ],
+  "strengths": [
+    {
+      "principle": {
+        "code": "C.1.4.01",
+        "slug": "error-prevention",
+        "title": "Error Prevention"
+      },
+      "message": "Estados de erro/empty tratados a sério: vazio que diz o que falta e porquê, erro com «Tentar de novo», ausência de backend com instruções concretas e error boundary a evitar ecrã branco (PanelState.tsx:27-67, AppShell.tsx:376-401). Fluxos irreversíveis (kill-switch, resposta à pergunta, cancelar tarefa, autopiloto) confirmam com âmbito, texto exato a enviar e consequências nomeadas."
+    },
+    {
+      "principle": {
+        "code": "C.1.2.01",
+        "slug": "user-control-freedom",
+        "title": "User Control and Freedom"
+      },
+      "message": "Controlo do utilizador em toda a parte: memória e objetivo editam-se em rascunho com chip «alterações por guardar» e «Reverter» antes de gravar (MemoryPanel.tsx:56-88, ObjectivePanel.tsx:86-110); a retoma de «Em pausa» devolve o último modo guardado e nunca escala silenciosamente para autopiloto; o wizard de aventura oferece 3 saídas, incluindo uma não-destrutiva."
+    },
+    {
+      "principle": {
+        "code": "F.1.1.02",
+        "slug": "cognitive-load",
+        "title": "Cognitive Load"
+      },
+      "message": "Carga cognitiva contida por divulgação progressiva: 5 sinais vitais acima da dobra e os 8 grupos do contrato em acordeões fechados ordenados por severidade (MetricsPanel.tsx:50-100); logs paginados (25/página, «Carregar mais»), detalhe de decisão em sheet e diagnóstico `source_data` num segundo nível colapsado."
+    },
+    {
+      "principle": {
+        "code": "H.1.1.01",
+        "slug": "perceivable-principle",
+        "title": "Perceivable Principle (WCAG)"
+      },
+      "message": "Percebilidade verificada, não assumida: a cor nunca é o único sinal (chips com etiqueta + tooltip, Chips.tsx:28-45), contraste AA nos dois esquemas do tema, `:focus-visible` global, skip-link, região `aria-live` permanente para a fila de perguntas (AppShell.tsx:256-279) e `prefers-reduced-motion` respeitado com posturas calm/off."
+    },
+    {
+      "principle": {
+        "code": "C.1.3.01",
+        "slug": "feedback-loops",
+        "title": "Feedback Loops"
+      },
+      "message": "Feedback contínuo e honesto: chegada de perguntas e re-pedidos anunciada por toast `role=status` + resumo persistente para tecnologias de assistência (AppShell.tsx:165-193), frescura «há X» com refresh manual nas superfícies vivas, e honestidade sobre incerteza — confiança ausente mostra «indisponível» e decisões auxiliares «desconhecido», nunca valores inventados."
+    }
+  ],
+  "priority_fixes": [
+    "finding-1",
+    "finding-2",
+    "finding-3",
+    "finding-4",
+    "finding-5",
+    "finding-6",
+    "finding-7",
+    "finding-8"
+  ],
+  "api_enriched": false,
+  "api_note": "Install the uxuiprinciples API key for enriched findings with citations and business impact data. See uxuiprinciples.com/en/checkout"
+}

@@ -28,17 +28,22 @@ Two live surfaces are owned here:
 and dedupe are unchanged); given a ``store``
 (:class:`~system_one_dwarf.app.persist.RuntimeStore`) every mutation is written
 through and, when the runtime is built, the recent records (+ every pending
-question/approval) and the id counters are reloaded.  The store never raises:
-without a working disk the runtime is memory-only, as before.
+question/approval) and the id counters are reloaded.  The build also runs the
+**startup migration** (Passo 16): whatever the rings already hold at birth and
+the base does not know yet is written into it — a *fallback*, never an overwrite
+(the base wins wherever it has data, a *dropped* record is never resurrected).
+The store never raises: without a working disk the runtime is memory-only, as
+before.
 """
 
 from __future__ import annotations
 
 import functools
 import logging
+import re
 import threading
 from dataclasses import dataclass, field
-from typing import Any, Callable, Mapping
+from typing import Any, Callable, Iterable, Mapping, Sequence
 
 from ..campaign.clock import parse_iso, utc_now_iso
 from .persist import (
@@ -168,6 +173,12 @@ def _page(
     if limit is not None and len(items) > limit:
         items = items[-limit:]
     return list(items)
+
+
+def _id_suffix(ident: Any, prefix: str) -> int:
+    """``q-7`` → 7; ``0`` when the id is not shaped ``<prefix>-<n>`` (``q-3-1``)."""
+    match = re.fullmatch(rf"{re.escape(prefix)}-(\d+)", str(ident or ""))
+    return int(match.group(1)) if match else 0
 
 
 def _source_action_id(item: Mapping[str, Any]) -> str | None:
@@ -408,6 +419,10 @@ class CampaignRuntime:
         self._ops: list[tuple[str, str, Any, Any]] = []
         #: How many records of each kind came back from the store at construction.
         self.restored: dict[str, int] = {}
+        #: How many records of each kind the startup migration wrote into the
+        #: store from the in-memory rings (additive diagnostic; zeros otherwise).
+        self.migrated: dict[str, int] = dict.fromkeys(
+            (KIND_DECISIONS, KIND_QUESTIONS, KIND_APPROVALS, KIND_INPUTS), 0)
         if self.store is not None:
             self._restore()
 
@@ -478,9 +493,15 @@ class CampaignRuntime:
     def _restore(self) -> None:
         """Reload the audit trail, the pending queue and the id counters.
 
-        Never raises: a store that fails (or hands back junk) leaves whatever was
-        already loaded and the runtime simply starts from there.
+        It also runs the **startup migration** (Passo 16 · H3): what the rings
+        already held at birth and the base does not know yet is written into it,
+        so the audit trail of a memory-only session reaches ``runtime.sqlite``
+        instead of dying with the process.  Never raises: a store that fails (or
+        hands back junk) leaves whatever was already loaded — the migrated
+        records stay in the rings, memory is the truth — and the runtime simply
+        starts from there.
         """
+        seed = self._take_seed()
         try:
             snap = self.store.load_snapshot(
                 decisions=DECISIONS_LIMIT, questions=QUESTIONS_LIMIT,
@@ -512,7 +533,133 @@ class CampaignRuntime:
                         exc_info=True)
         self.restored = {KIND_DECISIONS: len(self.decisions), KIND_QUESTIONS: len(self.questions),
                          KIND_APPROVALS: len(self.approvals), KIND_INPUTS: len(self.inputs)}
-        self._trim_pending_approvals()  # a store written under a bigger cap
+        self._migrate(seed)              # migração de arranque: anéis em memória → base
+        self._trim_pending_approvals()   # a store written under a bigger cap
+
+    # ---------------------------------------------------- migração de arranque
+
+    def _take_seed(self) -> dict[str, list[tuple[str, dict[str, Any]]]]:
+        """The records already in the rings at birth — the migration's source.
+
+        They leave the rings (fresh containers: the caller's lists/dicts are
+        never mutated) and come back through the normal paths: the base's rows
+        first (:meth:`_restore`), then whatever the base did not know
+        (:meth:`_migrate`).  Plain ``dict`` copies: the caller's objects are
+        never tracked nor edited.  Anything that is not a mapping stays put.
+        """
+        def pull(items: Iterable[Any]) -> tuple[list[tuple[str, dict[str, Any]]], list[Any]]:
+            taken = [(str(item.get("id") or ""), TrackedRecord(item))
+                     for item in items if isinstance(item, Mapping)]
+            return taken, [item for item in items if not isinstance(item, Mapping)]
+
+        taken_decisions, kept = pull(self.decisions)
+        self.decisions = kept
+        taken_inputs, kept_inputs = pull(self.inputs)
+        self.inputs = kept_inputs
+        taken_questions, _ = pull(self.questions.values())
+        ids = {key for key, _record in taken_questions}
+        self.questions = {key: item for key, item in self.questions.items() if key not in ids}
+        taken_approvals, _ = pull(self.approvals.values())
+        ids = {key for key, _record in taken_approvals}
+        self.approvals = {key: item for key, item in self.approvals.items() if key not in ids}
+        return {KIND_DECISIONS: taken_decisions, KIND_QUESTIONS: taken_questions,
+                KIND_APPROVALS: taken_approvals, KIND_INPUTS: taken_inputs}
+
+    def _known_ids(self, kind: str, ring: Iterable[Any]) -> set[str]:
+        """Ids the base already knows (tombstones included) plus the reloaded ring.
+
+        The migration must neither rewrite a stored row nor revive a record the
+        runtime *dropped*; a store without
+        :meth:`~system_one_dwarf.app.persist.RuntimeStore.known_ids` (test fakes)
+        falls back to the ids that actually came back from it.
+        """
+        known = {str(item.get("id") or "") for item in ring if isinstance(item, Mapping)}
+        known.discard("")
+        probe = getattr(self.store, "known_ids", None)
+        if callable(probe):
+            try:
+                known |= {str(value) for value in probe(kind) or ()}
+            except Exception:
+                log.debug("could not read the known ids of %s", kind, exc_info=True)
+        return known
+
+    def _migrate(self, seed: Mapping[str, Sequence[tuple[str, Mapping[str, Any]]]]) -> None:
+        """Startup migration: the rings' records the base does not know → the base.
+
+        *Fallback*, never an overwrite: an id the base already knows is skipped —
+        the base is the truth wherever it has data, and a record the runtime
+        deliberately dropped is never resurrected.  Memory fills the gaps: the
+        unknown records are written through (secret-scrubbed like every write)
+        and kept in the rings, decisions keeping their ``id`` and getting a fresh
+        ``seq`` key after the stored ones.  The ring caps still hold after the
+        merge (the base keeps the full history).  Never raises: migrating is a
+        courtesy, memory stays the truth.
+        """
+        self.migrated = dict.fromkeys(
+            (KIND_DECISIONS, KIND_QUESTIONS, KIND_APPROVALS, KIND_INPUTS), 0)
+        if self.store is None or not any(seed.values()):
+            return
+        migrated = self.migrated
+        try:
+            known = self._known_ids(KIND_DECISIONS, self.decisions)
+            seq = self._decision_seq
+            for _key, record in seed.get(KIND_DECISIONS, ()):
+                ident = str(record.get("id") or "")
+                if ident and ident in known:
+                    continue                      # a base já o tem: é ela a verdade
+                seq += 1                          # chave nova: nunca colide com uma guardada
+                if ident:
+                    self._decision_seq = max(self._decision_seq, _id_suffix(ident, "d"))
+                else:
+                    self._decision_seq += 1
+                    record["id"] = f"d-{self._decision_seq}"
+                self._track(KIND_DECISIONS, seq, record)
+                self.decisions.append(record)
+                migrated[KIND_DECISIONS] += 1
+            for kind, bucket in ((KIND_QUESTIONS, self.questions),
+                                 (KIND_APPROVALS, self.approvals)):
+                known = self._known_ids(kind, bucket.values())
+                for key, record in seed.get(kind, ()):
+                    if not key or key in known or key in bucket:
+                        continue
+                    bucket[key] = record
+                    self._track(kind, key, record)
+                    migrated[kind] += 1
+            known = self._known_ids(KIND_INPUTS, self.inputs)
+            for _key, record in seed.get(KIND_INPUTS, ()):
+                ident = str(record.get("id") or "")
+                if ident and ident in known:
+                    continue
+                if not ident:
+                    self._input_seq += 1
+                    ident = f"in-{self._input_seq}"
+                    record["id"] = ident
+                self._track(KIND_INPUTS, ident, record)
+                self.inputs.append(record)
+                migrated[KIND_INPUTS] += 1
+            # ids que a migração trouxe nunca podem ser reemitidos
+            for key, _record in seed.get(KIND_QUESTIONS, ()):
+                self._question_seq = max(self._question_seq, _id_suffix(key, "q"))
+            for _key, record in seed.get(KIND_INPUTS, ()):
+                self._input_seq = max(self._input_seq, _id_suffix(record.get("id"), "in"))
+        except Exception:  # migrar é cortesia: a memória continua a servir
+            log.warning("could not migrate the in-memory rings of %s", self.campaign_id,
+                        exc_info=True)
+            return
+        if migrated[KIND_DECISIONS] or migrated[KIND_INPUTS]:
+            for items in (self.decisions, self.inputs):  # o anel é cronológico
+                items.sort(key=lambda item: str(item.get("ts") or ""))
+        overflow = self.decisions[:-DECISIONS_LIMIT]
+        del self.decisions[:-DECISIONS_LIMIT]
+        for old in overflow:  # saem do anel: edições posteriores não escrevem
+            if isinstance(old, TrackedRecord):
+                old.bind(None)
+        overflow = self.inputs[:-HISTORY_LIMIT]
+        del self.inputs[:-HISTORY_LIMIT]
+        for old in overflow:
+            if isinstance(old, TrackedRecord):
+                old.bind(None)
+        self._evict_questions()
 
     # ------------------------------------------------------------------ decisions
 

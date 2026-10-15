@@ -1,5 +1,7 @@
 # System One Dwarf
 
+[![CI](https://github.com/frederico-kluser/dwarf-fortress-agent-skill/actions/workflows/ci.yml/badge.svg)](https://github.com/frederico-kluser/dwarf-fortress-agent-skill/actions/workflows/ci.yml)
+
 ## O que é
 
 **Agente de autoplay para Dwarf Fortress (adventure mode):** uma frota de decisões **JEV** (System One, tipada) escolhe cada ação, o **DeepSeek** escreve a narrativa, a tradução e as perguntas ao humano, a memória **CoALA** cresce campanha a campanha, e uma **UI web em português** dá ao humano objetivo, supervisão e kill-switch.
@@ -127,7 +129,7 @@ O loop completo (10 passos), os cuidados obrigatórios de prompt, a memória e a
 | Narrador, perguntas e loop | `src/system_one_dwarf/agent/` | **293 testes** a verde (`tests/agent/`: `test_llm.py`, `test_narrator.py`, `test_questions.py`, `test_memory_integration.py`, `test_wiring.py`, `test_candidates.py`, `test_executor.py`, `test_loop.py`); `AgentLoop` (10 passos) implementado |
 | Loop ligado ao backend | `src/system_one_dwarf/app/loop_runner.py` | **Integrado** — um `AgentLoop` por campanha, arrancado/parado pelo **modo de controlo** (`autopilot`/`checkpoint` correm, `paused`/kill-switch param) e **só com chaves** `typesafe` (JEV) + `openrouter` (LLM) |
 
-As contagens são as das suítes a correr neste venv (`.venv/bin/python -m pytest tests/<peça> -q`, tudo offline); a suíte completa de `tests/` soma **1111 testes passados + 1 skip** (a integração opt-in `SOD_RUN_INTEGRATION=1`). **Todas as peças estão commitadas** — `game/` em `8f654bb`, `agent/` em `8df44ee` (narrador/perguntas) e `bb16e07` (loop + executor), e a ligação ao backend em `67903de`.
+As contagens são as das suítes a correr neste venv (`.venv/bin/python -m pytest tests/<peça> -q`, tudo offline); a suíte completa de `tests/`, verificada com `.venv/bin/python -m pytest -q`, soma **3734 testes passados + 2 skips** (a integração opt-in `SOD_RUN_INTEGRATION=1` e 1 skip condicional). **Todas as peças estão commitadas** — `game/` em `8f654bb`, `agent/` em `8df44ee` (narrador/perguntas) e `bb16e07` (loop + executor), e a ligação ao backend em `67903de`.
 
 ## Procedimento manual (avançado)
 

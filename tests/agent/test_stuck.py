@@ -112,6 +112,32 @@ def test_progress_resets_the_stuck_ladder():
     assert event.stuck_round == 1  # escada recomeçou do zero
 
 
+def test_explicit_movement_signal_overrides_the_hash_churn():
+    """``moved=False`` do corredor de rotas conta como "sem mudança" à prova de
+    ruído: unidades novas a aparecer mudariam o hash sem a personagem andar."""
+    det = _detector()
+    churn = [world(x=5, y=5, units=[{"name": f"critter {i}", "distance": 3, "direction": "N"}])
+             for i in range(3)]
+    assert state_fingerprint(churn[0]) != state_fingerprint(churn[1])   # o hash mudava…
+    events = [det.observe(state, moved=False) for state in churn]
+    assert events[:2] == [None, None]
+    assert events[-1] is not None and events[-1].escalation == "force_explore"
+    assert events[-1].repeat == 3      # 3 passos sem mudança DA PERSONAGEM
+
+
+def test_explicit_movement_progress_resets_the_ladder_even_with_an_identical_hash():
+    det = _detector()
+    state = world(x=5, y=5)
+    det.observe(state, moved=False)
+    det.observe(state, moved=False)
+    # mesmo hash, mas o corredor viu movimento: é progresso e reinicia a escada
+    assert det.observe(state, moved=True) is None
+    assert det.observe(state, moved=False) is None
+    event = det.observe(state, moved=False)
+    assert event is not None and event.kind == "stuck"
+    assert event.stuck_round == 1      # a escada recomeçou do zero no movimento
+
+
 def test_action_loop_breaks_and_blocks_the_repeated_action():
     det = _detector(action_loop_after=3, stuck_after=99)
     state = world()

@@ -8,7 +8,6 @@ import ListItem from '@mui/material/ListItem';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
 import Add from '@mui/icons-material/Add';
-import Explore from '@mui/icons-material/Explore';
 import PlayArrow from '@mui/icons-material/PlayArrow';
 
 import {
@@ -29,8 +28,20 @@ import type { AdventureKind, AdventureSave, AdventureTask } from '../api/types';
 import AdventureTaskCard from '../components/AdventureTaskCard';
 import AdventureWizard from '../components/AdventureWizard';
 import PanelShell from '../components/PanelShell';
-import { PanelEmpty, PanelError, PanelLoading } from '../components/PanelState';
-import SectionCard from '../components/SectionCard';
+import { PanelError } from '../components/PanelState';
+import {
+  EmptyState,
+  RunaGlyph,
+  RunaRule,
+  StoneTexture,
+} from '../components/rpg';
+import {
+  RunaHover,
+  RunaLoading,
+  RunaSection,
+  TOKEN,
+  runaType,
+} from '../components/RunaKit';
 import { useNow } from '../hooks/useSparkSeries';
 
 /** Rótulo PT do tipo de save (`active` = jogo iniciado; `world` = só mundo). */
@@ -54,6 +65,10 @@ function taskHeading(task: AdventureTask): string {
  * e o wizard «Criar nova aventura» (mundo → personagem → progresso → pronto).
  * É o ponto de entrada da UI — sem aventura ativa, o estado vazio convida a
  * escolher ou criar.
+ *
+ * Tema «RPG medieval» (spec §5.1): o portão de entrada (hero) abre o painel com
+ * a textura de pedra, o glifo `map`, o título em Cinzel `--text-hero` e as duas
+ * saídas (criar · escolher); a régua runa separa o portão do conteúdo.
  */
 export default function AventuraPanel() {
   const adventuresQuery = useAdventures();
@@ -108,6 +123,11 @@ export default function AventuraPanel() {
     setWizardOpen(true);
   };
 
+  const openCreateWizard = () => {
+    setWizardMode('create');
+    setWizardOpen(true);
+  };
+
   const scrollToChooser = () => {
     document.getElementById('aventuras-existentes')?.scrollIntoView({ behavior: 'smooth' });
   };
@@ -139,16 +159,86 @@ export default function AventuraPanel() {
             variant="contained"
             startIcon={<Add />}
             disabled={running}
-            onClick={() => {
-              setWizardMode('create');
-              setWizardOpen(true);
-            }}
+            onClick={openCreateWizard}
           >
             Criar nova aventura
           </Button>
         </>
       }
     >
+      {/* Portão de entrada (spec §5.1): textura de pedra, glifo `map` 48px,
+          título Cinzel `--text-hero`, subtítulo ≤ 60ch e as duas saídas. */}
+      <Box
+        component="section"
+        aria-labelledby="aventura-hero-titulo"
+        sx={{
+          position: 'relative',
+          overflow: 'hidden',
+          borderRadius: 'var(--radius-xl)',
+          border: '1px solid',
+          borderColor: TOKEN.border,
+          backgroundColor: TOKEN.background,
+        }}
+      >
+        <StoneTexture />
+        <i className="canto-runa" data-canto="tl" aria-hidden="true" />
+        <i className="canto-runa" data-canto="tr" aria-hidden="true" />
+        <i className="canto-runa" data-canto="bl" aria-hidden="true" />
+        <i className="canto-runa" data-canto="br" aria-hidden="true" />
+        <StaggerReveal
+          as="section"
+          className="relative flex flex-col gap-4 px-6 py-8 max-sm:px-4 max-sm:py-6"
+        >
+          <StaggerRevealItem>
+            <span style={{ color: TOKEN.accent }}>
+              <RunaGlyph name="map" size={48} />
+            </span>
+          </StaggerRevealItem>
+          <div style={runaType('hero')}>
+            <StaggerRevealHeadline
+              as="h2"
+              ariaLabel={`Portão de entrada: ${current?.world_name ?? 'A Fortaleza-Vigia'}`}
+              className="text-balance"
+              id="aventura-hero-titulo"
+            >
+              {current?.world_name ?? 'A Fortaleza-Vigia'}
+            </StaggerRevealHeadline>
+          </div>
+          <StaggerRevealItem as="p">
+            <span
+              className="block max-w-[60ch] text-pretty"
+              style={{ ...runaType('body'), color: TOKEN.mutedForeground }}
+            >
+              Escolhe uma aventura existente ou cria um mundo e um personagem novos — com
+              progresso ao vivo.
+            </span>
+          </StaggerRevealItem>
+          <StaggerRevealItem>
+            <Stack
+              direction={{ xs: 'column', sm: 'row' }}
+              spacing={1.5}
+              useFlexGap
+              sx={{ alignItems: { xs: 'stretch', sm: 'center' } }}
+            >
+              <Button
+                variant="contained"
+                startIcon={<Add />}
+                disabled={running}
+                sx={TARGET_SX}
+                onClick={openCreateWizard}
+              >
+                Criar nova aventura
+              </Button>
+              <Button variant="outlined" sx={TARGET_SX} onClick={scrollToChooser}>
+                Escolher existente
+              </Button>
+            </Stack>
+          </StaggerRevealItem>
+        </StaggerReveal>
+      </Box>
+
+      <RunaRule />
+
       <Stack spacing={2}>
         {feedback ? (
           <Alert
@@ -168,9 +258,10 @@ export default function AventuraPanel() {
         ) : null}
 
         {/* Cartão de estado: a aventura atual ou o estado vazio convidativo. */}
-        <SectionCard
+        <RunaSection
           title="Aventura atual"
           subtitle="O que está a correr agora neste mundo"
+          glyph="map"
           action={
             current ? (
               <Button
@@ -185,7 +276,7 @@ export default function AventuraPanel() {
           }
         >
           {adventuresQuery.isLoading || statusQuery.isLoading ? (
-            <PanelLoading label="A carregar a aventura…" />
+            <RunaLoading label="A carregar a aventura…" />
           ) : adventuresQuery.isError ? (
             <PanelError
               message={errorMessage(adventuresQuery.error)}
@@ -201,12 +292,20 @@ export default function AventuraPanel() {
                   size="small"
                   color={current.alive ? 'success' : 'error'}
                   variant="outlined"
+                  icon={
+                    <RunaGlyph name={current.alive ? 'shield' : 'alert'} size={14} />
+                  }
                   label={current.alive ? 'aventureiro vivo' : 'aventureiro morto'}
                 />
               </Stack>
               <Typography variant="body1">
                 Aventureiro: <strong>{current.adventurer_name}</strong>
-                {current.adventure_id ? ` · jogo guardado «${current.adventure_id}»` : ''}
+                {current.adventure_id ? (
+                  <>
+                    {' · jogo guardado '}
+                    <span style={runaType('data')}>«{current.adventure_id}»</span>
+                  </>
+                ) : null}
               </Typography>
               {gameOff ? (
                 <Typography variant="caption" sx={{ color: 'text.secondary' }}>
@@ -221,55 +320,18 @@ export default function AventuraPanel() {
               ) : null}
             </Stack>
           ) : (
-            /* Estado vazio revelado em cascata (Motion UI `stagger-reveal`). */
+            /* Estado vazio «a masmorra ainda não foi explorada» (kit `rpg/`,
+               §5.7): mensagem do painel + 1 CTA concreta → wizard. */
             <div role="status">
-              <StaggerReveal
-                as="section"
-                className="flex flex-col items-center gap-3 px-2 py-6 text-center"
-                id="aventura-estado-vazio"
-              >
-              <Explore fontSize="large" sx={{ color: 'text.secondary' }} aria-hidden="true" />
-              <StaggerRevealHeadline
-                as="h3"
-                ariaLabel="Nenhuma aventura ativa — escolhe uma existente ou cria uma nova"
-                className="text-sm font-bold text-foreground"
-              >
-                Nenhuma aventura ativa — escolhe uma existente ou cria uma nova
-              </StaggerRevealHeadline>
-              <StaggerRevealItem>
-                <Typography variant="body2" sx={{ color: 'text.secondary', maxWidth: 480 }}>
-                  Uma aventura é um mundo + um personagem. Continua um jogo guardado que já tens ou
-                  deixa o agente conduzir a criação de um mundo novo, com o progresso a acontecer
-                  aqui.
-                </Typography>
-              </StaggerRevealItem>
-              <StaggerRevealItem>
-                <Stack
-                  direction={{ xs: 'column', sm: 'row' }}
-                  spacing={1.5}
-                  useFlexGap
-                  sx={{ alignItems: 'center', mt: 1 }}
-                >
-                  <Button
-                    variant="contained"
-                    startIcon={<Add />}
-                    disabled={running}
-                    onClick={() => {
-                      setWizardMode('create');
-                      setWizardOpen(true);
-                    }}
-                  >
-                    Criar nova aventura
-                  </Button>
-                  <Button variant="outlined" sx={TARGET_SX} onClick={scrollToChooser}>
-                    Escolher existente
-                  </Button>
-                </Stack>
-              </StaggerRevealItem>
-              </StaggerReveal>
+              <EmptyState
+                glyph="map"
+                title="Nenhuma aventura ativa — escolhe uma existente ou cria uma nova"
+                body="Uma aventura é um mundo + um personagem. Continua um jogo guardado que já tens ou deixa o agente conduzir a criação de um mundo novo, com o progresso a acontecer aqui. «Escolher existente» está no portão acima."
+                action={{ label: 'Criar nova aventura', onClick: openCreateWizard }}
+              />
             </div>
           )}
-        </SectionCard>
+        </RunaSection>
 
         {/* Progresso de tarefas lançadas fora do wizard (ex.: continuar um jogo guardado). */}
         {taskVisible ? (
@@ -324,22 +386,29 @@ export default function AventuraPanel() {
 
         {/* Escolhedor: os jogos guardados da pasta do DF, com a ação primária por linha. */}
         <Box id="aventuras-existentes">
-          <SectionCard
+          <RunaSection
             title="Aventuras existentes"
             subtitle="Jogos guardados na pasta do jogo (data/save) — «Continuar aventura» carrega o escolhido"
+            glyph="gem"
             flush
           >
             {adventuresQuery.isLoading ? (
-              <PanelLoading label="A carregar jogos guardados…" />
+              <Box sx={{ p: 2 }}>
+                <RunaLoading label="A carregar jogos guardados…" />
+              </Box>
             ) : adventuresQuery.isError ? (
-              <PanelError
-                message={errorMessage(adventuresQuery.error)}
-                onRetry={() => void adventuresQuery.refetch()}
-              />
+              <Box sx={{ p: 2 }}>
+                <PanelError
+                  message={errorMessage(adventuresQuery.error)}
+                  onRetry={() => void adventuresQuery.refetch()}
+                />
+              </Box>
             ) : saves.length === 0 ? (
-              <PanelEmpty
-                message="Nenhum jogo guardado encontrado na pasta do jogo."
-                hint="Cria uma nova aventura para gerar o primeiro mundo — ele aparece aqui assim que terminar."
+              <EmptyState
+                glyph="map"
+                title="Nenhum jogo guardado encontrado na pasta do jogo."
+                body="Cria uma nova aventura para gerar o primeiro mundo — ele aparece aqui assim que terminar."
+                action={{ label: 'Criar nova aventura', onClick: openCreateWizard }}
               />
             ) : (
               <List disablePadding aria-label="Aventuras guardadas">
@@ -353,51 +422,67 @@ export default function AventuraPanel() {
                     >
                       {/*
                         Cartão de jogo guardado: cada entrada revela-se em
-                        cascata na chegada (Motion UI `stagger-reveal`).
+                        cascata na chegada (Motion UI `stagger-reveal`) e
+                        levanta 2px no hover (token `snap`, §6).
                       */}
-                      <StaggerReveal className="flex flex-wrap items-center justify-between gap-2">
-                        <div className="min-w-0 flex-1">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <StaggerRevealHeadline
-                              as="h3"
-                              className="text-xs font-semibold text-foreground"
-                            >
-                              {save.name}
-                            </StaggerRevealHeadline>
-                            <Chip
-                              size="small"
-                              variant="outlined"
-                              color={save.kind === 'active' ? 'success' : 'default'}
-                              label={KIND_LABEL[save.kind]}
-                            />
+                      <RunaHover className="rounded-md">
+                        <StaggerReveal className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span style={{ color: TOKEN.accent }}>
+                                <RunaGlyph name="map" size={16} />
+                              </span>
+                              <StaggerRevealHeadline
+                                as="h3"
+                                className="text-xs font-semibold"
+                                ariaLabel={`Jogo guardado ${save.name}`}
+                              >
+                                {save.name}
+                              </StaggerRevealHeadline>
+                              <Chip
+                                size="small"
+                                variant="outlined"
+                                color={save.kind === 'active' ? 'success' : 'default'}
+                                icon={
+                                  <RunaGlyph
+                                    name={save.kind === 'active' ? 'flame' : 'map'}
+                                    size={14}
+                                  />
+                                }
+                                label={KIND_LABEL[save.kind]}
+                              />
+                            </div>
+                            <StaggerRevealItem>
+                              <Typography
+                                variant="caption"
+                                component="p"
+                                sx={{ color: 'text.secondary', display: 'block', mt: 0.5 }}
+                              >
+                                <span style={runaType('data')}>
+                                  id: {save.id} · guardado {formatDateTime(save.saved_at)} (
+                                  {formatRelative(save.saved_at, now)})
+                                </span>
+                              </Typography>
+                            </StaggerRevealItem>
                           </div>
-                          <StaggerRevealItem>
-                            <Typography
-                              variant="caption"
-                              sx={{ color: 'text.secondary', display: 'block', mt: 0.5 }}
-                            >
-                              id: {save.id} · guardado {formatDateTime(save.saved_at)} (
-                              {formatRelative(save.saved_at, now)})
-                            </Typography>
-                          </StaggerRevealItem>
-                        </div>
-                        <Button
-                          variant={inUse ? 'outlined' : 'contained'}
-                          disabled={running || inUse || loadMutation.isPending}
-                          startIcon={<PlayArrow />}
-                          sx={TARGET_SX}
-                          aria-label={`Continuar aventura ${save.name}`}
-                          onClick={() => continueAdventure(save)}
-                        >
-                          {inUse ? 'Em uso' : 'Continuar aventura'}
-                        </Button>
-                      </StaggerReveal>
+                          <Button
+                            variant={inUse ? 'outlined' : 'contained'}
+                            disabled={running || inUse || loadMutation.isPending}
+                            startIcon={<PlayArrow />}
+                            sx={TARGET_SX}
+                            aria-label={`Continuar aventura ${save.name}`}
+                            onClick={() => continueAdventure(save)}
+                          >
+                            {inUse ? 'Em uso' : 'Continuar aventura'}
+                          </Button>
+                        </StaggerReveal>
+                      </RunaHover>
                     </ListItem>
                   );
                 })}
               </List>
             )}
-          </SectionCard>
+          </RunaSection>
         </Box>
 
         <Typography variant="caption" sx={{ color: 'text.secondary' }}>

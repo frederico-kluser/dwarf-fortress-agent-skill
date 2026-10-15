@@ -52,7 +52,7 @@ export default function MetricCard({
   numericPrefix,
 }: MetricCardProps) {
   return (
-    <div className="h-full rounded-lg border border-border bg-card text-card-foreground shadow-sm">
+    <div className="h-full rounded-lg border border-border bg-card text-foreground shadow-sm">
       <div className="p-3">
         <Stack direction="row" spacing={1} sx={{ alignItems: 'center', color, mb: 0.5 }}>
           {icon}
@@ -66,6 +66,7 @@ export default function MetricCard({
             component="p"
             sx={{
               fontFamily: MONO_FONT,
+              fontVariantNumeric: 'tabular-nums',
               color: unavailable ? 'text.secondary' : 'text.primary',
             }}
           >

@@ -6,7 +6,7 @@ import Typography from '@mui/material/Typography';
 
 import { errorMessage } from '../api/events';
 import { formatRelative, severityTone, valuePt } from '../api/format';
-import { useMetrics } from '../api/queries';
+import { useApiContext, useMetrics } from '../api/queries';
 import type { Metrics } from '../api/types';
 import FreshnessIndicator from '../components/FreshnessIndicator';
 import {
@@ -36,6 +36,7 @@ import { useNow, useSparkSeries } from '../hooks/useSparkSeries';
  * cabeçalho mesmo fechado.
  */
 export default function MetricsPanel() {
+  const { campaign } = useApiContext();
   const metricsQuery = useMetrics();
   const metrics: Metrics | undefined = metricsQuery.data;
   const now = useNow(1000);
@@ -133,8 +134,17 @@ export default function MetricsPanel() {
             </Alert>
           ) : null}
 
-          {/* Acima da dobra: os 5 sinais que respondem a «está tudo bem?». */}
-          <VitalSignsStrip metrics={metrics} />
+          {/* Acima da dobra: a ficha com os 5 sinais que respondem a «está tudo bem?». */}
+          <VitalSignsStrip
+            metrics={metrics}
+            name={campaign ? campaign.name : 'sem campanha'}
+            series={{
+              decisions: decisionsSeries,
+              confidence: confidenceSeries,
+              latency: latencySeries,
+              cost: costSeries,
+            }}
+          />
 
           <Stack spacing={1}>
             <Stack

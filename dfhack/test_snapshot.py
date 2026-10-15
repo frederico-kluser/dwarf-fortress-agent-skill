@@ -29,6 +29,14 @@ os.environ["DF_BRIDGE_SKIP_INSTALL"] = "1"          # nunca instalar scripts nos
 import df_bridge as B                                # noqa: E402
 import test_bridge as TB                             # noqa: E402  (harness do servidor falso)
 
+SRC = os.path.join(os.path.dirname(HERE), "src")
+if SRC not in sys.path:
+    sys.path.insert(0, SRC)
+try:
+    from system_one_dwarf.game.readiness import CombatReadiness
+except ImportError:                                   # pragma: no cover
+    CombatReadiness = None
+
 ISO_UTC = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$")
 LUA = shutil.which("lua5.4") or shutil.which("lua") or shutil.which("luajit")
 
@@ -905,6 +913,72 @@ assert(CAPTURED.adventurer.pos.x == 88)
         proc = self.run_lua(EMPTY_SCENARIO, checks, mode="all")
         self.assertEqual(proc.returncode, 0, proc.stderr)
         self.assertIn("OK", proc.stdout)
+
+
+class AdventurerCombatSnapshotTests(unittest.TestCase):
+    """Bloco `adventurer.combat` (prontidão de combate, mudança 02) na ponte Python.
+
+    O bloco nasce no `dfb-state.lua` (`combat_block`) e tem de atravessar o
+    `sanitize_snapshot` **intacto** — é dele que `game/readiness.py` tira as
+    skills efetivas, atributos, dor/exaustão e sangue para as decisões de
+    ataque/fuga. Aditividade: nada do contrato antigo muda e nada é inventado.
+    """
+
+    COMBAT = {
+        "weapon": {"name": "iron spear", "skill_token": "SPEAR", "skill_noun": "Spearman",
+                   "skill": 7, "ranged": False, "armed": True},
+        "skills": {"fighter": 7, "dodger": 6, "shield_user": 2, "armor_user": 4,
+                   "wrestler": 1, "striker": 2, "kicker": 1},
+        "attributes": {"strength": 1300, "agility": 1200, "toughness": 1200, "endurance": 1100,
+                       "spatial_sense": 1000, "kinesthetic_sense": 1000, "willpower": 1000},
+        "condition": {"blood_ratio": 0.55, "pain": 20, "exhaustion": 1500, "winded": 0,
+                      "stunned": 0, "nausea": 0, "dizziness": 0, "webbed": 0,
+                      "wound_count": 2, "bleeding": 1},
+        "armor": {"pieces": 3, "slots": 3, "shield": True},
+    }
+
+    def test_combat_block_passes_through_the_sanitizer_verbatim(self):
+        snap = B.sanitize_snapshot({"adventurer": {"name": "Urist McTest",
+                                                  "combat": json.loads(json.dumps(self.COMBAT))},
+                                    "metrics": {}})
+        self.assertEqual(snap["adventurer"]["combat"], self.COMBAT)
+        self.assertEqual(snap["adventurer"]["name"], "Urist McTest")
+        # os grupos de métricas continuam normalizados à parte (aditividade)
+        for group in ("health_injuries", "threats", "inventory", "events"):
+            self.assertIn(group, snap["metrics"])
+
+    def test_missing_combat_block_stays_missing_nothing_is_invented(self):
+        snap = B.sanitize_snapshot({"adventurer": {"name": "Urist"}, "metrics": {}})
+        self.assertNotIn("combat", snap["adventurer"])
+
+    def test_garbage_combat_block_is_kept_and_parses_to_unknown_readiness(self):
+        for junk in (["list"], 42, "text", None, {"weapon": "not-an-object"}):
+            snap = B.sanitize_snapshot({"adventurer": {"name": "U", "combat": junk}, "metrics": {}})
+            self.assertEqual(snap["adventurer"]["combat"], junk)   # preservado, nunca fatal
+            if CombatReadiness is not None:
+                readiness = CombatReadiness.from_dict(snap["adventurer"])
+                self.assertIsInstance(readiness, CombatReadiness)
+                self.assertFalse(readiness.known)             # lixo nunca vira medição
+
+    def test_render_survives_the_combat_block(self):
+        snap = B.sanitize_snapshot({"adventurer": {"name": "Urist McTest",
+                                                  "combat": dict(self.COMBAT)},
+                                    "metrics": {}})
+        text = B.render_snapshot_text(snap)
+        self.assertIn("Urist McTest", text)
+
+    @unittest.skipIf(CombatReadiness is None, "sem src/ no PATH")
+    def test_bridge_round_trip_into_the_python_readiness(self):
+        snap = B.sanitize_snapshot({"adventurer": {"name": "Urist",
+                                                  "combat": json.loads(json.dumps(self.COMBAT))},
+                                    "metrics": {}})
+        readiness = CombatReadiness.from_dict(snap["adventurer"]["combat"])
+        self.assertEqual(readiness.weapon_skill, 7)          # skill EFETIVA da arma
+        self.assertEqual(readiness.fighter, 7)
+        self.assertEqual(readiness.blood_ratio, 0.55)        # dor/exaustão/sangue
+        self.assertEqual(readiness.pain, 20)
+        self.assertEqual(readiness.exhaustion, 1500)
+        self.assertTrue(readiness.known)
 
 
 if __name__ == "__main__":

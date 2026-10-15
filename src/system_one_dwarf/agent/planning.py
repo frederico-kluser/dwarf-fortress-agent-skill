@@ -61,6 +61,7 @@ from typing import Any, Callable, Iterable, Mapping, Sequence
 from .candidates import SAPIENT_WORDS
 from .executor import MAX_COORD, MOVE_DIRECTIONS
 from .llm import LLMAuthError, LLMQuotaError
+from .plan_cache import PlanCache, plan_key, plan_signature
 
 log = logging.getLogger("system_one_dwarf.agent.planning")
 
@@ -82,6 +83,8 @@ __all__ = [
     "Issue", "AnimalZone", "RouteStep", "SuccessCondition", "Plan", "PlanRequest",
     "PlanResult", "CritiqueContext", "EffortContext", "EffortDecision", "ConditionResult",
     "HuntPlanner",
+    # cache de planos (Passo 19)
+    "PlanCache", "plan_key", "plan_signature",
     # críticos e ciclo
     "Critic", "default_critics", "critique", "critic_schema_complete", "critic_animal_zone",
     "critic_waypoints", "critic_route_legs", "critic_route_actions",
@@ -1129,6 +1132,8 @@ class PlanResult:
     efforts: tuple[str, ...] = ()
     errors: tuple[str, ...] = ()
     elapsed_s: float = 0.0
+    #: ``True`` quando o plano veio do cache (zero chamadas — Passo 19).
+    cached: bool = False
 
     @property
     def used_fallback(self) -> bool:
@@ -1136,9 +1141,12 @@ class PlanResult:
 
     def summary(self) -> dict[str, Any]:
         """Resumo compacto (códigos, não mensagens) para o JSON do plano e logs."""
-        return {"source": self.source, "attempts": self.attempts, "efforts": list(self.efforts),
-                "issues": [[i.code for i in attempt] for attempt in self.issues_history],
-                "errors": list(self.errors)}
+        summary = {"source": self.source, "attempts": self.attempts, "efforts": list(self.efforts),
+                   "issues": [[i.code for i in attempt] for attempt in self.issues_history],
+                   "errors": list(self.errors)}
+        if self.cached:  # aditivo: só aparece nos hits (contrato antigo preservado)
+            summary["cached"] = True
+        return summary
 
 
 def parse_json_object(text: str) -> Mapping[str, Any] | None:
@@ -1616,6 +1624,11 @@ class HuntPlanner:
             (sempre o plano de *fallback*).
         fauna_search: ``search(query, limit=…)`` da base ``conhecimento/``
             (omissão: ``campaign.memory.search_knowledge``).
+        cache: :class:`~system_one_dwarf.agent.plan_cache.PlanCache` opcional
+            (Passo 19): um pedido igual (mesmo estado normalizado + objetivo)
+            devolve o plano guardado com **zero** chamadas; a mudança de zona,
+            de objetivo, de ameaça ou de HP invalida a entrada, e cada hit é
+            re-verificado pelos críticos de código antes de ser servido.
         fallback_fn / llm_critic_fn / allow_max / max_budget: ver
             :func:`generate_validated_plan` e :class:`EffortContext`.
     """
@@ -1632,6 +1645,7 @@ class HuntPlanner:
         fallback_fn: Callable[..., Any] | None = None,
         llm_critic_fn: Callable[..., Any] | None = None,
         clock: Callable[[], float] = time.monotonic,
+        cache: PlanCache | None = None,
     ) -> None:
         self.llm = llm
         self.fauna_search = fauna_search
@@ -1642,12 +1656,14 @@ class HuntPlanner:
         self.fallback_fn = fallback_fn
         self.llm_critic_fn = llm_critic_fn
         self.clock = clock
+        self.cache = cache
         self.plans = 0          #: planos pedidos nesta missão
         self.max_used = 0       #: …dos quais com esforço máximo
+        self.cache_hits = 0     #: …servidos pelo cache (zero chamadas)
         self.last: PlanResult | None = None
 
     def _generator(self, digest: dict[str, Any], knowledge: str, context: str,
-                   hints: list[str]) -> Callable[[PlanRequest], str]:
+                   hints: list[str], costs: list[float] | None = None) -> Callable[[PlanRequest], str]:
         def generate(request: PlanRequest) -> str:
             user = build_user_prompt(digest, knowledge=knowledge, hints=hints,
                                      context=context, request=request)
@@ -1655,17 +1671,45 @@ class HuntPlanner:
                 PLAN_SYSTEM_PROMPT, user, reasoning={"effort": request.effort},
                 max_tokens=MAX_TOKENS_BY_EFFORT.get(request.effort, MAX_TOKENS_BY_EFFORT[EFFORT_MEDIUM]),
                 temperature=self.temperature, purpose=PLAN_PURPOSE)
+            if costs is not None:  # o custo real alimenta a métrica "saved_usd" do cache
+                costs.append(float(getattr(result.usage, "cost_usd", 0.0) or 0.0))
             return result.text
         return generate
 
+    def _cached_plan(self, digest: dict[str, Any], goal: str) -> PlanResult | None:
+        """Hit do cache re-verificado pelos críticos; ``None`` = servir não é seguro.
+
+        Conservador: um plano guardado que já não passa nos críticos para ESTE
+        contexto é descartado da entrada e tratado como miss (re-gerar é barato
+        comparado com um plano stale).
+        """
+        if self.cache is None:
+            return None
+        hit = self.cache.get_plan(digest, goal)
+        if hit is None:
+            return None
+        plan = Plan.from_mapping(hit, keep_invalid=True)
+        ctx = CritiqueContext(goal=goal, origin=origin_of(digest),
+                              max_distance=DEFAULT_MAX_DISTANCE,
+                              max_leg_distance=DEFAULT_MAX_LEG_DISTANCE)
+        issues = critique(plan, ctx=ctx)
+        if any(issue.blocking for issue in issues):
+            log.info("plan cache: stored plan failed revalidation; dropping it")
+            self.cache.drop_plan(digest, goal)
+            return None
+        plan = _cleaned(plan)
+        return PlanResult(plan, attempts=0, issues_history=(), source=plan.source,
+                          efforts=(), errors=(), elapsed_s=0.0, cached=True)
+
     def plan(self, state: Any = None, *, context: str = "", knowledge: str = "",
              stuck_round: int = 0, first_plan: bool | None = None, routine: bool = False,
-             cached: bool = False) -> PlanResult:
+             cached: bool = False, goal: str = GOAL_HUNT) -> PlanResult:
         """Um plano verificado para ``state`` (GameState, snapshot ou digest).
 
         ``stuck_round`` é a ``StuckEvent.stuck_round`` que pede o plano (2+ =
         esforço máximo); ``first_plan`` omitido = "ainda não houve plano nesta
         missão".  Conhecimento do mapa = bioma reconhecido ou pistas da wiki.
+        ``goal`` é o objetivo do plano (chave do cache + invalidação).
         """
         try:
             digest = build_digest(state)
@@ -1673,17 +1717,29 @@ class HuntPlanner:
             place = str(location.get("region") or location.get("surroundings") or "")
             hints = fauna_hints(place, self.fauna_search)
             known = bool(hints) or any(word in place.lower() for word in BIOME_WORDS)
+            cached_result = self._cached_plan(digest, goal)
+            if cached_result is not None:
+                self.plans += 1
+                self.cache_hits += 1
+                self.last = cached_result
+                return cached_result
             effort = EffortContext(
                 first_plan=self.plans == 0 if first_plan is None else bool(first_plan),
                 map_knowledge=known, stuck_escalations=_int_or(stuck_round, 0),
                 routine_replan=routine, cached=cached, max_used=self.max_used,
                 max_budget=self.max_budget)
-            generate = (self._generator(digest, knowledge, context, hints)
+            costs: list[float] = []
+            generate = (self._generator(digest, knowledge, context, hints, costs)
                         if self.llm is not None else None)
             result = generate_validated_plan(
                 generate, state=digest, max_attempts=self.max_attempts, effort_context=effort,
                 allow_max=self.allow_max, fallback_fn=self.fallback_fn,
-                llm_critic_fn=self.llm_critic_fn, clock=self.clock)
+                llm_critic_fn=self.llm_critic_fn, clock=self.clock, goal=goal)
+            if self.cache is not None and result.source in (SOURCE_LLM, SOURCE_REPAIRED):
+                # Só planos que passaram nos críticos entram (fonte llm/llm_repaired);
+                # o fallback é determinístico e não vale a pena guardar.
+                self.cache.put_plan(digest, goal, result.plan.to_dict(),
+                                    cost_usd=sum(costs))
         except Exception:  # noqa: BLE001 - o loop nunca fica sem dica
             log.warning("HuntPlanner.plan crashed; using the deterministic fallback", exc_info=True)
             result = PlanResult(default_fallback_plan(state), errors=("planner crashed",))
