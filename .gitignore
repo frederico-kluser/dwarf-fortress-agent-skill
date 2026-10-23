@@ -39,3 +39,6 @@ scripts/e2e/logs/
 # Artefactos de runtime da missao de caça (estado/plano/report por corrida).
 scripts/e2e/mission-hunt-*.json
 scripts/e2e/hunt-plan-live.json
+
+# Artefactos de build Python (pip install -e)
+*.egg-info/
