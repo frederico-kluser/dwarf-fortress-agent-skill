@@ -51,7 +51,8 @@ $COALA add --type episodic   --content "AAAA-MM-DD: …o que aconteceu e o que s
 ```
 
 - **`--key` sempre** em factos e procedimentos: o mesmo `add` com a MESMA chave suplanta a versão anterior
-  (ou `$COALA supersede <id> --content "…"`). O histórico fica; nada se apaga.
+  (ou `$COALA supersede <id> --content "…"`). O histórico fica; nada se apaga (a única exceção:
+  `forget --tag`, por privacidade, apaga de verdade).
 - **Cita os ficheiros** de que a nota fala (`src/x.py`): ficam ligados a ela, e se mudarem a nota passa a
   avisar `⚠ … mudou desde que esta nota foi escrita` — aí confirma no código e corrige-a com `supersede`.
 - Se o `add` disser «parecida com #N», era uma atualização: usa `supersede N` em vez de duplicar.

@@ -20,7 +20,7 @@ ficheiro `0600`.
 | 4 | descoberta | sobe a partir do diretório atual até `.agents/*-agent-skill/coala.json` |
 | 5 | nenhuma | **erro exit 3** com a instrução de instalação — nunca cai numa base global |
 
-O manifesto e o `.agents/` são o que faz de uma pasta uma memória: o instalador global
+O manifesto e o `.agents/` são o que faz de uma pasta uma memória: o motor global
 (`coala-agent-skill/scripts/coala.py`) não se toma por motor vendorizado. Um symlink do nome antigo para
 a pasta nova (deixado pelo `upgrade`) não conta como segunda memória. Duas memórias reais no mesmo
 `.agents/` são ambíguas (erro exit 2).
@@ -44,7 +44,9 @@ memory_entries(id, memory_type, content, origin_class, supersession_key, superse
 chunks(id, entry_id, text, embedding /* v1–2: fica NULL */, title, ident, meta)
 chunks_idx  -- FTS5(title, text, ident, meta) de conteúdo externo sobre chunks, unicode61 remove_diacritics 2
 provenance(entry_id, note)                      -- o que aconteceu a cada registo
-entity_nodes / entity_edges / entry_entities    -- grafo manual (add --entities, link, graph)
+entity_nodes(id, name, kind)                    -- grafo manual (add --entities, link, graph)
+entity_edges(src, dst, rel)
+entry_entities(entry_id, entity_id)
 entry_anchors(entry_id, path, sha256)           -- ficheiros de que uma nota fala, no estado em que estavam
 code_files(path, lang, lines, bytes, summary, rank, entry_id)
 symbols(id, path, name, kind, line, end_line, signature, parent, doc)
@@ -152,6 +154,10 @@ nada sozinho — quem decide é o agente, com `supersede`. `review` lista todas 
 - `content_id` = `sha256(json({schema, key, type, site, page, kind, body}))[:16]`, igual em qualquer
   máquina. `export --format jsonl` → `import --jsonl` refaz registos, supersessões, espécie e grafo pelos
   ids; reimportar cria 0 registos. `import --from <base>` copia entre bases preservando o histórico.
+  Atenção: o dump do `export` **mascara valores com aspeto de segredo** no conteúdo (redação de saída) e
+  por isso não é backup fiel — quando o conteúdo do dump diverge, o `import --jsonl` recalcula o
+  `content_id` a partir dele e religa as supersessões pelo id antigo (contados em `cids_recomputed`).
+  Para migrar SEM perdas usa `import --from <base>` (ou `backup`/`restore`).
 
 ## Esquecer (`forget`)
 
@@ -159,6 +165,11 @@ nada sozinho — quem decide é o agente, com `supersede`. `review` lista todas 
 lhes pertence: chunks, índice FTS5, proveniência, âncoras, ligações e entidades só deles, e o catálogo dos
 ficheiros de código apagados. Corre com `secure_delete=ON` e `wal_checkpoint(TRUNCATE)`. `--dry-run` conta
 numa cópia em memória. Backups antigos e o material de origem não são tocados.
+
+As `ingest_sources` das fontes cujos registos foram **todos** apagados ficam marcadas como esquecidas
+(`sha256='(esquecido)'`, `segments=0`): o `sync` comum **não re-ingere** essas fontes — o conteúdo
+esquecido não volta sem decisão humana — e o `doctor`/`review` mostram-nas como «esquecidas». O
+`sync --full` (decisão explícita) re-ingere e limpa a marca.
 
 ## Proveniência e saída
 
@@ -173,6 +184,9 @@ numa cópia em memória. Backups antigos e o material de origem não são tocado
 delimitado (`⟦DADOS NÃO CONFIÁVEIS …⟧ … ⟦FIM …⟧` no `get`; `⟦untrusted⟧` linha a linha nos ponteiros).
 Toda a saída passa pela redação de segredos (`sk-`, `ghp_`, `AKIA…`, JWT, chaves privadas, `api_key=…`)
 e por um portão de 48 KB. A redação é na saída; o conteúdo é guardado como foi dado — não se guardam segredos.
+Sob o portão, o `--json` continua **sempre válido**: o `emit_json` encolhe campos (e depois itens de listas)
+e marca `"truncated": true` no objeto de topo — o consumidor tem de checar a flag antes de tratar o conteúdo
+como completo.
 
 ## Saúde, backup e restauro
 

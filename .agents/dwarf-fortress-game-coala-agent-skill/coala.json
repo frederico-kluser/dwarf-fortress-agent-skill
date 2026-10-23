@@ -6,17 +6,17 @@
   "engine": {
     "file": "scripts/coala.py",
     "version": "3.0.0",
-    "sha256": "41c550b6f0a462170fe4f37cc2b03094f2e06a967efac049f805f3e705b7db53"
+    "sha256": "2fd31064a98da803a94dfdb903f448daa551feeecc5b7dc7b371337ce88eee67"
   },
   "schema_version": 4,
   "git_policy": "ignore",
   "installer": "coala-agent-skill/scripts/coala-install.py",
   "installed_at": "2026-09-27T10:52:16+00:00",
-  "updated_at": "2026-10-12T19:41:22+00:00",
+  "updated_at": "2026-10-15T23:12:54+00:00",
   "managed": {
-    "SKILL.md": "825ba578df27dfcbfaeaa43d4e953d569f26f939069b1464e17e2122c508768e",
+    "SKILL.md": "cfbec30a2fbb85fdae1191e58d1b51523c2ffb6f6185fef7c26e308a5676930e",
     "memory/.gitignore": "5941079484623004d0493eda784610b14f22d89d4a7473df50f514a8a3b044d4",
-    "references/schema.md": "350f2e0b075c382ecadb608819ad31ebd76cacef3ecaf95db3775b23c09699ea",
-    "scripts/coala.py": "41c550b6f0a462170fe4f37cc2b03094f2e06a967efac049f805f3e705b7db53"
+    "references/schema.md": "d7bdd6cb63f82d0daf645c311e9b72a958b008ec09ab516759d1466905f46027",
+    "scripts/coala.py": "2fd31064a98da803a94dfdb903f448daa551feeecc5b7dc7b371337ce88eee67"
   }
 }
