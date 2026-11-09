@@ -29,7 +29,9 @@ from typing import Any, Callable, Sequence
 
 from .glossary import Glossary
 from .translator import (
+    SCREEN_MODEL,
     DeepSeekTranslator,
+    ScreenTranslator,
     ScreenTranslation,
     Translation,
     Translator,
@@ -508,6 +510,34 @@ def build_translator(
     if get_key is None or not _key_available(get_key):
         return IdentityTranslator()
     primary = DeepSeekTranslator(get_key, model=model, transport=transport, **kwargs)
+    return ChainTranslator(
+        primary,
+        fallback=IdentityTranslator(),
+        glossary=glossary if glossary is not None else Glossary.load(),
+        cache=cache,
+    )
+
+
+def build_screen_translator(
+    get_key: Callable[[], str] | None = None,
+    *,
+    model: str = SCREEN_MODEL,
+    transport: Any = None,
+    glossary: Glossary | None = None,
+    cache: Any = None,
+    **kwargs: Any,
+) -> Translator:
+    """Like :func:`build_translator`, with the screen engine (mimo, effort none).
+
+    Ferramenta de tradução de ecrã (``pesquisas/traducao-ecra-mimo.md`` §1):
+    ``xiaomi/mimo-v2.6-pro`` com ``reasoning: {"effort": "none"}`` e
+    ``temperature=0`` — a correr por baixo das mesmas proteções: glossário
+    curado (fast-path a zero custo), TM por assinatura e degradação para
+    :class:`IdentityTranslator` sem chave ou em erro.
+    """
+    if get_key is None or not _key_available(get_key):
+        return IdentityTranslator()
+    primary = ScreenTranslator(get_key, model=model, transport=transport, **kwargs)
     return ChainTranslator(
         primary,
         fallback=IdentityTranslator(),

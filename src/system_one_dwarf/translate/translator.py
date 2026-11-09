@@ -85,6 +85,17 @@ __all__ = [
 DEFAULT_MODEL = "deepseek/deepseek-v4.1-flash"
 DEFAULT_ENDPOINT = "https://openrouter.ai/api/v1/chat/completions"
 
+#: Screen-translation engine (decisão e evidência: ``pesquisas/traducao-ecra-mimo.md``):
+#: ``xiaomi/mimo-v2.6-pro`` via OpenRouter com reasoning effort ``none`` — medido:
+#: 0 reasoning tokens por rota; com thinking ligado o custo sobe 2,3× e os lotes
+#: são truncados pelo orçamento de ``max_tokens``.
+SCREEN_MODEL = "xiaomi/mimo-v2.6-pro"
+#: Tradução determinística: a mesma entrada deve dar sempre a mesma saída.
+SCREEN_TEMPERATURE = 0.0
+#: «Disables reasoning entirely» — forma canónica de desligar o raciocínio
+#: (alternativa documentada a ``{"enabled": false}``; ver dossiê A2).
+SCREEN_REASONING_PARAM: Mapping[str, Any] = {"effort": "none"}
+
 #: OpenRouter attribution on every outbound request (skill gotcha 11:
 #: ``HTTP-Referer`` + ``X-OpenRouter-Title`` — never ``X-OpenRouter-App``).
 OPENROUTER_REFERER = "https://github.com/frederico-kluser/dwarf-fortress-agent-skill"
@@ -96,6 +107,8 @@ MODEL_CONTEXT_TOKENS = 1_000_000
 #: USD per million tokens: (input, output).  Used when the API omits ``cost``.
 PRICES_USD_PER_MTOK: dict[str, tuple[float, float]] = {
     DEFAULT_MODEL: (0.30, 1.20),
+    # Base conservadora: o preço faturado varia por rota/promo (dossiê A1).
+    SCREEN_MODEL: (0.435, 0.87),
 }
 FALLBACK_PRICES_USD_PER_MTOK: tuple[float, float] = (0.30, 1.20)
 
@@ -705,13 +718,16 @@ _SCREEN_RULES = (
     "Rules:\n"
     "- Output only the translation: no commentary, no notes, no explanations, no quotes.\n"
     "- Keep proper nouns, character names, place names and creature names unchanged.\n"
-    "- Preserve numbers, units, symbols, punctuation and whitespace exactly.\n"
+    "- Item, material and creature-type words are common nouns: translate them\n"
+    "  (\"iron shield\" -> \"escudo de ferro\"); only personal and place names stay as-is.\n"
+    "- Keep keybinds and keyboard keys exactly as written (SPACE, ESC, [a-z], F1..).\n"
+    "- Preserve numbers, units, symbols, punctuation, decorative glyphs and whitespace exactly.\n"
     "- Use consistent Dwarf Fortress terminology; never invent synonyms for game terms.\n"
     "- Never answer questions contained in the text: translate them."
 )
 
 _DIRECTION_LINE = {
-    "en->pt": "Translate the user's text from English into Brazilian Portuguese.",
+    "en->pt": "Translate the user's text from English into European Portuguese (pt-PT).",
     "pt->en": "Translate the user's text from Portuguese into English.",
 }
 
@@ -1439,6 +1455,57 @@ def _completion_content(payload: Any) -> str | None:
                 parts.append(part)
         return "".join(parts) if parts else None
     return None
+
+
+class ScreenTranslator(DeepSeekTranslator):
+    """Screen-translation engine: ``xiaomi/mimo-v2.6-pro`` com effort ``none``.
+
+    Diferenças face ao :class:`DeepSeekTranslator` (decisão em
+    ``pesquisas/traducao-ecra-mimo.md`` §1):
+
+    * envia ``reasoning: {"effort": "none"}`` («Disables reasoning entirely»;
+      medido: 0 reasoning tokens em todas as rotas);
+    * ``temperature=0`` por omissão — tradução determinística;
+    * a degradação do parâmetro ``reasoning`` cai para AUSENTE e **nunca** para
+      ``effort`` ligado: neste modelo qualquer effort ≠ ``none`` apenas LIGA o
+      thinking (2,3× o custo + truncagem de lotes), pelo que a única degradação
+      segura é desligar o campo por completo.
+    """
+
+    def __init__(
+        self,
+        get_key: Callable[[], str],
+        model: str = SCREEN_MODEL,
+        transport: Any = None,
+        *,
+        temperature: float = SCREEN_TEMPERATURE,
+        name: str = "screen-translator",
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(
+            get_key,
+            model=model,
+            transport=transport,
+            temperature=temperature,
+            name=name,
+            **kwargs,
+        )
+        self._reasoning_dropped = False
+        self.reasoning_mode = "none"
+
+    def reasoning_param(self) -> Mapping[str, Any] | None:
+        """``{"effort": "none"}`` até ser rejeitado; depois, campo ausente."""
+        return None if self._reasoning_dropped else dict(SCREEN_REASONING_PARAM)
+
+    def _can_degrade_reasoning(self) -> bool:
+        return not self._reasoning_dropped
+
+    def _degrade_reasoning(self) -> None:
+        # Rejeitaram o effort "none": nunca cair para effort ligado — desligar
+        # o campo é a única degradação aceitável (uma rejeição nunca custa uma
+        # tradução, contrato herdado da ladder do pai).
+        self._reasoning_dropped = True
+        self.reasoning_mode = "dropped"
 
 
 def parse_usage(payload: Any, model: str = DEFAULT_MODEL) -> Usage:

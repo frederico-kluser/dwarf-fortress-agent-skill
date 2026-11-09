@@ -54,7 +54,7 @@ def test_to_pt_happy_path_request_and_result() -> None:
     assert body["max_tokens"] == DEFAULT_MAX_TOKENS <= 2000
     assert body["messages"][0]["role"] == "system"
     assert "only the translation" in body["messages"][0]["content"]
-    assert "into Brazilian Portuguese" in body["messages"][0]["content"]
+    assert "into European Portuguese" in body["messages"][0]["content"]
     assert body["messages"][1] == {"role": "user", "content": "Hello, adventurer."}
 
     assert result.text == "Olá, aventureiro."

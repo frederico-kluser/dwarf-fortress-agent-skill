@@ -204,7 +204,7 @@ def prefixed_reply(prefix_pt: str = "[pt] ", prefix_en: str = "[en] ") -> Callab
         messages = body["messages"]
         system = messages[0]["content"]
         user = messages[-1]["content"]
-        prefix = prefix_pt if "into Brazilian Portuguese" in system else prefix_en
+        prefix = prefix_pt if "into European Portuguese" in system else prefix_en
         try:
             parsed = json.loads(user)
         except (TypeError, ValueError):

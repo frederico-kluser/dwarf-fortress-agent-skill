@@ -37,6 +37,7 @@ from .fallback import (
     IDENTITY_MODEL,
     ChainTranslator,
     IdentityTranslator,
+    build_screen_translator,
     build_translator,
 )
 from .glossary import (
@@ -53,8 +54,12 @@ from .translator import (
     PRICES_USD_PER_MTOK,
     REASONING_LADDER,
     RETRYABLE_STATUSES,
+    SCREEN_MODEL,
+    SCREEN_REASONING_PARAM,
+    SCREEN_TEMPERATURE,
     BatchTranslator,
     DeepSeekTranslator,
+    ScreenTranslator,
     ScreenTranslation,
     TextTranslator,
     Translation,
@@ -82,9 +87,15 @@ __all__ = [
     "Usage",
     # implementations
     "DeepSeekTranslator",
+    "ScreenTranslator",
     "IdentityTranslator",
     "ChainTranslator",
     "build_translator",
+    "build_screen_translator",
+    # screen-translation engine (pesquisas/traducao-ecra-mimo.md)
+    "SCREEN_MODEL",
+    "SCREEN_TEMPERATURE",
+    "SCREEN_REASONING_PARAM",
     # supporting pieces
     "Glossary",
     "GlossaryEntry",

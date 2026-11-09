@@ -45,14 +45,17 @@ TranslatorFactory = Callable[..., Translator]
 
 
 def default_translator_factory(get_key: Callable[[], str | None], **kwargs: Any) -> Translator:
-    """The production factory: ``system_one_dwarf.translate.build_translator``.
+    """The production factory: ``system_one_dwarf.translate.build_screen_translator``.
 
-    Imported inside the function so that ``create_app()`` (and the whole app
-    package) never depends on the translate piece at import time.
+    Motor de ecrã ``xiaomi/mimo-v2.6-pro`` com reasoning effort ``none``
+    (decisão: ``pesquisas/traducao-ecra-mimo.md`` §1) por baixo do
+    glossário/TM/fallback do ``build_translator``.  Importado dentro da função
+    para que ``create_app()`` (e todo o pacote app) nunca dependa da peça
+    translate em tempo de import.
     """
-    from ..translate import build_translator
+    from ..translate import build_screen_translator
 
-    return build_translator(get_key, **kwargs)
+    return build_screen_translator(get_key, **kwargs)
 
 
 class CampaignTranslator:

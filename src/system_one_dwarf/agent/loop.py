@@ -723,12 +723,12 @@ class AgentLoop:
     def _build_translator(self) -> Any:
         """Constrói o tradutor a partir do key store (só se nenhum foi injetado)."""
         try:
-            from ..translate import build_translator
+            from ..translate import build_screen_translator
         except Exception:  # peça vizinha indisponível: o loop segue sem tradução
             self.log.warning("translator unavailable (import failed)", exc_info=True)
             return None
         try:
-            self.translator = build_translator(self.key_for)
+            self.translator = build_screen_translator(self.key_for)
         except Exception:
             self.log.warning("build_translator failed", exc_info=True)
             return None
