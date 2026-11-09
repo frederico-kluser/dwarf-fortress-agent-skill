@@ -9,6 +9,7 @@ O servidor falso responde a cada RunCommand conforme um roteiro: o primeiro toke
 comando (ou 'lua:<script>') mapeia para (texto, código). Scripts dfb-* devolvem JSON.
 """
 import io, json, os, socket, struct, sys, tempfile, threading, unittest
+from unittest import mock
 from contextlib import redirect_stdout, redirect_stderr
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -98,10 +99,13 @@ class FakeDFHack(threading.Thread):
         self.srv.close()
 
 
+SCRATCH_DF = tempfile.mkdtemp(prefix="dfb-test-df-")   # diretório do DF falso (host-agnóstico)
+
+
 def make_args(**kw):
     """argparse.Namespace mínimo com os defaults que os comandos esperam."""
     ns = type("NS", (), {})()
-    defaults = dict(df_path="/tmp", port=None, json=False, via="tcp", lines=20, new=False,
+    defaults = dict(df_path=SCRATCH_DF, port=None, json=False, via="tcp", lines=20, new=False,
                     seconds=1.0, poll=0.1, command=None, what="all", radius=10,
                     action=None, args=[], times=1, delay=0.0, max_steps=50,
                     dry_run=False, stop_on_threat=False, stop_on_focus_change=False,
@@ -314,6 +318,81 @@ class BatchExecTests(unittest.TestCase):
         finally:
             os.environ.pop("XDG_STATE_HOME", None)
             srv.stop()
+
+
+class WindowsSupportTests(unittest.TestCase):
+    """Deteção em Windows — candidatos Steam, classify e dfhack-run (offline, host-agnóstico)."""
+
+    def test_classify_windows_native_on_windows_host(self):
+        with tempfile.TemporaryDirectory() as td:
+            with open(os.path.join(td, "Dwarf Fortress.exe"), "w"):
+                pass
+            with mock.patch("os.name", "nt"):
+                self.assertEqual(B.classify(td), "windows")
+
+    def test_classify_proton_when_same_dir_found_on_other_host(self):
+        with tempfile.TemporaryDirectory() as td:
+            with open(os.path.join(td, "Dwarf Fortress.exe"), "w"):
+                pass
+            with mock.patch("os.name", "posix"):
+                self.assertEqual(B.classify(td), "proton")
+
+    def test_classify_native_and_unknown(self):
+        with tempfile.TemporaryDirectory() as td:
+            with open(os.path.join(td, "dwarfort"), "w"):
+                pass
+            self.assertEqual(B.classify(td), "nativo")
+        with tempfile.TemporaryDirectory() as td:
+            self.assertEqual(B.classify(td), "desconhecido")
+
+    def test_find_dfhack_run_prefers_root_wrapper(self):
+        with tempfile.TemporaryDirectory() as td:
+            for rel in ("dfhack-run", os.path.join("hack", "dfhack-run.exe")):
+                p = os.path.join(td, rel)
+                os.makedirs(os.path.dirname(p) or td, exist_ok=True)
+                with open(p, "w"):
+                    pass
+            self.assertEqual(B.find_dfhack_run(td), os.path.join(td, "dfhack-run"))
+
+    def test_find_dfhack_run_hack_exe_on_windows_layout(self):
+        with tempfile.TemporaryDirectory() as td:
+            p = os.path.join(td, "hack", "dfhack-run.exe")
+            os.makedirs(os.path.dirname(p))
+            with open(p, "w"):
+                pass
+            self.assertEqual(B.find_dfhack_run(td), p)
+        with tempfile.TemporaryDirectory() as td:
+            self.assertIsNone(B.find_dfhack_run(td))
+
+    def test_dfhack_run_ok_semantics(self):
+        self.assertFalse(B.dfhack_run_ok(None))
+        with tempfile.TemporaryDirectory() as td:
+            p = os.path.join(td, "dfhack-run")
+            with open(p, "w"):
+                pass
+            with mock.patch("os.name", "nt"):
+                self.assertTrue(B.dfhack_run_ok(p))   # no Windows existir basta
+            with mock.patch("os.name", "posix"), mock.patch("os.access", return_value=False):
+                self.assertFalse(B.dfhack_run_ok(p))  # no Linux sem +x não conta
+
+    def test_steam_library_dirs_extra_candidates_and_vdf_backslashes(self):
+        with tempfile.TemporaryDirectory() as td:
+            lib_a = os.path.join(td, "Steam")          # candidato, com libraryfolders.vdf
+            lib_b = os.path.join(td, "SteamLibrary")   # descoberto pelo vdf
+            os.makedirs(os.path.join(lib_a, "steamapps"))
+            os.makedirs(os.path.join(lib_b, "steamapps"))
+            escaped = lib_b.replace("\\", "\\\\")      # o VDF do Windows escapa as barras
+            with open(os.path.join(lib_a, "steamapps", "libraryfolders.vdf"),
+                      "w", encoding="utf-8") as f:
+                f.write('"libraryfolders"\n{\n\t"1"\n\t{\n\t\t"path"\t\t"%s"\n\t}\n}\n' % escaped)
+            out = B.steam_library_dirs(candidates=[os.path.join(lib_a, "steamapps")])
+            self.assertIn(os.path.join(lib_a, "steamapps"), out)
+            self.assertIn(os.path.join(lib_b, "steamapps"), out)
+
+    def test_windows_steam_candidates_cover_classic_installs(self):
+        out = B.windows_steam_candidates()
+        for classic in B.WINDOWS_STEAM_CANDIDATES:
+            self.assertIn(classic, out)
 
 
 if __name__ == "__main__":

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Ponte ao vivo com o Dwarf Fortress via DFHack (Linux) — stdlib-only.
+"""Ponte ao vivo com o Dwarf Fortress via DFHack (Linux e Windows) — stdlib-only.
 
 LEITURA  — acompanha o gamelog.txt (anúncios/eventos do jogo, em inglês);
 ESCRITA  — envia comandos ao console do DFHack de um jogo aberto, via o binário
@@ -57,6 +57,26 @@ STEAM_CANDIDATES = (                # instalação clássica, XDG e flatpak
     "~/.local/share/Steam/steamapps",
     "~/.var/app/com.valvesoftware.Steam/.local/share/Steam/steamapps",
 )
+
+WINDOWS_STEAM_CANDIDATES = (        # fallback do Steam em Windows (o registo HKCU manda)
+    "C:/Program Files (x86)/Steam/steamapps",
+    "C:/Program Files/Steam/steamapps",
+)
+
+
+def windows_steam_candidates():
+    """steamapps/ do Steam em Windows: registo HKCU primeiro, caminhos clássicos depois."""
+    out = []
+    try:
+        import winreg
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Valve\Steam") as key:
+            value, _ = winreg.QueryValueEx(key, "SteamPath")
+        if value:
+            out.append(os.path.join(value, "steamapps"))
+    except (ImportError, OSError):
+        pass  # sem registo (CI, Wine, Steam noutro lado): segue para os clássicos
+    out.extend(WINDOWS_STEAM_CANDIDATES)
+    return out
 
 # Categorização leve dos anúncios p/ --json (1º match vence). A tradução de
 # verdade fica com o agente — isto só ajuda a triagem.
@@ -130,8 +150,12 @@ class BridgeError(Exception):
 
 
 # ---------- descoberta do Dwarf Fortress ----------
-def steam_library_dirs():
+def steam_library_dirs(candidates=None):
     """steamapps/ candidatos + bibliotecas extras do libraryfolders.vdf."""
+    if candidates is None:
+        candidates = list(STEAM_CANDIDATES)
+        if os.name == "nt":
+            candidates += windows_steam_candidates()
     seen, out = set(), []
 
     def add(path):
@@ -140,7 +164,7 @@ def steam_library_dirs():
             seen.add(real)
             out.append(path)
 
-    for cand in STEAM_CANDIDATES:
+    for cand in candidates:
         lib = os.path.expanduser(cand)
         add(lib)
         vdf = os.path.join(lib, "libraryfolders.vdf")
@@ -148,7 +172,9 @@ def steam_library_dirs():
             try:
                 with open(vdf, encoding="utf-8", errors="replace") as f:
                     for m in re.finditer(r'"path"\s*"([^"]+)"', f.read()):
-                        add(os.path.join(m.group(1), "steamapps"))
+                        # o VDF do Windows escapa as barras ("C:\\Steam") — normalizar
+                        raw = m.group(1).replace("\\\\", "\\")
+                        add(os.path.join(raw, "steamapps"))
             except OSError:
                 pass
     return out
@@ -177,11 +203,11 @@ def find_df_path(cli_path):
 
 
 def classify(df):
-    """nativo|proton|desconhecido — escrita via DFHack Linux só faz sentido no nativo."""
+    """nativo|windows|proton|desconhecido — 'windows' = build Windows a correr no Windows."""
     if os.path.exists(os.path.join(df, "dwarfort")):
         return "nativo"
     if os.path.exists(os.path.join(df, "Dwarf Fortress.exe")):
-        return "proton"
+        return "windows" if os.name == "nt" else "proton"
     return "desconhecido"
 
 
@@ -470,8 +496,29 @@ def probe_rpc(port):
         rpc.close()
 
 
+DFHACK_RUN_NAMES = ("dfhack-run", "dfhack-run.exe",
+                    os.path.join("hack", "dfhack-run"), os.path.join("hack", "dfhack-run.exe"))
+
+
+def find_dfhack_run(df):
+    """(caminho|None) — no Linux o wrapper vive na raiz; o zip do Windows traz hack/dfhack-run.exe."""
+    for rel in DFHACK_RUN_NAMES:
+        cand = os.path.join(df, rel)
+        if os.path.isfile(cand):
+            return cand
+    return None
+
+
+def dfhack_run_ok(exe):
+    """executável? — bits POSIX no Linux; no Windows existir basta (X_OK não significa nada)."""
+    return bool(exe) and (os.name == "nt" or os.access(exe, os.X_OK))
+
+
 def run_via_binary(df, port, argv, timeout=20):
-    exe = os.path.join(df, "dfhack-run")
+    exe = find_dfhack_run(df)
+    if exe is None:
+        raise BridgeError("dfhack-run não existe em %s — DFHack não instalado?" % df,
+                          EXIT_UNREACHABLE, "instale o DFHack dentro do diretório do DF, ou use --via tcp")
     env = dict(os.environ, DFHACK_PORT=str(port))
     try:
         # cwd=df: o dfhack-run resolve dfhack-config/remote-server.json relativo ao cwd
@@ -479,7 +526,7 @@ def run_via_binary(df, port, argv, timeout=20):
                               encoding="utf-8", errors="replace", timeout=timeout)
     except FileNotFoundError:
         raise BridgeError("dfhack-run não existe em %s — DFHack não instalado?" % df,
-                          EXIT_UNREACHABLE, "rode install_dfhack_linux.sh, ou use --via tcp")
+                          EXIT_UNREACHABLE, "instale o DFHack dentro do diretório do DF, ou use --via tcp")
     except PermissionError:
         raise BridgeError("dfhack-run existe mas não é executável (chmod +x?)",
                           EXIT_UNREACHABLE, "use --via tcp")
@@ -500,11 +547,11 @@ def run_via_binary(df, port, argv, timeout=20):
 
 def send_command(df, port, argv, via):
     """Fachada: dfhack-run quando disponível, senão TCP. Retorna dict normalizado."""
-    exe = os.path.join(df, "dfhack-run") if df else None
-    run_ok = bool(exe) and os.access(exe, os.X_OK)
+    exe = find_dfhack_run(df) if df else None
+    run_ok = dfhack_run_ok(exe)
     if via == "run" and not run_ok:
         raise BridgeError("--via run, mas dfhack-run não está disponível/executável no diretório do DF",
-                          EXIT_UNREACHABLE, "use --via tcp, ou rode install_dfhack_linux.sh")
+                          EXIT_UNREACHABLE, "use --via tcp, ou instale o DFHack no diretório do DF")
     if via == "run" or (via == "auto" and run_ok):
         return {"ok": True, "via": "dfhack-run", "code": 0,
                 "text": run_via_binary(df, port, argv)}
@@ -542,14 +589,14 @@ def cmd_status(args):
     glog = os.path.join(df, "gamelog.txt")
     has_glog = os.path.isfile(glog)
     port = resolve_port(args, df)
-    exe = os.path.join(df, "dfhack-run")
+    exe = find_dfhack_run(df)
     info.update({
         "kind": kind,
         "gamelog": {"path": glog, "exists": has_glog,
                     "size": os.path.getsize(glog) if has_glog else 0,
                     "mtime": int(os.path.getmtime(glog)) if has_glog else None},
         "dfhack_installed": os.path.isdir(os.path.join(df, "hack")),
-        "dfhack_run": os.access(exe, os.X_OK),
+        "dfhack_run": dfhack_run_ok(exe),
         "rpc": {"port": port, "reachable": probe_rpc(port)},
     })
     info["ok_read"] = info["gamelog"]["exists"]
@@ -563,7 +610,7 @@ def cmd_status(args):
     lines.append("gamelog.txt:    %s" % ("ok — %d bytes" % g["size"] if g["exists"]
                                          else "AUSENTE (rode o jogo ao menos uma vez)"))
     lines.append("DFHack:         %s%s" % ("instalado" if info["dfhack_installed"]
-                                           else "NÃO instalado (rode install_dfhack_linux.sh)",
+                                           else "NÃO instalado (instale o DFHack no diretório do DF)",
                                            ", dfhack-run ok" if info["dfhack_run"] else ""))
     lines.append("RPC:            porta %d — %s" % (port, "ALCANÇÁVEL (jogo aberto)"
                                                     if info["rpc"]["reachable"]

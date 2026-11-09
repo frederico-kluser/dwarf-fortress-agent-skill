@@ -876,6 +876,27 @@ class GameProcessError(RuntimeError):
     """O processo do jogo não pode ser gerido (caminho inválido, spawn falhou)."""
 
 
+SIG_KILL = getattr(signal, "SIGKILL", 9)   # Windows não tem SIGKILL (os.kill mata à mesma)
+
+
+def _windows_pid_alive(pid: int) -> bool:
+    """Vivo? — OpenProcess + GetExitCodeProcess (``os.kill(pid, 0)`` TERMINA no Windows)."""
+    try:
+        import ctypes
+        handle = ctypes.windll.kernel32.OpenProcess(0x1000, False, int(pid))  # QUERY_LIMITED
+        if not handle:
+            return False
+        try:
+            code = ctypes.c_ulong()
+            if not ctypes.windll.kernel32.GetExitCodeProcess(handle, ctypes.byref(code)):
+                return False
+            return code.value == 259                              # STILL_ACTIVE
+        finally:
+            ctypes.windll.kernel32.CloseHandle(handle)
+    except Exception:
+        return False
+
+
 class OsProcessOps:
     """Operações de processo reais (Linux) — injetáveis para testes.
 
@@ -934,9 +955,16 @@ class OsProcessOps:
         return proc.pid
 
     def signal_group(self, pgid: int, sig: int) -> bool:
-        """``kill -<sig> -- -<pgid>`` com fallback para o pid (como o sod.sh)."""
+        """``kill -<sig> -- -<pgid>`` com fallback para o pid (como o sod.sh).
+
+        No Windows não há ``killpg``: ``os.kill`` aplica-se ao pid (TerminateProcess).
+        """
+        killpg = getattr(os, "killpg", None)
         try:
-            os.killpg(pgid, sig)
+            if killpg is not None:
+                killpg(pgid, sig)
+            else:
+                os.kill(pgid, sig)
             return True
         except OSError:
             try:
@@ -946,6 +974,8 @@ class OsProcessOps:
                 return False
 
     def group_alive(self, pgid: int) -> bool:
+        if not hasattr(os, "killpg"):        # Windows: sonda sem matar
+            return _windows_pid_alive(pgid)
         try:
             os.killpg(pgid, 0)
             return True
@@ -1056,7 +1086,7 @@ class GameProcessManager:
         forced = []
         for pgid in groups:
             if self.ops.group_alive(pgid):
-                self.ops.signal_group(pgid, signal.SIGKILL)
+                self.ops.signal_group(pgid, SIG_KILL)
                 forced.append(pgid)
         if forced:
             self.ops.sleep(0.5)

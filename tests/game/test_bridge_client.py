@@ -6,6 +6,7 @@ devolve o JSON que a ponte devolveria, e o backend TCP usa um módulo de ponte f
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 from datetime import timezone
 from types import SimpleNamespace
@@ -70,7 +71,7 @@ def test_command_matches_bridge_contract(proc_factory, busy_payload):
                              runner=runner)
     state = client.snapshot()
     assert runner.calls == [[
-        "python3", "/repo/dfhack/df_bridge.py", "snapshot", "--json",
+        "python3", os.path.normpath("/repo/dfhack/df_bridge.py"), "snapshot", "--json",
         "--radius", "12", "--events", "5", "--df-path", "/df", "--port", "5000",
         "--via", "tcp"]]
     assert state.mode == "adventure"

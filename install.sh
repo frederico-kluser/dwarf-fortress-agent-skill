@@ -71,9 +71,9 @@ SISTEMAS SUPORTADOS (matriz verificada nesta sessão):
                                          em 0.47.05 — não existe par 53.x; o par
                                          0.47.05 falha no servidor RPC e o stack
                                          usa df-structures 53.16
-  Windows       ⚠️ NÃO TESTADO           o par DF 53.16 + DFHack 53.16-r2 existe
-                                         para Windows, mas nada foi testado; este
-                                         instalador recusa (exit 3)
+  Windows       ⚠️ FLUXO PRÓPRIO          o par DF 53.16 + DFHack 53.16-r3 foi
+                                         verificado em Windows; o launcher é
+                                         'scripts/df.ps1' (fluxo próprio)
   WSL2          ⚠️ EXPERIMENTAL          pode funcionar como Linux sem áudio;
                                          nada foi testado em WSL2
 
@@ -109,10 +109,11 @@ os_guard() { # Linux segue; WSL2 segue com aviso; macOS/Windows recusam (exit 3)
       exit 3
       ;;
     MINGW*|MSYS*|CYGWIN*|Windows_NT)
-      warn "Windows NÃO TESTADO — este instalador recusa (exit 3)."
-      say "   O par DF 53.16 + DFHack 53.16-r2 existe para Windows, mas nada foi"
-      say "   testado; o suporte oficial é Linux x86_64. Usa WSL2 (experimental)"
-      say "   ou Linux nativo. Matriz completa: bash install.sh --help"
+      warn "Windows: este instalador cobre o fluxo LINUX e recusa aqui (exit 3)."
+      say "   No Windows o caminho é PowerShell: launcher 'scripts/df.ps1' e"
+      say "   DFHack 53.16-r3 (zip Windows-64bit) extraído para dentro do diretório"
+      say "   do Dwarf Fortress da Steam (instalação manual, sem sudo)."
+      say "   Arranque:  pwsh scripts/df.ps1 up   ·   ajuda:  pwsh scripts/df.ps1 help"
       exit 3
       ;;
     *)

@@ -390,7 +390,7 @@ def test_bridge_command_carries_the_client_flags():
     game.port = 5001
     ex, _ = executor(game=game)
     argv = ex.bridge_command("act", "batch")
-    assert argv[:2] == ["/usr/bin/python3", "/opt/df/df_bridge.py"]
+    assert argv[:2] == ["/usr/bin/python3", str(pathlib.Path("/opt/df/df_bridge.py"))]
     assert "--json" in argv
     assert argv[argv.index("--df-path") + 1] == "/games/Dwarf Fortress"
     assert argv[argv.index("--port") + 1] == "5001"

@@ -723,6 +723,9 @@ def test_subprocess_bridge_screen_sem_json_mostra_o_stderr():
 # --------------------------------------------------------------------------- #
 
 
+SIG_KILL = getattr(signal, "SIGKILL", 9)   # espelha driver.SIG_KILL (Windows não tem SIGKILL)
+
+
 class FakeOps:
     """Operações de processo falsas: regista tudo, não toca em nenhum processo."""
 
@@ -744,7 +747,7 @@ class FakeOps:
 
     def signal_group(self, pgid, sig):
         self.signals.append((pgid, sig))
-        if sig == signal.SIGKILL or (sig == signal.SIGTERM and self.die_on_term):
+        if sig == SIG_KILL or (sig == signal.SIGTERM and self.die_on_term):
             self.procs = [p for p in self.procs if p["pgid"] != pgid]
         return True
 
@@ -802,7 +805,7 @@ def test_game_stop_escalonamento_term_para_kill(tmp_path):
     ops = FakeOps(procs=[{"pid": 7, "pgid": 7}], die_on_term=False)
     manager = GameProcessManager(df_path=tmp_path, ops=ops)
     result = manager.stop(grace=0)  # grace=0: o escalonamento é imediato no teste
-    assert ops.signals == [(7, signal.SIGTERM), (7, signal.SIGKILL)]
+    assert ops.signals == [(7, signal.SIGTERM), (7, SIG_KILL)]
     assert result["action"] == "stop" and result["forced_groups"] == [7]
     assert result["running"] is False
 
