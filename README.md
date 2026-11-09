@@ -15,7 +15,7 @@
 |---|---|---|
 | **Linux x86_64** | ✅ **SUPORTADO/VERIFICADO** | DF 53.16 *classic* (bay12) + DFHack 53.16-r2 Linux-64bit; testado em CachyOS/Arch |
 | **macOS** | ❌ **NÃO SUPORTADO** | Verificado: o DF Classic e o DFHack para macOS terminam em 0.47.05 — não existe par 53.x para macOS; o par 0.47.05 falha no servidor RPC e o stack usa df-structures 53.16 |
-| **Windows** | ⚠️ **NÃO TESTADO** | O par DF 53.16 + DFHack 53.16-r2 existe para Windows, mas nada foi testado; o instalador recusa com mensagem clara (exit 3) |
+| **Windows** | ✅ **FLUXO PRÓPRIO** | DF 53.16 (Steam, build 24557528) + DFHack 53.16-r3 verificados; launcher [`scripts/df.ps1`](scripts/df.ps1) — ver [docs/setup-windows.md](docs/setup-windows.md). `install.sh` (fluxo Linux) recusa com mensagem clara (exit 3) |
 | **WSL2** | ⚠️ **EXPERIMENTAL** | Pode funcionar como Linux sem áudio; nada foi testado em WSL2 |
 
 **Ferramentas necessárias (Linux):** `python3` ≥ 3.10 · `node` ≥ 20 · `npm` · `curl` · `sha256sum` (e `tar`, `bzip2` para os tarballs). O instalador valida tudo isto — `bash install.sh --check` mostra o estado sem instalar nada.
@@ -121,7 +121,7 @@ O loop completo (10 passos), os cuidados obrigatórios de prompt, a memória e a
 | Base de conhecimento DF | `conhecimento/` | **30 129 registos** (30 111 semânticos · 18 procedurais · 0 episódicos), 33 745 chunks, ~124 MB — só-leitura, importada do macmini ([docs/conhecimento.md](docs/conhecimento.md)) |
 | Cliente da frota JEV | `src/system_one_dwarf/jev/` | **231 testes** offline (validação de pedido/resposta, bandas, retries, custo) |
 | Backend (REST + WebSocket) | `src/system_one_dwarf/app/` + `campaign/` | **265 testes passados** (144 de API + 121 das camadas de campanha) + **1 teste de integração opt-in** (`SOD_RUN_INTEGRATION=1`) |
-| Tradutor PT↔EN | `src/system_one_dwarf/translate/` | **145 testes** (glossário, cache, seam de memória) |
+| Tradução (ecrã + texto) | `src/system_one_dwarf/translate/` | **163 testes** (glossário, cache, motor de ecrã `xiaomi/mimo-v2.6-pro` com reasoning effort `none` — desenho e evidência em [pesquisas/traducao-ecra-mimo.md](pesquisas/traducao-ecra-mimo.md)) |
 | Game state | `src/system_one_dwarf/game/` | **35 testes** pytest (`tests/game`) + **59 unittest** no DFHack (17 de contrato + 42 de snapshot) — snapshot normalizado, tolerante aos campos que o Lua não consegue ler |
 | Ponte DFHack | `dfhack/` | **59 unittest** (`test_bridge.py` 17 de contrato + `test_snapshot.py` 42 de snapshot) — baseline de não-regressão |
 | UI web | `web/` | **8 painéis** em MUI v9, em português, com cliente *mock* completo (corre sem backend) |
@@ -200,6 +200,8 @@ A configuração é real por variáveis `SOD_*` (ex.: `SOD_MODE`, `SOD_AUTO_THRE
 | [docs/arquitetura.md](docs/arquitetura.md) | Contrato canónico: papéis de modelo, frota JEV, bandas de ação, loop, memória, UI e decisões acordadas |
 | [docs/api.md](docs/api.md) | Contrato REST + WebSocket entre backend e UI (incluindo o marcador `stub`/`live`) |
 | [docs/setup.md](docs/setup.md) | Instalação verificada do DFHack 53.16-r2, lançamento do jogo, servidor RPC e troubleshooting |
+| [docs/setup-windows.md](docs/setup-windows.md) | Instalação verificada em Windows: DF Steam + DFHack 53.16-r3, launcher `df.ps1`, chaves/ambiente e baseline de testes |
+| [pesquisas/traducao-ecra-mimo.md](pesquisas/traducao-ecra-mimo.md) | Pesquisa profunda que desenhou a ferramenta de tradução de ecrã (129 fontes, verificação adversarial, preços e limitações) |
 | [docs/conhecimento.md](docs/conhecimento.md) | Base de conhecimento: conteúdo, proveniência, regras de uso e refrescamento do import |
 | [docs/calibracao.md](docs/calibracao.md) | Cenários de `evals/`, o que medem accuracy e ECE, e a política de bandas que assumem |
 | [docs/uxui-audit-ui.md](docs/uxui-audit-ui.md) | Auditoria UX/UI dos 8 painéis: score 40/100 (fair), 2 *critical*, 3 *warning*, 3 *suggestion*, com as correções priorizadas |
@@ -207,7 +209,8 @@ A configuração é real por variáveis `SOD_*` (ex.: `SOD_MODE`, `SOD_AUTO_THRE
 ## Aviso de custos
 
 - **JEV** (`typesafe/jev-1.13`): **$0.042 por milhão de tokens de entrada — saída grátis**.
-- **DeepSeek** (`deepseek/deepseek-v4.1-flash`, narrador + tradutor + perguntas): **$0.30/M de entrada · $1.20/M de saída** (tabela `PRICES_USD_PER_MTOK` em `src/system_one_dwarf/agent/llm.py`).
+- **Tradução de ecrã** (`xiaomi/mimo-v2.6-pro` com reasoning effort `none`, decidido em [docs/../pesquisas/traducao-ecra-mimo.md](pesquisas/traducao-ecra-mimo.md)): **$0.435/M de entrada · $0.87/M de saída** (tabela `PRICES_USD_PER_MTOK` em `src/system_one_dwarf/translate/translator.py`; ~$0.0002 por ecrã de 500 caracteres).
+- **DeepSeek** (`deepseek/deepseek-v4.1-flash`, narrador + perguntas): **$0.30/M de entrada · $1.20/M de saída** (tabela `PRICES_USD_PER_MTOK` em `src/system_one_dwarf/agent/llm.py`).
 - **Sem teto de orçamento** — decisão explícita: só visibilidade. `GET /api/campaigns/{id}/spend` e o painel **Controlo** (secção de gastos) mostram chamadas, tokens e custo por campanha.
 - Em autopilot o custo cresce com o tempo de jogo: o **kill-switch** do painel Controlo e o modo *checkpoint* existem precisamente para isso.
 
